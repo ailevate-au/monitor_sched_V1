@@ -172,9 +172,14 @@ export function buildSched(rawTasks, tdepMap, base, extraDelays = {}, cascadeMod
   });
 
   // ── Conflict detection (resource overlap, same person) ─────────────────────
+  // Completed tasks are excluded entirely: a finished task cannot conflict with
+  // anything — it's already done. This is what makes marking a task complete
+  // actually clear the conflict it was part of.
   for (let i = 0; i < all.length; i++) {
     for (let j = i + 1; j < all.length; j++) {
       const a = all[i], b = all[j];
+      if (a.id === b.id) continue;                   // never conflict a task with a duplicate of itself
+      if (a.isCompleted || b.isCompleted) continue;  // done tasks don't conflict
       if (a.person !== b.person) continue;
       if (a.s <= b.e && b.s <= a.e) {
         a.isC = b.isC = true;
@@ -185,8 +190,13 @@ export function buildSched(rawTasks, tdepMap, base, extraDelays = {}, cascadeMod
   }
 
   // ── Fragile detection (consecutive same-person tasks with ≤1 day gap) ──────
+  // Completed tasks are likewise excluded — a finished task being close to the
+  // next one isn't a scheduling risk.
   const byP = {};
-  for (const t of all) (byP[t.person] = byP[t.person] || []).push(t);
+  for (const t of all) {
+    if (t.isCompleted) continue;  // done tasks don't make a schedule fragile
+    (byP[t.person] = byP[t.person] || []).push(t);
+  }
   for (const ts of Object.values(byP)) {
     ts.sort((a, b) => a.s - b.s);
     for (let i = 0; i < ts.length - 1; i++) {

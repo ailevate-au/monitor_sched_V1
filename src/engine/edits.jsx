@@ -20,9 +20,19 @@ export function applyEditsToData(base, edits) {
   const deletedIds   = new Set(edits.deletedIds   || []);
   const deletedProjs = new Set(edits.deletedProjs || []);
 
+  // An edited task (e.g. one moved via shiftTimeline) keeps the SAME id as its
+  // base version. We must let the edited copy REPLACE the base copy — not
+  // append alongside it. Previously both were included, so a shifted task and
+  // its un-shifted original (same id, same person, overlapping dates) were
+  // detected as conflicting with each other — a phantom self-conflict.
+  const editedTasks   = edits.rawTasks || [];
+  const editedTaskIds = new Set(editedTasks.map(t => t.id));
+
   let rawTasks = [
-    ...base.rawTasks,
-    ...(edits.rawTasks || []),
+    // base tasks, EXCEPT any that have an edited replacement
+    ...base.rawTasks.filter(t => !editedTaskIds.has(t.id)),
+    // the edited versions
+    ...editedTasks,
   ].filter(t => !deletedIds.has(t.id) && !deletedProjs.has(t.proj));
 
   let projs = [

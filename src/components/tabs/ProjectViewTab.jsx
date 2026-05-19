@@ -269,18 +269,21 @@ export function ProjectViewTab({ tasks, onDelete, onEdit, onToggleComplete, stat
               const proj  = projs.find(p => p.id === r.projId);
               const ss    = SS[r.status] || SS['On Track'];
               const baseBg = ri%2===0 ? '#13131A' : '#0F0F18';
+              // Project/task IDs render in green normally, red when the row is
+              // in conflict — consistent with the Gantt's green/red scheme.
+              const rowColor = r.status === 'Conflict' ? '#EF4444' : (proj?.color || '#22C55E');
               return (
                 <tr key={r.id} style={{ background:baseBg, borderBottom:`1px solid ${BORDER}` }}
                   onMouseEnter={e=>e.currentTarget.style.background='#1E2535'}
                   onMouseLeave={e=>e.currentTarget.style.background=baseBg}>
                   <td style={{ padding:'10px 16px', borderRight:`1px solid ${BORDER}` }}>
                     <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-                      <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:proj?.color, flexShrink:0 }} />
-                      <span style={{ fontWeight:'700', color:proj?.color, fontSize:'13px' }}>{r.projId}</span>
+                      <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:rowColor, flexShrink:0 }} />
+                      <span style={{ fontWeight:'700', color:rowColor, fontSize:'13px' }}>{r.projId}</span>
                     </div>
                   </td>
                   <td style={{ padding:'10px 16px', borderRight:`1px solid ${BORDER}` }}>
-                    <span style={{ fontWeight:'600', color:proj?.color, fontSize:'13px' }}>{r.id.split('-')[1]}</span>
+                    <span style={{ fontWeight:'600', color:rowColor, fontSize:'13px' }}>{r.id.split('-')[1]}</span>
                   </td>
                   <td style={{ padding:'10px 16px', borderRight:`1px solid ${BORDER}`, color:TEXT, maxWidth:'280px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.name}</td>
                   <td style={{ padding:'10px 16px', borderRight:`1px solid ${BORDER}`, color:TEXT }}>{r.person}</td>

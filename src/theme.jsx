@@ -14,9 +14,15 @@ export const COLORS = {
 // Convenience destructure (used by components that don't want the full object)
 export const { NAV, SURFACE, CARD, BORDER, ORANGE, TEXT, MUTED } = COLORS;
 
-// ── Auto-assigned palettes (insertion-order indexed) ─────────────────────────
-export const PROJ_COLORS   = ['#6366F1','#10B981','#F59E0B','#0EA5E9','#EC4899','#8B5CF6','#EF4444','#06B6D4'];
-export const PERSON_COLORS = ['#6366F1','#10B981','#F59E0B','#0EA5E9','#EC4899','#7C3AED','#EF4444','#06B6D4','#84CC16','#F97316'];
+// ── Task / project colour scheme ─────────────────────────────────────────────
+// Colour-coding by project/person was removed. Everything is uniform green;
+// conflicts are highlighted red by individual components. These palettes are
+// kept (rather than deleted) so existing code that indexes into them still
+// works — every entry is just the same green now.
+export const TASK_GREEN   = '#22C55E';  // default task/project colour
+export const CONFLICT_RED = '#EF4444';  // conflict highlight
+export const PROJ_COLORS   = [TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN];
+export const PERSON_COLORS = [TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN];
 
 // ── Static timeline reference (Jan–Dec day offsets in a non-leap year) ──────
 export const ALL_MONS = [

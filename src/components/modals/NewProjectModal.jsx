@@ -16,7 +16,9 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
 
   const [projId,    setProjId]   = useState(nextId);
   const [projName,  setProjName] = useState('');
-  const [color,     setColor]    = useState(PROJ_COLORS[existingProjs.length % PROJ_COLORS.length]);
+  // Project colour is no longer user-selectable (colour-coding was removed).
+  // Kept as a fixed value so the created project object still has the field.
+  const color = PROJ_COLORS[0]; // uniform green
   const [tasks,     setTasks]    = useState([
     { seq:'A', name:'', person:'', role:'', rate:'', start:'', end:'', deps:[], depType:'FS' },
   ]);
@@ -120,14 +122,6 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
                 <div style={{ fontSize:'11px', color:MUTED, marginBottom:'5px' }}>Project Name</div>
                 <input value={projName} onChange={e => setProjName(e.target.value)} placeholder="New Build, Renovation\u2026" style={INPUT} />
               </div>
-              <div>
-                <div style={{ fontSize:'11px', color:MUTED, marginBottom:'5px' }}>Colour</div>
-                <div style={{ display:'flex', gap:'5px' }}>
-                  {PROJ_COLORS.slice(0,6).map(c => (
-                    <div key={c} onClick={() => setColor(c)} style={{ width:'22px', height:'22px', borderRadius:'50%', background:c, cursor:'pointer', border: color===c ? '2px solid white' : '2px solid transparent', flexShrink:0 }} />
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
 
@@ -209,5 +203,3 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
     </div>
   );
 }
-
-

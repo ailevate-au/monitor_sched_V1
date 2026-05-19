@@ -17,6 +17,7 @@ import {
 import { parseXlsx } from './engine/xlsx.jsx';
 import { buildSched } from './engine/schedule.jsx';
 import { applyEditsToData, mutateSchedData } from './engine/edits.jsx';
+import { addW, parseDate, fmtDDMMYYYY } from './engine/dates.jsx';
 import { NAV, SURFACE, CARD, BORDER, ORANGE, TEXT, MUTED } from './theme.jsx';
 
 import { EditModal } from './components/EditModal.jsx';
@@ -169,7 +170,7 @@ function EmptyState({ fileInputRef, showNewProj, setShowNewProj, handleFileChang
       {/* Nav */}
       <div style={{ background:NAV, padding:'0 28px', height:'52px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${BORDER}` }}>
         <div style={{ display:'flex', alignItems:'center' }}>
-          <span style={{ color:ORANGE, fontWeight:'800', fontSize:'18px', letterSpacing:'-0.5px', marginRight:'32px' }}>FlowIQ</span>
+          <span style={{ color:ORANGE, fontWeight:'800', fontSize:'18px', letterSpacing:'-0.5px', marginRight:'32px' }}>Interscale</span>
           {['Gantt Chart','Project View','Conflicts','Resource'].map((l, i) => (
             <button key={i} style={{ padding:'0 18px', height:'52px', border:'none', background:'none', cursor:'default', fontSize:'13px', fontWeight:'500', color:i===0?ORANGE:MUTED, borderBottom:i===0?`2px solid ${ORANGE}`:'2px solid transparent', whiteSpace:'nowrap', opacity:0.5 }}>{l}</button>
           ))}
@@ -256,9 +257,22 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
 
   const todayMs = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }, []);
 
+  // A task counts as "completed" for scheduling/conflict purposes if EITHER:
+  //  - it's in the completedIds set (the ✓ toggle), OR
+  //  - it has a status override explicitly set to 'Completed' (via EditModal).
+  // buildSched only takes one Set, so we merge both notions here. Without this,
+  // marking a task Completed in the EditModal wouldn't clear its conflicts.
+  const effectiveCompletedIds = useMemo(() => {
+    const s = new Set(completedIds);
+    for (const [taskId, status] of statusOverrides.entries()) {
+      if (status === 'Completed') s.add(taskId);
+    }
+    return s;
+  }, [completedIds, statusOverrides]);
+
   const tasks = useMemo(
-    () => buildSched(rawTasks, tdepMap, base, simDelays, cascadeMode, completedIds, todayMs),
-    [rawTasks, tdepMap, base, simDelays, cascadeMode, completedIds, todayMs]
+    () => buildSched(rawTasks, tdepMap, base, simDelays, cascadeMode, effectiveCompletedIds, todayMs),
+    [rawTasks, tdepMap, base, simDelays, cascadeMode, effectiveCompletedIds, todayMs]
   );
 
   const toggleComplete = useCallback(taskId => {
@@ -315,14 +329,27 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
   const handleEdit  = useCallback(target => setEditTarget(target), []);
   const handleApply = useCallback((nd, mode) => { setSimDelays(nd); if (mode) setCascadeMode(mode); }, []);
 
-  // Persist a real timeline shift — rewrites rawTask dates via the edits layer.
-  // (Bug fix: original used `bd` as a local re-shadowing `baseData`. Renamed to `currentBaseData`.)
-  const handleShift = useCallback((taskIds, days, mode) => {
+  // ── Timeline-shift preview/commit ───────────────────────────────────────────
+  // A timeline shift is no longer committed immediately. Instead it becomes a
+  // `pendingShift` — the Gantt renders a preview (new bars + greyed ghosts of
+  // the old positions) and a floating Confirm/Revert bar lets the user decide.
+  //   pendingShift shape: { taskIds:[...], days:Number, mode:String } | null
+  const [pendingShift, setPendingShift] = useState(null);
+
+  // Called by EditModal's "Apply Shift" — stages the shift instead of committing.
+  const stageShift = useCallback((taskIds, days, mode) => {
+    if (!days) return;
+    setPendingShift({ taskIds: [...taskIds], days, mode });
+  }, []);
+
+  // Commit logic — bakes the staged shift into rawTasks via the edits layer.
+  const commitShift = useCallback(() => {
+    if (!pendingShift) return;
+    const { taskIds, days, mode } = pendingShift;
     const currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
     const currentEdits = loadSchedEdits();
 
-    // Determine full set of task IDs to shift. For 'full'/'min' we also shift
-    // tasks that would cascade in buildSched — computed via a preview pass.
+    // Expand to the full set of affected ids — direct + cascade.
     let allIds = [...taskIds];
     if (mode !== 'none') {
       const tempDelays = {};
@@ -338,13 +365,34 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
 
     const updated = mutateSchedData(currentBaseData, currentEdits, { type:'shiftTimeline', taskIds: allIds, days });
     onMutate(updated);
-    // Clear any simDelays for shifted tasks — now baked into rawTasks
     setSimDelays(prev => {
       const nd = { ...prev };
       allIds.forEach(id => delete nd[id]);
       return nd;
     });
-  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate]);
+    setPendingShift(null);  // preview consumed
+  }, [pendingShift, rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate]);
+
+  // Discard a staged shift without applying it.
+  const cancelShift = useCallback(() => setPendingShift(null), []);
+
+  // ── Preview task set ────────────────────────────────────────────────────────
+  // When a shift is staged, previewTasks is the schedule WITH the shift applied.
+  // The Gantt diffs `tasks` (current) against `previewTasks` to draw ghosts.
+  const previewTasks = useMemo(() => {
+    if (!pendingShift) return null;
+    const { taskIds, days, mode } = pendingShift;
+    const tempDelays = {};
+    // For a forward shift we use positive delays; backward shifts need the
+    // dates rewritten, so we shift the rawTasks directly for the preview.
+    const shiftedRaw = rawTasks.map(t => {
+      if (!taskIds.includes(t.id)) return t;
+      const sD = parseDate(t.start), eD = parseDate(t.end);
+      if (!sD || !eD) return t;
+      return { ...t, start: fmtDDMMYYYY(addW(sD, days)), end: fmtDDMMYYYY(addW(eD, days)) };
+    });
+    return buildSched(shiftedRaw, tdepMap, base, {}, mode || cascadeMode, effectiveCompletedIds, todayMs);
+  }, [pendingShift, rawTasks, tdepMap, base, cascadeMode, effectiveCompletedIds, todayMs]);
 
   // (Bug fix: original re-declared `baseData` inside the callback, shadowing
   //  the prop. Renamed to `currentBaseData` for clarity.)
@@ -404,7 +452,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
           tasks={tasks}
           simDelays={simDelays}
           onApply={handleApply}
-          onShift={handleShift}
+          onShift={stageShift}
           onClose={() => setEditTarget(null)}
           onDelete={handleDelete}
           statusOverrides={statusOverrides}
@@ -524,7 +572,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
 
       {/* Tab panel */}
       <div style={{ margin:'14px 28px 28px', background:CARD, borderRadius:'12px', border:`1px solid ${BORDER}`, overflow:'hidden' }}>
-        {tab==='gantt'     && <ProjectGanttTab tasks={tasks} simDelays={simDelays} setSimDelays={setSimDelays} onEdit={handleEdit} setAddTasksProj={setAddTasksProj} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} todayMs={todayMs} />}
+        {tab==='gantt'     && <ProjectGanttTab tasks={tasks} previewTasks={previewTasks} pendingShift={pendingShift} onCommitShift={commitShift} onCancelShift={cancelShift} simDelays={simDelays} setSimDelays={setSimDelays} onEdit={handleEdit} setAddTasksProj={setAddTasksProj} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} todayMs={todayMs} />}
         {tab==='project'   && <ProjectViewTab tasks={tasks} onDelete={handleDelete} onEdit={handleEdit} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} onSetStatus={setStatusOverride} todayMs={todayMs} />}
         {tab==='workflows' && <WorkflowsTab />}
         {tab==='conflicts' && <ConflictsTab tasks={tasks} />}

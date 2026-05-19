@@ -9,8 +9,42 @@ import { normDep } from '../../engine/schedule.jsx';
 import { computeStatus } from '../../engine/status.jsx';
 import { DPX, HH, LW, PRH, RRH, SRH, SBH, ALL_MONS } from '../../theme.jsx';
 
-export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAddTasksProj, onToggleComplete, statusOverrides, todayMs }) {
+export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, onCommitShift, onCancelShift, simDelays, setSimDelays, onEdit, setAddTasksProj, onToggleComplete, statusOverrides, todayMs }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
+
+  // ── Timeline-shift simulation ──────────────────────────────────────────────
+  // When a shift is staged (pendingShift), the chart renders the PREVIEW tasks
+  // (new positions). `ghostMap` holds the OLD {sd, cd} for every task whose
+  // position changed, so we can draw a greyed "ghost" bar where it used to be.
+  // When no shift is staged, everything behaves exactly as before.
+  const isSimulating = !!pendingShift && !!previewTasks;
+  const tasks = isSimulating ? previewTasks : tasksProp;
+  const ghostMap = useMemo(() => {
+    if (!isSimulating) return {};
+    const oldById = Object.fromEntries(tasksProp.map(t => [t.id, t]));
+    const m = {};
+    for (const t of previewTasks) {
+      const old = oldById[t.id];
+      if (old && (old.sd !== t.sd || old.cd !== t.cd)) {
+        m[t.id] = { sd: old.sd, cd: old.cd };
+      }
+    }
+    return m;
+  }, [isSimulating, previewTasks, tasksProp]);
+
+  // ── Neutral / conflict palette ─────────────────────────────────────────────
+  // All tasks render in NEUTRAL by default. Conflicts override to CONFLICT_RED.
+  // This replaces the previous per-project / per-role colour scheme so that
+  // conflicts pop visually wherever they appear.
+  const NEUTRAL       = '#22C55E';  // green-500 — default task colour (distinct from completed-green #10B981)
+  const CONFLICT_RED  = '#EF4444';  // red-500 — matches existing conflict badges
+  const GHOST_GREY    = '#475569';  // greyed ghost of a task's pre-shift position
+  // Helper: pick the right colour for a task based on its conflict flag.
+  const taskColor = t => (t && t.isC) ? CONFLICT_RED : NEUTRAL;
+  // Helper for groups of tasks (rollup pill, role row): if ANY task in the
+  // group is in conflict, use red — otherwise neutral.
+  const groupColor = arr => (arr && arr.some(t => t.isC)) ? CONFLICT_RED : NEUTRAL;
+
 
   // ── Filter state — owned here, not in parent ──────────────────────────────
   const [filterProj,   setFilterProj]   = useState(null); // null = All
@@ -194,7 +228,7 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
           const role = {
             key:   roleName,                       // used to build expand/collapse keys
             label: roleName,                       // shown in the role row header
-            color: members[0].color || proj.color, // colour from first member, or project
+            color: NEUTRAL, // neutralised; per-task conflict colouring still applies on bars
           };
           return {
             role,
@@ -302,6 +336,38 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
 
   return (
     <div>
+      {/* ── Timeline-shift simulation bar ──────────────────────────────────
+          Shown only while a shift is staged. Greyed ghost bars on the chart
+          mark the old positions; this bar commits or discards the change. */}
+      {isSimulating && (
+        <div style={{
+          display:'flex', alignItems:'center', gap:'14px',
+          padding:'10px 16px', background:'#1E1B2E',
+          borderBottom:'2px solid #F97316'
+        }}>
+          <span style={{ fontSize:'13px', fontWeight:'700', color:'#F97316' }}>
+            ◷ Simulating timeline shift
+          </span>
+          <span style={{ fontSize:'12px', color:'#9CA3AF' }}>
+            {pendingShift.days > 0 ? `+${pendingShift.days}` : pendingShift.days} working day{Math.abs(pendingShift.days)===1?'':'s'}
+            {' · '}
+            {Object.keys(ghostMap).length} task{Object.keys(ghostMap).length===1?'':'s'} affected
+            {' · '}grey = current, solid = proposed
+          </span>
+          <div style={{ flex:1 }} />
+          <button onClick={onCancelShift}
+            style={{ padding:'6px 14px', borderRadius:'7px', border:'1px solid #2A2A3A',
+              background:'transparent', color:'#E8E8F0', fontSize:'12px', fontWeight:'600', cursor:'pointer' }}>
+            ↺ Revert
+          </button>
+          <button onClick={onCommitShift}
+            style={{ padding:'6px 16px', borderRadius:'7px', border:'none',
+              background:'#F97316', color:'white', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>
+            ✓ Confirm shift
+          </button>
+        </div>
+      )}
+
       {/* ── Toolbar — matches Figma exactly ── */}
       <div style={{ display:'flex', alignItems:'center', gap:'0', padding:'0 16px', height:'48px', borderBottom:`1px solid #2A2A3A`, background:'#1C1C27' }}>
         {/* Details › */}
@@ -433,7 +499,7 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
             <button onClick={() => setFilterMenuOpen(v => !v)}
               style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', border:'none', background: filterProj ? '#F9731612' : 'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color: filterProj ? '#F97316' : '#E8E8F0', minWidth:'140px' }}>
               {filterProj
-                ? <><div style={{ width:'9px', height:'9px', borderRadius:'50%', background: projs.find(p=>p.id===filterProj)?.color, flexShrink:0 }} />{filterProj}</>
+                ? <><div style={{ width:'9px', height:'9px', borderRadius:'50%', background: NEUTRAL, flexShrink:0 }} />{filterProj}</>
                 : 'All Projects'
               }
               <span style={{ marginLeft:'auto', color:'#6B7280', fontSize:'10px' }}>▾</span>
@@ -485,20 +551,21 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
                 const isExp = expanded.has(proj.id);
                 const midY = y + PRH / 2;
                 const hasC = pt.some(t => t.isC);
+                const projColor = hasC ? CONFLICT_RED : NEUTRAL;
                 return (
                   <g key={proj.id+'-lbl'} style={{ cursor:'pointer' }} onClick={() => toggle(proj.id)}>
-                    <rect x={0} y={y} width={LW} height={PRH} fill={proj.color+'18'} />
-                    <rect x={10} y={midY-11} width={22} height={22} rx="6" fill={proj.color+'30'} />
-                    <text x={21} y={midY+1} textAnchor="middle" dominantBaseline="middle" fill={proj.color} fontSize="14" fontWeight="800" style={{userSelect:'none'}}>{isExp?'−':'+'}</text>
-                    <text x={40} y={midY-6} fill={proj.color} fontSize="14" fontWeight="800">{proj.id}</text>
+                    <rect x={0} y={y} width={LW} height={PRH} fill={projColor+'18'} />
+                    <rect x={10} y={midY-11} width={22} height={22} rx="6" fill={projColor+'30'} />
+                    <text x={21} y={midY+1} textAnchor="middle" dominantBaseline="middle" fill={projColor} fontSize="14" fontWeight="800" style={{userSelect:'none'}}>{isExp?'−':'+'}</text>
+                    <text x={40} y={midY-6} fill={projColor} fontSize="14" fontWeight="800">{proj.id}</text>
                     <text x={40} y={midY+9} fill="#6B7280" fontSize="10">New Build · {pt.length} tasks</text>
-                    <rect x={LW-46} y={midY-11} width={36} height={22} rx="11" fill={proj.color+'25'} />
-                    <text x={LW-28} y={midY+1} textAnchor="middle" dominantBaseline="middle" fill={proj.color} fontSize="11" fontWeight="700">{pt.length}</text>
+                    <rect x={LW-46} y={midY-11} width={36} height={22} rx="11" fill={projColor+'25'} />
+                    <text x={LW-28} y={midY+1} textAnchor="middle" dominantBaseline="middle" fill={projColor} fontSize="11" fontWeight="700">{pt.length}</text>
                     {hasC && <g>
                       <circle cx={LW-8} cy={y+14} r={7} fill="#EF4444" />
                       <text x={LW-8} y={y+14} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="700">!</text>
                     </g>}
-                    <line x1={0} y1={y+PRH} x2={LW} y2={y+PRH} stroke={isExp?proj.color+'50':'#2A2A3A'} strokeWidth={isExp?1.5:1} />
+                    <line x1={0} y1={y+PRH} x2={LW} y2={y+PRH} stroke={isExp?projColor+'50':'#2A2A3A'} strokeWidth={isExp?1.5:1} />
                   </g>
                 );
               }
@@ -510,19 +577,20 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
                 const rMidY = ry + RRH / 2;
                 const allTasks = rg.personRows.flatMap(r2 => r2.tasks);
                 const rHasC = allTasks.some(t => t.isC);
+                const roleC = rHasC ? CONFLICT_RED : NEUTRAL;
                 return (
                   <g key={roleKey+'-lbl'} style={{ cursor:'pointer' }} onClick={() => toggle(roleKey)}>
                     <rect x={0} y={ry} width={LW} height={RRH} fill="#1A1A24" />
-                    <line x1={18} y1={ry} x2={18} y2={ry+RRH} stroke={rpd.proj.color+'50'} strokeWidth="1.5" />
-                    <rect x={26} y={rMidY-9} width={18} height={18} rx="5" fill={rg.role.color+'30'} />
-                    <text x={35} y={rMidY+1} textAnchor="middle" dominantBaseline="middle" fill={rg.role.color} fontSize="12" fontWeight="800" style={{userSelect:'none'}}>{isRExp?'−':'+'}</text>
-                    <text x={51} y={rMidY-5} fill={rg.role.color} fontSize="11.5" fontWeight="700">{rg.role.label}</text>
+                    <line x1={18} y1={ry} x2={18} y2={ry+RRH} stroke={NEUTRAL+'50'} strokeWidth="1.5" />
+                    <rect x={26} y={rMidY-9} width={18} height={18} rx="5" fill={roleC+'30'} />
+                    <text x={35} y={rMidY+1} textAnchor="middle" dominantBaseline="middle" fill={roleC} fontSize="12" fontWeight="800" style={{userSelect:'none'}}>{isRExp?'−':'+'}</text>
+                    <text x={51} y={rMidY-5} fill={roleC} fontSize="11.5" fontWeight="700">{rg.role.label}</text>
                     <text x={51} y={rMidY+8} fill="#6B7280" fontSize="9.5">{rg.personRows.length} member{rg.personRows.length>1?'s':''} · {allTasks.length} tasks</text>
                     {rHasC && <g>
                       <circle cx={LW-8} cy={ry+12} r={7} fill="#EF4444" />
                       <text x={LW-8} y={ry+12} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="700">!</text>
                     </g>}
-                    <line x1={0} y1={ry+RRH} x2={LW} y2={ry+RRH} stroke={isRExp?rg.role.color+'40':'#2A2A3A'} strokeWidth={isRExp?1.2:0.8} />
+                    <line x1={0} y1={ry+RRH} x2={LW} y2={ry+RRH} stroke={isRExp?roleC+'40':'#2A2A3A'} strokeWidth={isRExp?1.2:0.8} />
                   </g>
                 );
               }
@@ -534,15 +602,16 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
                 const pMidY = py + SRH / 2;
                 const pHasC = pTasks.some(t => t.isC);
                 const pHasF = pTasks.some(t => t.isF && !t.isC);
+                const personC = pHasC ? CONFLICT_RED : NEUTRAL;
                 return (
                   <g key={`${ppd.proj.id}-${pr.per.name}-lbl`}>
                     <rect x={0} y={py} width={LW} height={SRH} fill="#13131A" />
-                    <line x1={18} y1={py} x2={18} y2={py+SRH} stroke={ppd.proj.color+'50'} strokeWidth="1.5" />
-                    <line x1={32} y1={py} x2={32} y2={py+SRH} stroke={prg.role.color+'50'} strokeWidth="1.5" />
-                    <line x1={32} y1={pMidY} x2={44} y2={pMidY} stroke={prg.role.color+'50'} strokeWidth="1.5" />
-                    <circle cx={56} cy={pMidY} r={13} fill={prg.role.color+'20'} />
-                    <circle cx={56} cy={pMidY} r={13} fill="none" stroke={prg.role.color} strokeWidth="1.5" />
-                    <text x={56} y={pMidY+1} textAnchor="middle" dominantBaseline="middle" fill={prg.role.color} fontSize="8.5" fontWeight="700">{pr.per.init}</text>
+                    <line x1={18} y1={py} x2={18} y2={py+SRH} stroke={NEUTRAL+'50'} strokeWidth="1.5" />
+                    <line x1={32} y1={py} x2={32} y2={py+SRH} stroke={NEUTRAL+'50'} strokeWidth="1.5" />
+                    <line x1={32} y1={pMidY} x2={44} y2={pMidY} stroke={NEUTRAL+'50'} strokeWidth="1.5" />
+                    <circle cx={56} cy={pMidY} r={13} fill={personC+'20'} />
+                    <circle cx={56} cy={pMidY} r={13} fill="none" stroke={personC} strokeWidth="1.5" />
+                    <text x={56} y={pMidY+1} textAnchor="middle" dominantBaseline="middle" fill={personC} fontSize="8.5" fontWeight="700">{pr.per.init}</text>
                     <text x={75} y={pMidY-7} fill="#E8E8F0" fontSize="12" fontWeight="600">{pr.per.name}</text>
                     <text x={75} y={pMidY+8} fill="#6B7280" fontSize="9.5">{pTasks.length} tasks</text>
                     <rect x={LW-40} y={pMidY-10} width={28} height={20} rx="10" fill="#2A2A3A" />
@@ -647,15 +716,34 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
                 const bx = txR(minSd), bw = (maxEd - minSd) * dpx;
                 const midY = y + PRH / 2;
                 const isExp = expanded.has(proj.id);
+                // Tasks in this project that are in conflict — used to paint
+                // red bands ON TOP of the neutral pill so you can see *where*
+                // the trouble is, even when the project is rolled up.
+                const conflictTasks = pt.filter(t => t.isC && t.cd > 0);
+                const hasC = conflictTasks.length > 0;
+                const pillColor = hasC ? CONFLICT_RED : NEUTRAL;
                 return (
                   <g key={proj.id+'-r'}>
-                    <rect x={0} y={y} width={TD*dpx} height={PRH} fill={proj.color+'15'} />
-                    <rect x={bx+2} y={midY-11} width={bw} height={22} rx="11" fill={proj.color+'25'} />
-                    <rect x={bx} y={midY-11} width={bw} height={22} rx="11" fill="none" stroke={proj.color} strokeWidth="2" />
-                    {bw>80 && <text x={bx+bw/2} y={midY+1} textAnchor="middle" dominantBaseline="middle" fill={proj.color} fontSize="11" fontWeight="700" style={{pointerEvents:'none',userSelect:'none'}}>
-                      {proj.id} · {pt.filter(t=>t.cd>0).length} tasks with duration
+                    <rect x={0} y={y} width={TD*dpx} height={PRH} fill={NEUTRAL+'15'} />
+                    {/* Neutral pill (shadow + body + outline) */}
+                    <rect x={bx+2} y={midY-11} width={bw} height={22} rx="11" fill={NEUTRAL+'25'} />
+                    <rect x={bx} y={midY-11} width={bw} height={22} rx="11" fill="none" stroke={pillColor} strokeWidth="2" />
+                    {/* Red conflict bands — drawn AFTER the neutral pill body so they sit on top.
+                        Each band spans the conflicting task's time-range inside the pill.
+                        We clip-path them to the pill's rounded shape via the same rx="11". */}
+                    {conflictTasks.map(t => {
+                      const cx = txR(t.sd);
+                      const cw = Math.max(t.cd * dpx, 4);
+                      return (
+                        <rect key={t.id+'-cf'}
+                          x={cx} y={midY-9} width={cw} height={18} rx="6"
+                          fill={CONFLICT_RED+'66'} stroke={CONFLICT_RED} strokeWidth="1" />
+                      );
+                    })}
+                    {bw>80 && <text x={bx+bw/2} y={midY+1} textAnchor="middle" dominantBaseline="middle" fill={pillColor} fontSize="11" fontWeight="700" style={{pointerEvents:'none',userSelect:'none'}}>
+                      {proj.id} · {pt.filter(t=>t.cd>0).length} tasks{hasC ? ` · ${conflictTasks.length} conflict${conflictTasks.length>1?'s':''}` : ' with duration'}
                     </text>}
-                    <line x1={0} y1={y+PRH} x2={TD*dpx} y2={y+PRH} stroke={isExp?proj.color+'50':'#2A2A3A'} strokeWidth={isExp?1.5:1} />
+                    <line x1={0} y1={y+PRH} x2={TD*dpx} y2={y+PRH} stroke={isExp?NEUTRAL+'50':'#2A2A3A'} strokeWidth={isExp?1.5:1} />
                   </g>
                 );
               }
@@ -670,11 +758,12 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
                 const mbH = 20, mbY = rMid - mbH / 2;
                 return (
                   <g key={roleKey+'-r'}>
-                    <rect x={0} y={ry2} width={TD*dpx} height={RRH} fill={rg.role.color+'08'} />
+                    <rect x={0} y={ry2} width={TD*dpx} height={RRH} fill={NEUTRAL+'08'} />
                     {/* When collapsed: render every task as a small bar in this single row */}
                     {!isRExp && allTasks.filter(t => t.cd > 0).map(t => {
                       const tx2 = txR(t.sd), tw = Math.max(t.cd * dpx, 4);
                       const isHovT = hov === t.id;
+                      const tc = taskColor(t);  // RED if conflict, NEUTRAL otherwise
                       return (
                         <g key={t.id} style={{ cursor:'pointer' }}
                           onMouseEnter={() => setHov(t.id)}
@@ -682,17 +771,17 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
                           onClick={() => onEdit({ type:'task', id:t.id })}>
                           <rect x={tx2+1} y={mbY+1} width={tw} height={mbH} rx="3" fill="rgba(0,0,0,0.05)" />
                           <rect x={tx2} y={mbY} width={tw} height={mbH} rx="3"
-                            fill={rg.role.color+'30'}
-                            stroke={isHovT ? rg.role.color : rg.role.color+'70'}
+                            fill={tc+'30'}
+                            stroke={isHovT ? tc : tc+'70'}
                             strokeWidth={isHovT ? 1.5 : 1} />
                           {/* Left stripe per person for identity */}
                           <rect x={tx2+1} y={mbY+1} width={3} height={mbH-2} rx="2"
-                            fill={rg.role.color} />
+                            fill={tc} />
                           {t.isC && <circle cx={tx2+tw-5} cy={mbY+5} r={4} fill="#EF4444" />}
 
                           {/* Label only if wide enough */}
                           {tw > 60 && <text x={tx2+8} y={rMid+1} dominantBaseline="middle"
-                            fill={rg.role.color} fontSize="8.5" fontWeight="600"
+                            fill={tc} fontSize="8.5" fontWeight="600"
                             style={{ pointerEvents:'none', userSelect:'none' }}>
                             {t.name.length > Math.floor((tw-12)/5) ? t.name.slice(0, Math.floor((tw-12)/5))+'…' : t.name}
                           </text>}
@@ -703,10 +792,10 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
                     {!isRExp && allTasks.filter(t => t.cd === 0).map(t => (
                       <polygon key={t.id}
                         points={`${txR(t.sd)},${rMid-5} ${txR(t.sd)+5},${rMid} ${txR(t.sd)},${rMid+5} ${txR(t.sd)-5},${rMid}`}
-                        fill={rg.role.color} opacity="0.7" />
+                        fill={taskColor(t)} opacity="0.7" />
                     ))}
                     <line x1={0} y1={ry2+RRH} x2={TD*dpx} y2={ry2+RRH}
-                      stroke={isRExp ? rg.role.color+'40' : '#2A2A3A'}
+                      stroke={isRExp ? NEUTRAL+'40' : '#2A2A3A'}
                       strokeWidth={isRExp ? 1 : 1} />
                   </g>
                 );
@@ -714,21 +803,44 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
               const { rg: prg, pd, pr, y } = row;
               const { proj } = pd;
               const { per, tasks: pTasks } = pr;
-              const roleColor = per.color; // color by person (all same role)
+              // Bars are now coloured by status, not by person/role:
+              // - red if conflict
+              // - neutral grey otherwise
+              // - completed / overdue / dep-violated still get their dedicated colours below
               const by0 = y + (SRH-SBH)/2;
               const midY = y + SRH/2;
               return (
                 <g key={`${proj.id}-${per.name}-bars`}>
                   <rect x={0} y={y} width={TD*dpx} height={SRH} fill="#13131A" />
                   <line x1={0} y1={y+SRH} x2={TD*dpx} y2={y+SRH} stroke="#2A2A3A" strokeWidth="1" />
+                  {/* Ghost bars — old positions during a staged timeline shift.
+                      Drawn first so the real (new-position) bars sit on top. */}
+                  {isSimulating && pTasks.map(t => {
+                    const g = ghostMap[t.id];
+                    if (!g) return null;
+                    const gx = txR(g.sd), gw = Math.max(g.cd*dpx, g.cd?4:0);
+                    if (!g.cd) return (
+                      <polygon key={t.id+'-ghost'}
+                        points={`${gx},${midY-5} ${gx+5},${midY} ${gx},${midY+5} ${gx-5},${midY}`}
+                        fill="none" stroke={GHOST_GREY} strokeWidth="1.5" strokeDasharray="3 2"
+                        style={{pointerEvents:'none'}} />
+                    );
+                    return (
+                      <rect key={t.id+'-ghost'}
+                        x={gx} y={by0} width={gw} height={SBH} rx="4"
+                        fill={GHOST_GREY+'22'} stroke={GHOST_GREY} strokeWidth="1.5"
+                        strokeDasharray="4 3" style={{pointerEvents:'none'}} />
+                    );
+                  })}
                   {pTasks.map(t => {
                     const x = txR(t.sd), w = Math.max(t.cd*dpx, t.cd?4:0);
                     const ih = hov===t.id;
                     const dimmed = showDeps && hov && !hovRelated.has(t.id);
+                    const tc = taskColor(t);  // red if conflict, neutral otherwise
                     if (!t.cd) return (
                       <polygon key={t.id}
                         points={`${x},${midY-5} ${x+5},${midY} ${x},${midY+5} ${x-5},${midY}`}
-                        fill={roleColor} opacity={dimmed?0.2:0.85}
+                        fill={tc} opacity={dimmed?0.2:0.85}
                         style={{cursor:'pointer'}}
                         onMouseEnter={()=>setHov(t.id)} onMouseLeave={()=>setHov(null)}
                         onClick={()=>onEdit({ type:'task', id:t.id })} />
@@ -742,20 +854,26 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
                     const barStroke = effectiveCompleted ? '#10B981'
                       : t.isOverdue  ? '#F59E0B'
                       : t.isDV       ? '#F59E0B'
-                      : roleColor;
+                      : tc;
                     const barFill = effectiveCompleted ? '#10B98118'
                       : t.isOverdue  ? '#F59E0B18'
                       : t.isDV       ? '#FFF7ED'
-                      : roleColor+'28';
+                      : tc+'28';
                     const barDash = (t.isDV && !effectiveCompleted) ? '5 3' : 'none';
-                    const labelColor = effectiveCompleted ? '#10B981' : t.isOverdue ? '#F59E0B' : roleColor;
+                    const labelColor = effectiveCompleted ? '#10B981' : t.isOverdue ? '#F59E0B' : tc;
                     const labelDecoration = effectiveCompleted ? 'line-through' : 'none';
 
-                    // Badge position — clamped so it stays inside even tiny bars
-                    // For bars < 16px wide, show a small dot on the left edge instead
-                    const badgeCx = Math.min(x + 8, x + w - 5);
+                    // Badge position. For normal-width bars the badge sits
+                    // just inside the top-left. For very thin bars there's no
+                    // room inside, so the badge floats just PAST the bar's
+                    // right edge into the empty timeline space — far more
+                    // visible than the old tiny corner dot.
+                    const tinyBar = w < 18;
+                    const badgeR  = tinyBar ? 6 : 7;
+                    const badgeCx = tinyBar
+                      ? x + w + badgeR + 1            // floats just right of the bar
+                      : Math.min(x + 8, x + w - 5);   // tucked inside a wide bar
                     const badgeCy = by0 + 8;
-                    const tinyBar = w < 16;
 
                     return (
                       <g key={t.id} style={{cursor:'pointer'}} opacity={effectiveCompleted ? 0.55 : dimmed ? 0.28 : 1}
@@ -777,38 +895,29 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
                           {(()=>{const mc=Math.floor((w-18)/5.8);return t.name.length>mc?t.name.slice(0,mc)+'…':t.name;})()}
                         </text>}
 
-                        {/* Badge — completed ✓ takes priority, then conflict, fragile, overdue, DV */}
-                        {/* Tiny bars (<16px): coloured dot on left stripe instead of circle+text */}
-                        {tinyBar ? (
-                          /* Dot indicator on the left stripe for very narrow bars */
-                          effectiveCompleted ? <circle cx={x+3} cy={by0+4} r={3} fill="#10B981" style={{pointerEvents:'none'}} /> :
-                          !effectiveCompleted && t.isC ? <circle cx={x+3} cy={by0+4} r={3} fill="#EF4444" style={{pointerEvents:'none'}} /> :
-                          !effectiveCompleted && t.isOverdue ? <circle cx={x+3} cy={by0+4} r={3} fill="#F59E0B" style={{pointerEvents:'none'}} /> :
-                          null
-                        ) : (
-                          <>
-                            {effectiveCompleted && <g style={{pointerEvents:'none'}}>
-                              <circle cx={badgeCx} cy={badgeCy} r={7} fill="#10B981" />
-                              <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="800">✓</text>
-                            </g>}
-                            {!effectiveCompleted && t.isC && <g style={{pointerEvents:'none'}}>
-                              <circle cx={badgeCx} cy={badgeCy} r={7} fill="#EF4444" />
-                              <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8.5" fontWeight="800">!</text>
-                            </g>}
-                            {!effectiveCompleted && t.isOverdue && !t.isC && <g style={{pointerEvents:'none'}}>
-                              <circle cx={badgeCx} cy={badgeCy} r={7} fill="#F59E0B" />
-                              <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="800">⚠</text>
-                            </g>}
-                            {!effectiveCompleted && t.isF && !t.isC && !t.isOverdue && <g style={{pointerEvents:'none'}}>
-                              <circle cx={badgeCx} cy={badgeCy} r={7} fill="#F59E0B" />
-                              <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="11" fontWeight="800" dy="0.5">~</text>
-                            </g>}
-                            {!effectiveCompleted && t.isDV && !t.isC && !t.isF && !t.isOverdue && <g style={{pointerEvents:'none'}}>
-                              <circle cx={badgeCx} cy={badgeCy} r={7} fill="#F59E0B" />
-                              <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="800">⊗</text>
-                            </g>}
-                          </>
-                        )}
+                        {/* Badge — completed ✓ takes priority, then conflict, fragile, overdue, DV.
+                            Works for tiny bars too: badgeCx floats the badge just past the bar's
+                            right edge when the bar is too thin to hold it. */}
+                        {effectiveCompleted && <g style={{pointerEvents:'none'}}>
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#10B981" stroke="#13131A" strokeWidth="1.5" />
+                          <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'8':'9'} fontWeight="800">✓</text>
+                        </g>}
+                        {!effectiveCompleted && t.isC && <g style={{pointerEvents:'none'}}>
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#EF4444" stroke="#13131A" strokeWidth="1.5" />
+                          <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'8':'8.5'} fontWeight="800">!</text>
+                        </g>}
+                        {!effectiveCompleted && t.isOverdue && !t.isC && <g style={{pointerEvents:'none'}}>
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#F59E0B" stroke="#13131A" strokeWidth="1.5" />
+                          <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'8':'9'} fontWeight="800">⚠</text>
+                        </g>}
+                        {!effectiveCompleted && t.isF && !t.isC && !t.isOverdue && <g style={{pointerEvents:'none'}}>
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#F59E0B" stroke="#13131A" strokeWidth="1.5" />
+                          <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'10':'11'} fontWeight="800" dy="0.5">~</text>
+                        </g>}
+                        {!effectiveCompleted && t.isDV && !t.isC && !t.isF && !t.isOverdue && <g style={{pointerEvents:'none'}}>
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#F59E0B" stroke="#13131A" strokeWidth="1.5" />
+                          <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'8':'9'} fontWeight="800">⊗</text>
+                        </g>}
 
                         {/* Hover icons — pencil (edit) + checkmark (toggle complete) */}
                         {ih && w > 52 && <g>
@@ -842,7 +951,10 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
               <g style={{ pointerEvents:'none' }}>
                 {depLines.map((line, i) => {
                   const { from, to, projId, taskId, depId, type: depType } = line;
-                  const pc = projs.find(p => p.id === projId)?.color || '#888';
+                  // Line goes red if either endpoint is a conflict task; neutral otherwise
+                  const srcT = tasks.find(t => t.id === depId);
+                  const dstT = tasks.find(t => t.id === taskId);
+                  const pc = (srcT?.isC || dstT?.isC) ? CONFLICT_RED : NEUTRAL;
                   const isHov = hov && (hovRelated.has(taskId) || hovRelated.has(depId));
                   const opacity = hov ? (isHov ? 1 : 0.07) : 0.4;
                   const sw = isHov ? 2.5 : 1.5;
@@ -1020,7 +1132,7 @@ export function ProjectGanttTab({ tasks, simDelays, setSimDelays, onEdit, setAdd
 
         {/* Tooltip */}
         {ht && (() => {
-          const pc = projs.find(p => p.id === ht.projId)?.color || '#888';
+          const pc = ht.isC ? CONFLICT_RED : NEUTRAL;
           const htPer = people.find(p => p.name === ht.person);
           const cNames = ht.cw.map(id => { const c = tasks.find(x => x.id === id); return c ? `${c.id} (${c.person})` : id; });
           const depIds = tdepMap[ht.id] || [];
