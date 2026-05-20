@@ -67,10 +67,15 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
     }
   }, [todayX]);
 
+  // "Hot" tasks get full brightness; everything else is muted to ~30% opacity
+  // so the eye locks onto the actionable items. Per spec: only conflicts and
+  // fragile tasks are hot. Dep violations and overdue stay visible but muted
+  // along with everything else — they have their own badges to be findable.
+  const fragileTasks = useMemo(() => tasks.filter(t => t.isF && !t.isC), [tasks]);
   const hotIds = useMemo(() => new Set([
     ...conflicts.map(t => t.id),
-    ...depViolations.map(t => t.id),
-  ]), [conflicts, depViolations]);
+    ...fragileTasks.map(t => t.id),
+  ]), [conflicts, fragileTasks]);
 
   const ht = hov ? tasks.find(t => t.id === hov) : null;
 
@@ -118,7 +123,8 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
               const y   = HH + i * RH;
               const midY = y + RH / 2;
               const hasC = pt.some(t => t.isC);
-              const hasDV = pt.some(t => t.isDV && !t.isC);
+              const hasF = pt.some(t => t.isF && !t.isC);
+              const hasDV = pt.some(t => t.isDV && !t.isC && !t.isF);
               return (
                 <g key={per.name}>
                   <rect x={0} y={y} width={LW} height={RH} fill={i%2===0?'#13131A':'#0F0F18'} />
@@ -129,8 +135,10 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
                   <text x={42} y={midY+8} fill={MUTED} fontSize="9.5">{per.role.split(' ')[0]}</text>
                   {hasC  && <circle cx={LW-10} cy={y+12} r={6} fill="#EF4444" />}
                   {hasC  && <text x={LW-10} y={y+12} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8" fontWeight="700">!</text>}
-                  {hasDV && !hasC && <circle cx={LW-10} cy={y+12} r={6} fill="#F59E0B" />}
-                  {hasDV && !hasC && <text x={LW-10} y={y+12} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8" fontWeight="700">⊗</text>}
+                  {hasF && !hasC && <circle cx={LW-10} cy={y+12} r={6} fill="#FBBF24" />}
+                  {hasF && !hasC && <text x={LW-10} y={y+12} textAnchor="middle" dominantBaseline="middle" fill="#0F172A" fontSize="10" fontWeight="800" dy="0.5">~</text>}
+                  {hasDV && !hasC && !hasF && <circle cx={LW-10} cy={y+12} r={6} fill="#F59E0B" />}
+                  {hasDV && !hasC && !hasF && <text x={LW-10} y={y+12} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8" fontWeight="700">⊗</text>}
                   <line x1={0} y1={y+RH} x2={LW} y2={y+RH} stroke={BORDER} strokeWidth="0.8" />
                 </g>
               );
@@ -207,11 +215,17 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
                     const isHot = hotIds.has(t.id);
                     const isDV  = t.isDV && !t.isC;
                     const isC   = t.isC;
+                    const isF   = t.isF && !t.isC;  // fragile (but not also conflicting)
                     const ih    = hov === t.id;
 
-                    const barColor = isC ? '#EF4444' : isDV ? '#F59E0B' : per.color;
-                    const barFill  = isC ? '#EF444430' : isDV ? '#F59E0B25' : per.color+'18';
-                    const opacity  = isHot ? 1 : (hov && !ih) ? 0.3 : isHot ? 1 : 0.65;
+                    // Colour by status: red for conflict, yellow for fragile,
+                    // amber for dep-violation, neutral steel-blue otherwise.
+                    const barColor = isC ? '#EF4444' : isF ? '#FBBF24' : isDV ? '#F59E0B' : '#5B7B9A';
+                    const barFill  = isC ? '#EF444430' : isF ? '#FBBF2425' : isDV ? '#F59E0B25' : '#5B7B9A18';
+                    // Focus: bright if hot (conflict/fragile) or hovered, otherwise muted.
+                    // No-hover state: hot = 1, everything else = 0.22.
+                    // Hovering a non-hot bar brightens that one specifically.
+                    const opacity = isHot ? 1 : ih ? 1 : 0.22;
 
                     return (
                       <g key={t.id} opacity={opacity} style={{ cursor:'default' }}
@@ -240,6 +254,12 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
                           <g style={{ pointerEvents:'none' }}>
                             <circle cx={x+w-7} cy={by0+7} r={5.5} fill="#EF4444" />
                             <text x={x+w-7} y={by0+7} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="7" fontWeight="800">!</text>
+                          </g>
+                        )}
+                        {isF && !isC && (
+                          <g style={{ pointerEvents:'none' }}>
+                            <circle cx={x+w-7} cy={by0+7} r={5.5} fill="#FBBF24" />
+                            <text x={x+w-7} y={by0+7} textAnchor="middle" dominantBaseline="middle" fill="#0F172A" fontSize="9" fontWeight="800" dy="0.5">~</text>
                           </g>
                         )}
                         {isDV && (
@@ -298,4 +318,3 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
     </div>
   );
 }
-
