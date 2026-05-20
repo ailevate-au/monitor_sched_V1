@@ -170,7 +170,7 @@ function EmptyState({ fileInputRef, showNewProj, setShowNewProj, handleFileChang
       {/* Nav */}
       <div style={{ background:NAV, padding:'0 28px', height:'52px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${BORDER}` }}>
         <div style={{ display:'flex', alignItems:'center' }}>
-          <span style={{ color:ORANGE, fontWeight:'800', fontSize:'18px', letterSpacing:'-0.5px', marginRight:'32px' }}>Interscale</span>
+          <span style={{ color:ORANGE, fontWeight:'800', fontSize:'18px', letterSpacing:'-0.5px', marginRight:'32px' }}>FlowIQ</span>
           {['Gantt Chart','Project View','Conflicts','Resource'].map((l, i) => (
             <button key={i} style={{ padding:'0 18px', height:'52px', border:'none', background:'none', cursor:'default', fontSize:'13px', fontWeight:'500', color:i===0?ORANGE:MUTED, borderBottom:i===0?`2px solid ${ORANGE}`:'2px solid transparent', whiteSpace:'nowrap', opacity:0.5 }}>{l}</button>
           ))}
@@ -319,13 +319,6 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
   const [showResolver, setShowResolver] = useState(false);
   const [addTasksProj, setAddTasksProj] = useState(null);
 
-  const kpi = {
-    total:     tasks.length,
-    conflicts: tasks.filter(t => t.isC).length,
-    fragile:   tasks.filter(t => t.isF).length,
-    depViol:   tasks.filter(t => t.isDV).length,
-  };
-
   const handleEdit  = useCallback(target => setEditTarget(target), []);
   const handleApply = useCallback((nd, mode) => { setSimDelays(nd); if (mode) setCascadeMode(mode); }, []);
 
@@ -424,16 +417,75 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
   // A task is "effectively completed" if the engine marks it or an override says so.
   const isEffectivelyCompleted = t => t.isCompleted || statusOverrides.get(t.id) === 'Completed';
 
-  // A project is "on schedule" if none of its active tasks are
-  // conflicted, dep-violated, overdue, or have a simulated delay applied.
+  // Index tasks by id for fast cross-lookup (conflict partners, dep upstreams).
+  const taskById = useMemo(() => Object.fromEntries(tasks.map(t => [t.id, t])), [tasks]);
+
+  // ── Conflict partition: intra-project vs cross-project ────────────────────
+  // The engine flags a task as `isC` for ANY same-person overlap. To split
+  // these into "Project Risk" vs "Cross Project Risk" we look at each task's
+  // conflict-partners (t.cw — the IDs it overlaps with) and see whether any
+  // partner is in the SAME project (→ intra) or a DIFFERENT one (→ cross).
+  //
+  // Clean split: a project shows up in EXACTLY ONE bucket per conflict.
+  //   - Has an intra-project conflict?  → Project Risk
+  //   - Has a cross-project conflict?    → Cross Project Risk
+  // A project can be in BOTH buckets if it has both kinds of conflict, but
+  // a single conflict is never double-counted.
+  const intraConflictProjs = new Set();
+  const crossConflictProjs = new Set();
+  for (const t of tasks) {
+    if (!t.isC || isEffectivelyCompleted(t)) continue;
+    for (const partnerId of (t.cw || [])) {
+      const partner = taskById[partnerId];
+      if (!partner || isEffectivelyCompleted(partner)) continue;
+      if (partner.projId === t.projId) intraConflictProjs.add(t.projId);
+      else                              crossConflictProjs.add(t.projId);
+    }
+  }
+
+  // ── Risky cross-project dependencies ──────────────────────────────────────
+  // A project also lights up Cross Project Risk if it has a task whose dep
+  // points to a task in a DIFFERENT project AND that upstream is in real
+  // trouble (conflict or overdue — not just "moved", per spec).
+  for (const t of tasks) {
+    if (isEffectivelyCompleted(t)) continue;
+    for (const depRaw of (tdepMap[t.id] || [])) {
+      const depId = typeof depRaw === 'string' ? depRaw : depRaw.id;
+      const upstream = taskById[depId];
+      if (!upstream) continue;
+      if (upstream.projId === t.projId) continue;       // same-project dep — not a cross-project signal
+      if (isEffectivelyCompleted(upstream)) continue;   // upstream is done — no risk to flow
+      if (upstream.isC || upstream.isOverdue) {
+        crossConflictProjs.add(t.projId);
+      }
+    }
+  }
+
+  // ── On-schedule projects (a project is on schedule if it has NO unresolved risk) ──
   const delayedTaskIds = new Set(Object.keys(simDelays).filter(id => simDelays[id] > 0));
   const onSchedule = projs.filter(p => {
+    if (intraConflictProjs.has(p.id) || crossConflictProjs.has(p.id)) return false;
     const pt = tasks.filter(t => t.projId === p.id && !isEffectivelyCompleted(t));
-    return !pt.some(t => t.isC || t.isDV || t.isOverdue || delayedTaskIds.has(t.id));
+    return !pt.some(t => t.isOverdue || delayedTaskIds.has(t.id));
   }).length;
   const onSchedulePct = projs.length ? Math.round((onSchedule / projs.length) * 100) : 0;
-  const projRisk  = projs.filter(p => tasks.filter(t => t.projId === p.id && !isEffectivelyCompleted(t)).some(t => t.isC));
-  const crossRisk = projs.filter(p => tasks.filter(t => t.projId === p.id && !isEffectivelyCompleted(t)).some(t => t.isDV));
+
+  const projRisk  = projs.filter(p => intraConflictProjs.has(p.id));
+  const crossRisk = projs.filter(p => crossConflictProjs.has(p.id));
+
+  // KPI object — must come AFTER projRisk/crossRisk are declared (it reads
+  // their lengths) and before the JSX that consumes it.
+  const kpi = {
+    total:         tasks.length,
+    conflicts:     tasks.filter(t => t.isC).length,  // total conflict count (used by resolver)
+    fragile:       tasks.filter(t => t.isF).length,
+    // Tile-gating flags — true when the respective KPI is non-zero.
+    // hasProjRisk lights the "Project Risk" tile (intra-project conflicts).
+    // hasCrossRisk lights the "Cross Project Risk" tile (cross-project
+    //   conflicts OR a risky cross-project dependency).
+    hasProjRisk:   projRisk.length > 0,
+    hasCrossRisk:  crossRisk.length > 0,
+  };
 
   const TAB_ITEMS = [
     { id:'gantt',     l:'Gantt Chart'  },
@@ -512,17 +564,17 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
           <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>Projects On Schedule</div>
         </div>
 
-        <div onClick={() => { if (kpi.conflicts>0) setTab('conflicts'); }}
-          style={{ background:kpi.conflicts>0?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.conflicts>0?'#7F1D1D':BORDER}`, minWidth:'160px', cursor:kpi.conflicts>0?'pointer':'default', position:'relative', flex:1 }}>
+        <div onClick={() => { if (kpi.hasProjRisk) setTab('conflicts'); }}
+          style={{ background:kpi.hasProjRisk?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasProjRisk?'#7F1D1D':BORDER}`, minWidth:'160px', cursor:kpi.hasProjRisk?'pointer':'default', position:'relative', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.conflicts>0?'#FCA5A5':MUTED }}>Project Risk</span>
-            {kpi.conflicts>0 && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
+            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.hasProjRisk?'#FCA5A5':MUTED }}>Project Risk</span>
+            {kpi.hasProjRisk && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.conflicts>0?'#FCA5A5':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.conflicts>0?projRisk.length:'—'}</span>
-            {kpi.conflicts>0 && projRisk[0] && <span style={{ fontSize:'13px', color:'#FCA5A5', fontWeight:'600' }}>({projRisk[0].id})</span>}
+            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.hasProjRisk?'#FCA5A5':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.hasProjRisk?projRisk.length:'—'}</span>
+            {kpi.hasProjRisk && projRisk[0] && <span style={{ fontSize:'13px', color:'#FCA5A5', fontWeight:'600' }}>({projRisk[0].id})</span>}
           </div>
-          {kpi.conflicts>0
+          {kpi.hasProjRisk
             ? <div style={{ fontSize:'11px', color:'#F87171', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
             : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>No issues</div>
           }
@@ -531,17 +583,17 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
           )}
         </div>
 
-        <div onClick={() => { if (kpi.depViol>0) setTab('conflicts'); }}
-          style={{ background:kpi.depViol>0?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.depViol>0?'#7F1D1D':BORDER}`, minWidth:'180px', cursor:kpi.depViol>0?'pointer':'default', flex:1 }}>
+        <div onClick={() => { if (kpi.hasCrossRisk) setTab('conflicts'); }}
+          style={{ background:kpi.hasCrossRisk?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasCrossRisk?'#7F1D1D':BORDER}`, minWidth:'180px', cursor:kpi.hasCrossRisk?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.depViol>0?'#FCA5A5':MUTED }}>Cross Project Risk</span>
-            {kpi.depViol>0 && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
+            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.hasCrossRisk?'#FCA5A5':MUTED }}>Cross Project Risk</span>
+            {kpi.hasCrossRisk && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.depViol>0?'#FCA5A5':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.depViol>0?crossRisk.length:'—'}</span>
-            {kpi.depViol>0 && crossRisk[0] && <span style={{ fontSize:'13px', color:'#FCA5A5', fontWeight:'600' }}>({crossRisk[0].id})</span>}
+            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.hasCrossRisk?'#FCA5A5':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.hasCrossRisk?crossRisk.length:'—'}</span>
+            {kpi.hasCrossRisk && crossRisk[0] && <span style={{ fontSize:'13px', color:'#FCA5A5', fontWeight:'600' }}>({crossRisk[0].id})</span>}
           </div>
-          {kpi.depViol>0
+          {kpi.hasCrossRisk
             ? <div style={{ fontSize:'11px', color:'#F87171', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
             : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>No issues</div>
           }

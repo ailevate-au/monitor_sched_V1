@@ -27,6 +27,9 @@ export const STATUS_STYLES = {
   'Overdue':     { bg:'#3B1219', tx:'#FB923C', bd:'#C2410C' },
   'Conflict':    { bg:'#3B1219', tx:'#F87171', bd:'#7F1D1D' },
   'Fragile':     { bg:'#2D2200', tx:'#FBBF24', bd:'#92400E' },
-  'In Progress': { bg:'#0D2235', tx:'#38BDF8', bd:'#0369A1' },
-  'On Track':    { bg:'#0F1F14', tx:'#4ADE80', bd:'#166534' },
+  // On Track / In Progress share the steel-blue family — only exceptional states
+  // get warning colours. In Progress uses a brighter text/border to mirror the
+  // brighter outline on the Gantt bar.
+  'In Progress': { bg:'#1A2632', tx:'#7DA3C8', bd:'#3D5A78' },
+  'On Track':    { bg:'#161E27', tx:'#5B7B9A', bd:'#2E4256' },
 };

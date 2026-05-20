@@ -269,9 +269,13 @@ export function ProjectViewTab({ tasks, onDelete, onEdit, onToggleComplete, stat
               const proj  = projs.find(p => p.id === r.projId);
               const ss    = SS[r.status] || SS['On Track'];
               const baseBg = ri%2===0 ? '#13131A' : '#0F0F18';
-              // Project/task IDs render in green normally, red when the row is
-              // in conflict — consistent with the Gantt's green/red scheme.
-              const rowColor = r.status === 'Conflict' ? '#EF4444' : (proj?.color || '#22C55E');
+              // Project/task IDs reflect the row's status colour, so a quick
+              // scan down the column tells you what needs attention.
+              const rowColor =
+                r.status === 'Conflict'  ? '#EF4444' :
+                r.status === 'Overdue'   ? '#F59E0B' :
+                r.status === 'Completed' ? '#10B981' :
+                '#5B7B9A';
               return (
                 <tr key={r.id} style={{ background:baseBg, borderBottom:`1px solid ${BORDER}` }}
                   onMouseEnter={e=>e.currentTarget.style.background='#1E2535'}

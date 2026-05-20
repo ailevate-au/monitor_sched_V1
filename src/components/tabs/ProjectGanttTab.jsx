@@ -32,18 +32,49 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
     return m;
   }, [isSimulating, previewTasks, tasksProp]);
 
-  // ── Neutral / conflict palette ─────────────────────────────────────────────
-  // All tasks render in NEUTRAL by default. Conflicts override to CONFLICT_RED.
-  // This replaces the previous per-project / per-role colour scheme so that
-  // conflicts pop visually wherever they appear.
-  const NEUTRAL       = '#22C55E';  // green-500 — default task colour (distinct from completed-green #10B981)
-  const CONFLICT_RED  = '#EF4444';  // red-500 — matches existing conflict badges
-  const GHOST_GREY    = '#475569';  // greyed ghost of a task's pre-shift position
-  // Helper: pick the right colour for a task based on its conflict flag.
-  const taskColor = t => (t && t.isC) ? CONFLICT_RED : NEUTRAL;
-  // Helper for groups of tasks (rollup pill, role row): if ANY task in the
-  // group is in conflict, use red — otherwise neutral.
-  const groupColor = arr => (arr && arr.some(t => t.isC)) ? CONFLICT_RED : NEUTRAL;
+  // ── Status-driven palette ──────────────────────────────────────────────────
+  // Bar colour = task status. Brand orange (#F97316) is reserved for UI chrome
+  // (active tabs, simulation bar, buttons) and never used on bars.
+  //   On Track / In Progress → steel-blue (the default)
+  //   Completed              → green
+  //   Overdue                → amber-orange
+  //   Conflict               → red
+  //   Fragile / Dep-Violation → badge only (bar colour unchanged)
+  // In-Progress is identical to On Track in fill but uses a BRIGHTER stroke,
+  // so active work whispers "I'm running" without dominating the chart.
+  const TASK_BLUE     = '#5B7B9A';
+  const TASK_BLUE_HI  = '#7DA3C8';  // brighter outline for in-progress
+  const STATUS_GREEN  = '#10B981';
+  const STATUS_AMBER  = '#F59E0B';
+  const STATUS_RED    = '#EF4444';
+  const GHOST_GREY    = '#475569';
+  // Aliases kept so the rest of the file (which references NEUTRAL / CONFLICT_RED) still compiles.
+  const NEUTRAL       = TASK_BLUE;
+  const CONFLICT_RED  = STATUS_RED;
+
+  // Effective status of a task → bar fill colour.
+  const fillForStatus = s =>
+    s === 'Completed' ? STATUS_GREEN :
+    s === 'Overdue'   ? STATUS_AMBER :
+    s === 'Conflict'  ? STATUS_RED   :
+    TASK_BLUE;
+  // Stroke is normally the same as the fill, BUT in-progress overrides to the
+  // brighter blue so active tasks have a subtly highlighted outline.
+  const strokeForStatus = s =>
+    s === 'In Progress' ? TASK_BLUE_HI : fillForStatus(s);
+
+  // Wrapper that computes a task's effective status (respecting overrides)
+  // and returns { fill, stroke } in one call. Used in the bar render path.
+  const colorsFor = (t) => {
+    const eff = computeStatus(t, statusOverrides, todayMs || Date.now());
+    return { status: eff, fill: fillForStatus(eff), stroke: strokeForStatus(eff) };
+  };
+
+  // Legacy helper kept for callers that just want one colour per task —
+  // returns the bar's fill, which already accounts for conflict/completed/overdue.
+  const taskColor = t => t ? fillForStatus(computeStatus(t, statusOverrides, todayMs || Date.now())) : TASK_BLUE;
+  // Group helper (rollup pill, role row): if ANY task is in conflict, red — otherwise neutral.
+  const groupColor = arr => (arr && arr.some(t => t.isC)) ? STATUS_RED : TASK_BLUE;
 
 
   // ── Filter state — owned here, not in parent ──────────────────────────────
@@ -836,31 +867,31 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                     const x = txR(t.sd), w = Math.max(t.cd*dpx, t.cd?4:0);
                     const ih = hov===t.id;
                     const dimmed = showDeps && hov && !hovRelated.has(t.id);
-                    const tc = taskColor(t);  // red if conflict, neutral otherwise
+                    const c = colorsFor(t);          // { status, fill, stroke }
+                    const effectiveStatus = c.status;
+                    const effectiveCompleted = effectiveStatus === 'Completed';
+
                     if (!t.cd) return (
                       <polygon key={t.id}
                         points={`${x},${midY-5} ${x+5},${midY} ${x},${midY+5} ${x-5},${midY}`}
-                        fill={tc} opacity={dimmed?0.2:0.85}
+                        fill={c.fill} opacity={dimmed?0.2:0.85}
                         style={{cursor:'pointer'}}
                         onMouseEnter={()=>setHov(t.id)} onMouseLeave={()=>setHov(null)}
                         onClick={()=>onEdit({ type:'task', id:t.id })} />
                     );
 
                     // ── Bar colour logic ───────────────────────────────────
-                    const nowMs2 = todayMs || Date.now();
-                    const effectiveStatus = computeStatus(t, statusOverrides, nowMs2);
-                    const effectiveCompleted = effectiveStatus === 'Completed';
-
-                    const barStroke = effectiveCompleted ? '#10B981'
-                      : t.isOverdue  ? '#F59E0B'
-                      : t.isDV       ? '#F59E0B'
-                      : tc;
-                    const barFill = effectiveCompleted ? '#10B98118'
-                      : t.isOverdue  ? '#F59E0B18'
-                      : t.isDV       ? '#FFF7ED'
-                      : tc+'28';
+                    // Status drives both fill and stroke via colorsFor(). The
+                    // exceptions: dep-violations get an amber dashed treatment
+                    // (the dashes signal "broken constraint"), and a completed
+                    // bar still uses the green family but with a much lower
+                    // fill opacity so it visually recedes — done means done.
+                    const barStroke = t.isDV && !effectiveCompleted ? STATUS_AMBER : c.stroke;
+                    const barFill   = effectiveCompleted ? STATUS_GREEN+'18'
+                                    : t.isDV             ? STATUS_AMBER+'14'
+                                    : c.fill + '28';
                     const barDash = (t.isDV && !effectiveCompleted) ? '5 3' : 'none';
-                    const labelColor = effectiveCompleted ? '#10B981' : t.isOverdue ? '#F59E0B' : tc;
+                    const labelColor = c.fill;
                     const labelDecoration = effectiveCompleted ? 'line-through' : 'none';
 
                     // Badge position. For normal-width bars the badge sits
@@ -911,8 +942,8 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                           <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'8':'9'} fontWeight="800">⚠</text>
                         </g>}
                         {!effectiveCompleted && t.isF && !t.isC && !t.isOverdue && <g style={{pointerEvents:'none'}}>
-                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#F59E0B" stroke="#13131A" strokeWidth="1.5" />
-                          <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'10':'11'} fontWeight="800" dy="0.5">~</text>
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#FBBF24" stroke="#13131A" strokeWidth="1.5" />
+                          <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="#0F172A" fontSize={tinyBar?'10':'11'} fontWeight="800" dy="0.5">~</text>
                         </g>}
                         {!effectiveCompleted && t.isDV && !t.isC && !t.isF && !t.isOverdue && <g style={{pointerEvents:'none'}}>
                           <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#F59E0B" stroke="#13131A" strokeWidth="1.5" />

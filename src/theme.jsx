@@ -15,14 +15,20 @@ export const COLORS = {
 export const { NAV, SURFACE, CARD, BORDER, ORANGE, TEXT, MUTED } = COLORS;
 
 // ── Task / project colour scheme ─────────────────────────────────────────────
-// Colour-coding by project/person was removed. Everything is uniform green;
-// conflicts are highlighted red by individual components. These palettes are
-// kept (rather than deleted) so existing code that indexes into them still
-// works — every entry is just the same green now.
-export const TASK_GREEN   = '#22C55E';  // default task/project colour
-export const CONFLICT_RED = '#EF4444';  // conflict highlight
-export const PROJ_COLORS   = [TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN];
-export const PERSON_COLORS = [TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN, TASK_GREEN];
+// Status drives colour. The bar IS the task's status; warning badges layer
+// on top. Brand orange (#F97316) is reserved for UI accents — never used for
+// task bars or status.
+export const TASK_BLUE       = '#5B7B9A';  // default — on track / in progress
+export const TASK_BLUE_HI    = '#7DA3C8';  // brighter stroke for in-progress
+export const STATUS_GREEN    = '#10B981';  // completed
+export const STATUS_AMBER    = '#F59E0B';  // overdue
+export const STATUS_RED      = '#EF4444';  // conflict
+export const BADGE_YELLOW    = '#FBBF24';  // fragile (badge only, never bar)
+export const CONFLICT_RED    = STATUS_RED; // alias kept for callers that import it
+// Legacy palettes kept so older code that indexes into them still works.
+// Every entry is the neutral now — colour-coding by project/person was removed.
+export const PROJ_COLORS   = [TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE];
+export const PERSON_COLORS = [TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE, TASK_BLUE];
 
 // ── Static timeline reference (Jan–Dec day offsets in a non-leap year) ──────
 export const ALL_MONS = [
