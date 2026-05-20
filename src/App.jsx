@@ -24,6 +24,7 @@ import { NAV, SURFACE, CARD, BORDER, ORANGE, TEXT, MUTED } from './theme.jsx';
 import { EditModal } from './components/EditModal.jsx';
 import { ConflictResolutionPopover } from './components/ConflictResolutionPopover.jsx';
 import { ProjectGanttTab } from './components/tabs/ProjectGanttTab.jsx';
+import { DashboardTab } from './components/tabs/DashboardTab.jsx';
 import { ProjectViewTab } from './components/tabs/ProjectViewTab.jsx';
 import { ConflictsTab } from './components/tabs/ConflictsTab.jsx';
 import { PeopleTab } from './components/tabs/PeopleTab.jsx';
@@ -158,8 +159,40 @@ export default function App() {
 }
 
 // ── EmptyState ───────────────────────────────────────────────────────────────
-// Pre-import shell. Greyed-out KPIs, instructional placeholder, Import button.
+// Pre-import shell. Renders the same header + tab bar as the loaded app, with
+// the Dashboard tab fully populated in "empty mode" (zero values + a prominent
+// Import banner). Other tabs in the empty state show a small stub explaining
+// they'll populate once data is imported. This keeps the app's structure
+// consistent whether or not data is loaded.
 function EmptyState({ fileInputRef, showNewProj, setShowNewProj, handleFileChange, triggerImport, importing, importError }) {
+  const [tab, setTab] = useState('dashboard');
+  const TAB_ITEMS = [
+    { id:'dashboard', l:'Dashboard'   },
+    { id:'gantt',     l:'Gantt Chart'  },
+    { id:'project',   l:'Project View' },
+    { id:'workflows', l:'Workflows'    },
+    { id:'conflicts', l:'Conflicts'    },
+    { id:'people',    l:'Resource'     },
+  ];
+
+  // Stub for non-dashboard tabs in empty mode — simple, informative.
+  const TabStub = ({ name }) => (
+    <div style={{ padding:'80px 28px', textAlign:'center' }}>
+      <div style={{ fontSize:'15px', fontWeight:'600', color:TEXT, marginBottom:'10px' }}>{name} is empty</div>
+      <div style={{ fontSize:'12px', color:MUTED, marginBottom:'18px', maxWidth:'420px', margin:'0 auto 18px' }}>
+        Import an xlsx with projects and tasks to populate this view. Or jump back to the Dashboard for the full overview.
+      </div>
+      <button onClick={triggerImport} disabled={importing}
+        style={{ padding:'8px 18px', borderRadius:'8px', border:'none', background:ORANGE, color:'white', fontSize:'12px', fontWeight:'700', cursor:'pointer', marginRight:'8px' }}>
+        {importing ? 'Importing...' : '↥ Import xlsx'}
+      </button>
+      <button onClick={() => setTab('dashboard')}
+        style={{ padding:'8px 18px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', color:TEXT, fontSize:'12px', fontWeight:'600', cursor:'pointer' }}>
+        Back to Dashboard
+      </button>
+    </div>
+  );
+
   return (
     <div style={{ fontFamily:FONT_STACK, background:SURFACE, minHeight:'100vh', color:TEXT }}>
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileChange} style={{ display:'none' }} />
@@ -168,12 +201,15 @@ function EmptyState({ fileInputRef, showNewProj, setShowNewProj, handleFileChang
         <NewProjectModal existingProjs={[]} existingPeople={[]} onAdd={()=>{}} onClose={() => setShowNewProj(false)} />
       )}
 
-      {/* Nav */}
+      {/* Nav — same chrome as the loaded path, with all tabs clickable */}
       <div style={{ background:NAV, padding:'0 28px', height:'52px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${BORDER}` }}>
         <div style={{ display:'flex', alignItems:'center' }}>
-          <span style={{ color:ORANGE, fontWeight:'800', fontSize:'18px', letterSpacing:'-0.5px', marginRight:'32px' }}>FlowIQ</span>
-          {['Gantt Chart','Project View','Conflicts','Resource'].map((l, i) => (
-            <button key={i} style={{ padding:'0 18px', height:'52px', border:'none', background:'none', cursor:'default', fontSize:'13px', fontWeight:'500', color:i===0?ORANGE:MUTED, borderBottom:i===0?`2px solid ${ORANGE}`:'2px solid transparent', whiteSpace:'nowrap', opacity:0.5 }}>{l}</button>
+          <span style={{ color:ORANGE, fontWeight:'800', fontSize:'18px', letterSpacing:'-0.5px', marginRight:'32px' }}>Interscale</span>
+          {TAB_ITEMS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              style={{ padding:'0 18px', height:'52px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color:tab===t.id?ORANGE:MUTED, borderBottom:tab===t.id?`2px solid ${ORANGE}`:'2px solid transparent', whiteSpace:'nowrap' }}>
+              {t.l}
+            </button>
           ))}
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
@@ -185,62 +221,26 @@ function EmptyState({ fileInputRef, showNewProj, setShowNewProj, handleFileChang
         </div>
       </div>
 
-      {/* Placeholder KPI row */}
-      <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', padding:'20px 28px 0' }}>
-        {[{l:'Total Projects',v:'—'},{l:'Projects On Schedule',v:'—%'},{l:'Project Risk',v:'—',sub:'No data'},{l:'Cross Project Risk',v:'—',sub:'No data'},{l:'Fragile Tasks',v:'—',sub:'No data'}].map((k,i) => (
-          <div key={i} style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, flex:i>1?1:undefined, minWidth:i===0?'140px':'160px' }}>
-            <div style={{ fontSize:'10px', color:MUTED, marginBottom:'6px', textTransform:'uppercase', letterSpacing:'0.06em' }}>{k.l}</div>
-            <div style={{ fontSize:'28px', fontWeight:'800', color:MUTED, lineHeight:'1' }}>{k.v}</div>
-            {k.sub && <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>{k.sub}</div>}
-          </div>
-        ))}
-        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px dashed ${BORDER}`, minWidth:'120px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'6px' }}>
-          <span style={{ fontSize:'11px', color:MUTED }}>Add KPI</span>
-          <div style={{ width:'28px', height:'28px', borderRadius:'50%', border:`1.5px solid ${BORDER}`, display:'flex', alignItems:'center', justifyContent:'center', color:MUTED, fontSize:'18px' }}>+</div>
-        </div>
-      </div>
+      {/* Tab content. Dashboard renders in empty mode; other tabs show a stub. */}
+      {tab === 'dashboard' && (
+        <DashboardTab
+          tasks={[]}
+          kpi={{ fragile:0, conflicts:0, hasProjRisk:false, hasCrossRisk:false }}
+          projRisk={[]}
+          crossRisk={[]}
+          onSchedulePct={0}
+          onGoToTab={setTab}
+          onImport={triggerImport}
+          isEmpty={true}
+        />
+      )}
+      {tab !== 'dashboard' && <TabStub name={TAB_ITEMS.find(t => t.id === tab)?.l || 'Tab'} />}
 
-      {/* Action row */}
-      <div style={{ display:'flex', justifyContent:'flex-end', gap:'10px', padding:'14px 28px 0' }}>
-        <button onClick={triggerImport} disabled={importing}
-          style={{ display:'flex', alignItems:'center', gap:'6px', padding:'7px 16px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', color:TEXT, fontSize:'12px', cursor:'pointer', fontWeight:'500' }}>
-          <svg width="13" height="13" fill="none" viewBox="0 0 16 16"><path d="M8 2v9M4 8l4 4 4-4" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M2 13h12" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round"/></svg>
-          {importing ? 'Importing...' : 'Import'}
-        </button>
-        <button onClick={() => setShowNewProj(true)}
-          style={{ padding:'7px 16px', borderRadius:'8px', border:'none', background:ORANGE, color:'white', fontSize:'12px', cursor:'pointer', fontWeight:'700' }}>
-          + New Project
-        </button>
-      </div>
-
-      {/* Empty tab shell */}
-      <div style={{ margin:'14px 28px 28px', background:CARD, borderRadius:'12px', border:`1px solid ${BORDER}`, overflow:'hidden' }}>
-        <div style={{ display:'flex', alignItems:'center', borderBottom:`1px solid ${BORDER}`, background:'#1C1C27', padding:'0 6px' }}>
-          {['Gantt Chart','Project View','Conflicts','Resource'].map((l,i) => (
-            <button key={i} style={{ padding:'12px 18px', border:'none', background:'none', cursor:'default', fontSize:'13px', fontWeight:i===0?'600':'400', color:i===0?ORANGE:MUTED, borderBottom:i===0?`2px solid ${ORANGE}`:'2px solid transparent', marginBottom:'-1px', whiteSpace:'nowrap', opacity:i===0?1:0.45 }}>{l}</button>
-          ))}
+      {importError && (
+        <div style={{ margin:'0 28px 28px', padding:'12px 16px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D', color:'#FCA5A5', fontSize:'12px' }}>
+          <strong>Import failed:</strong> {importError}
         </div>
-        <div style={{ position:'relative', minHeight:'420px', display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ position:'absolute', inset:0, overflow:'hidden', opacity:0.15 }}>
-            {Array.from({length:8}).map((_,i) => <div key={i} style={{ position:'absolute', left:`${(i+1)*12.5}%`, top:0, bottom:0, width:'1px', background:MUTED }} />)}
-            {Array.from({length:5}).map((_,i) => <div key={i} style={{ position:'absolute', top:`${(i+1)*16.6}%`, left:0, right:0, height:'1px', background:MUTED }} />)}
-          </div>
-          <div style={{ textAlign:'center', zIndex:1 }}>
-            <div style={{ fontSize:'36px', marginBottom:'14px', opacity:0.4 }}>📊</div>
-            <div style={{ fontSize:'16px', fontWeight:'600', color:TEXT, marginBottom:'8px', opacity:0.6 }}>No schedule data</div>
-            <div style={{ fontSize:'12px', color:MUTED, lineHeight:'1.7', maxWidth:'340px', margin:'0 auto', opacity:0.7 }}>
-              Use the <strong style={{color:TEXT}}>Import</strong> button above to load your schedule.<br/>
-              Expects a <strong style={{color:TEXT}}>Schedule</strong> sheet with columns:<br/>
-              <span style={{ fontSize:'11px', color:'#6B7280' }}>Project · Task ID · Task Name · Assigned · Role · Rate · Start · End · Dependencies</span>
-            </div>
-            {importError && (
-              <div style={{ marginTop:'16px', padding:'10px 14px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D', color:'#FCA5A5', fontSize:'12px', maxWidth:'340px', margin:'16px auto 0', textAlign:'left' }}>
-                <strong>Import failed:</strong> {importError}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -344,7 +344,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
     onMutate(applyEditsToData(baseData, currentEdits));
   }, [baseData, onMutate]);
 
-  const [tab,        setTab]        = useState('gantt');
+  const [tab,        setTab]        = useState('dashboard');
   const [sel,        setSel]        = useState(null);
   const [editTarget, setEditTarget] = useState(null);
   const [showResolver, setShowResolver] = useState(false);
@@ -585,6 +585,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
   };
 
   const TAB_ITEMS = [
+    { id:'dashboard', l:'Dashboard'   },
     { id:'gantt',     l:'Gantt Chart'  },
     { id:'project',   l:'Project View' },
     { id:'workflows', l:'Workflows'    },
@@ -740,6 +741,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
 
       {/* Tab panel */}
       <div style={{ margin:'14px 28px 28px', background:CARD, borderRadius:'12px', border:`1px solid ${BORDER}`, overflow:'hidden' }}>
+        {tab==='dashboard' && <DashboardTab tasks={tasks} kpi={kpi} projRisk={projRisk} crossRisk={crossRisk} onSchedulePct={onSchedulePct} onGoToTab={setTab} />}
         {tab==='gantt'     && <ProjectGanttTab tasks={tasks} previewTasks={previewTasks} pendingShift={pendingShift} pendingReassigns={pendingReassigns} onCommitAll={commitAllPending} onCancelShift={cancelShift} onCancelReassign={cancelReassign} simDelays={simDelays} setSimDelays={setSimDelays} onEdit={handleEdit} setAddTasksProj={setAddTasksProj} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} todayMs={todayMs} />}
         {tab==='project'   && <ProjectViewTab tasks={tasks} history={history} onDelete={handleDelete} onEdit={handleEdit} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} onSetStatus={setStatusOverride} todayMs={todayMs} />}
         {tab==='workflows' && <WorkflowsTab />}
