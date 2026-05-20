@@ -9,16 +9,21 @@ import { normDep } from '../../engine/schedule.jsx';
 import { computeStatus } from '../../engine/status.jsx';
 import { DPX, HH, LW, PRH, RRH, SRH, SBH, ALL_MONS } from '../../theme.jsx';
 
-export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, onCommitShift, onCancelShift, simDelays, setSimDelays, onEdit, setAddTasksProj, onToggleComplete, statusOverrides, todayMs }) {
+export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, pendingReassigns, onCommitAll, onCancelShift, onCancelReassign, simDelays, setSimDelays, onEdit, setAddTasksProj, onToggleComplete, statusOverrides, todayMs }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
 
-  // ── Timeline-shift simulation ──────────────────────────────────────────────
-  // When a shift is staged (pendingShift), the chart renders the PREVIEW tasks
-  // (new positions). `ghostMap` holds the OLD {sd, cd} for every task whose
-  // position changed, so we can draw a greyed "ghost" bar where it used to be.
-  // When no shift is staged, everything behaves exactly as before.
-  const isSimulating = !!pendingShift && !!previewTasks;
+  // ── Timeline-shift + reassignment simulation ───────────────────────────────
+  // When ANY change is staged, the chart renders the PREVIEW tasks (with all
+  // staged changes applied). Two ghost maps capture the "before" state so we
+  // can draw greyed bars on the original rows:
+  //   ghostMap          — task id → old {sd, cd} for tasks that MOVED in time
+  //   reassignGhostMap  — task id → old person name for tasks that changed owner
+  // A given task can be in both maps simultaneously (rare but valid).
+  const hasShift     = !!pendingShift;
+  const hasReassigns = !!pendingReassigns && Object.keys(pendingReassigns).length > 0;
+  const isSimulating = (hasShift || hasReassigns) && !!previewTasks;
   const tasks = isSimulating ? previewTasks : tasksProp;
+
   const ghostMap = useMemo(() => {
     if (!isSimulating) return {};
     const oldById = Object.fromEntries(tasksProp.map(t => [t.id, t]));
@@ -31,6 +36,19 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
     }
     return m;
   }, [isSimulating, previewTasks, tasksProp]);
+
+  const reassignGhostMap = useMemo(() => {
+    if (!isSimulating || !hasReassigns) return {};
+    // For each reassigned task: store the OLD person + the OLD {sd, cd} so we
+    // can paint a ghost on that person's row at the original time slot.
+    const oldById = Object.fromEntries(tasksProp.map(t => [t.id, t]));
+    const m = {};
+    for (const [taskId, { from }] of Object.entries(pendingReassigns)) {
+      const oldT = oldById[taskId];
+      if (oldT) m[taskId] = { oldPerson: from, sd: oldT.sd, cd: oldT.cd, projId: oldT.projId };
+    }
+    return m;
+  }, [isSimulating, hasReassigns, pendingReassigns, tasksProp]);
 
   // ── Status-driven palette ──────────────────────────────────────────────────
   // Bar colour = task status. Brand orange (#F97316) is reserved for UI chrome
@@ -239,7 +257,29 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
         // role/person rows ever rendered. This builds the groups from real data.
         //
         // Find the people who actually have (visible) tasks in this project:
-        const projPeople = people.filter(per => pt.some(t => t.person === per.name));
+        const projPeopleNames = new Set(pt.map(t => t.person));
+
+        // PLUS: when reassignments are staged, anyone receiving a task in this
+        // project must appear here too — even if they had no prior tasks in
+        // it. Their new task is already in `pt` (because previewTasks was
+        // rewritten upstream), so projPeopleNames usually already picks them
+        // up. This extra pass is just defensive in case the preview isn't
+        // synthesised for some reason (e.g. wholly-new person not yet known).
+        if (hasReassigns && pendingReassigns) {
+          for (const [taskId, ra] of Object.entries(pendingReassigns)) {
+            const t = pt.find(x => x.id === taskId);
+            if (t) projPeopleNames.add(ra.to);
+          }
+        }
+
+        // Look up the full person objects. If a reassignment destination is
+        // not in `people` yet (brand-new to this dataset), synthesize a
+        // minimal stand-in so the row can render.
+        const projPeople = [...projPeopleNames].map(name => {
+          const known = people.find(p => p.name === name);
+          if (known) return known;
+          return { name, role: 'Unassigned', init: name.slice(0,2).toUpperCase(), color: NEUTRAL, rate: '$42/hr' };
+        });
 
         // Distinct role names, in first-seen order:
         const roleNames = [];
@@ -273,7 +313,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
         return { proj, pt, minSd, maxEd, roleGroups };
       })
       .filter(pd => pd.pt.length > 0 || !filterPerson); // hide projects with no matching tasks when filtering by person
-  }, [tasks, filterProj, filterPerson, showCompleted, statusOverrides, todayMs]);
+  }, [tasks, filterProj, filterPerson, showCompleted, statusOverrides, todayMs, hasReassigns, pendingReassigns, people, NEUTRAL]);
 
   // Flat row list: proj → role → person, with y positions
   const { rowList, totalH } = useMemo(() => {
@@ -367,35 +407,63 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
 
   return (
     <div>
-      {/* ── Timeline-shift simulation bar ──────────────────────────────────
-          Shown only while a shift is staged. Greyed ghost bars on the chart
-          mark the old positions; this bar commits or discards the change. */}
+      {/* ── Consolidated simulation bar ─────────────────────────────────────
+          Lists every staged change (shifts + reassignments) with per-change
+          revert. A single Confirm All commits everything in one transaction.
+          Stays visible whenever any change is staged. */}
       {isSimulating && (
         <div style={{
-          display:'flex', alignItems:'center', gap:'14px',
           padding:'10px 16px', background:'#1E1B2E',
           borderBottom:'2px solid #F97316'
         }}>
-          <span style={{ fontSize:'13px', fontWeight:'700', color:'#F97316' }}>
-            ◷ Simulating timeline shift
-          </span>
-          <span style={{ fontSize:'12px', color:'#9CA3AF' }}>
-            {pendingShift.days > 0 ? `+${pendingShift.days}` : pendingShift.days} working day{Math.abs(pendingShift.days)===1?'':'s'}
-            {' · '}
-            {Object.keys(ghostMap).length} task{Object.keys(ghostMap).length===1?'':'s'} affected
-            {' · '}grey = current, solid = proposed
-          </span>
-          <div style={{ flex:1 }} />
-          <button onClick={onCancelShift}
-            style={{ padding:'6px 14px', borderRadius:'7px', border:'1px solid #2A2A3A',
-              background:'transparent', color:'#E8E8F0', fontSize:'12px', fontWeight:'600', cursor:'pointer' }}>
-            ↺ Revert
-          </button>
-          <button onClick={onCommitShift}
-            style={{ padding:'6px 16px', borderRadius:'7px', border:'none',
-              background:'#F97316', color:'white', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>
-            ✓ Confirm shift
-          </button>
+          <div style={{ display:'flex', alignItems:'center', gap:'14px', marginBottom: (hasShift || hasReassigns) ? '8px' : '0' }}>
+            <span style={{ fontSize:'13px', fontWeight:'700', color:'#F97316' }}>
+              ◷ Simulating changes
+            </span>
+            <span style={{ fontSize:'12px', color:'#9CA3AF' }}>
+              {(hasShift ? 1 : 0) + (hasReassigns ? Object.keys(pendingReassigns).length : 0)} staged
+              {' · '}grey = current, solid = proposed
+            </span>
+            <div style={{ flex:1 }} />
+            <button onClick={onCommitAll}
+              style={{ padding:'6px 16px', borderRadius:'7px', border:'none',
+                background:'#F97316', color:'white', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>
+              ✓ Confirm all
+            </button>
+          </div>
+          {/* Per-change rows — each with its own revert. */}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:'6px' }}>
+            {hasShift && (
+              <div style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'4px 8px 4px 10px', borderRadius:'6px', background:'rgba(249,115,22,0.12)', border:'1px solid rgba(249,115,22,0.35)' }}>
+                <span style={{ fontSize:'11px', color:'#FED7AA', fontWeight:'600' }}>
+                  Shift {pendingShift.days > 0 ? '+' : ''}{pendingShift.days}d
+                  <span style={{ color:'#9CA3AF', fontWeight:'400' }}> · {Object.keys(ghostMap).length} task{Object.keys(ghostMap).length===1?'':'s'}</span>
+                </span>
+                <button onClick={onCancelShift}
+                  title="Revert this shift"
+                  style={{ padding:'2px 6px', borderRadius:'4px', border:'none', background:'transparent', color:'#FCA5A5', fontSize:'11px', cursor:'pointer' }}>
+                  ↺
+                </button>
+              </div>
+            )}
+            {hasReassigns && Object.entries(pendingReassigns).map(([taskId, ra]) => {
+              const t = tasks.find(x => x.id === taskId) || tasksProp.find(x => x.id === taskId);
+              const label = t ? `${t.name || taskId}` : taskId;
+              return (
+                <div key={taskId} style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'4px 8px 4px 10px', borderRadius:'6px', background:'rgba(249,115,22,0.12)', border:'1px solid rgba(249,115,22,0.35)' }}>
+                  <span style={{ fontSize:'11px', color:'#FED7AA', fontWeight:'600' }}>
+                    {ra.from} → {ra.to}
+                    <span style={{ color:'#9CA3AF', fontWeight:'400' }}> · {label}</span>
+                  </span>
+                  <button onClick={() => onCancelReassign && onCancelReassign(taskId)}
+                    title="Revert this reassignment"
+                    style={{ padding:'2px 6px', borderRadius:'4px', border:'none', background:'transparent', color:'#FCA5A5', fontSize:'11px', cursor:'pointer' }}>
+                    ↺
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -844,6 +912,28 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                 <g key={`${proj.id}-${per.name}-bars`}>
                   <rect x={0} y={y} width={TD*dpx} height={SRH} fill="#13131A" />
                   <line x1={0} y1={y+SRH} x2={TD*dpx} y2={y+SRH} stroke="#2A2A3A" strokeWidth="1" />
+                  {/* Reassignment ghosts — when a task has been reassigned AWAY
+                      from this row's person, paint a greyed-out bar at the
+                      task's original time slot on this (old-owner's) row.
+                      The actual solid bar appears on the new owner's row. */}
+                  {isSimulating && hasReassigns && Object.entries(reassignGhostMap).map(([taskId, info]) => {
+                    if (info.oldPerson !== per.name || info.projId !== proj.id) return null;
+                    if (!info.cd) return null; // skip milestones for clarity
+                    const gx = txR(info.sd), gw = Math.max(info.cd*dpx, 4);
+                    return (
+                      <g key={taskId+'-ra-ghost'} style={{ pointerEvents:'none' }}>
+                        <rect x={gx} y={by0} width={gw} height={SBH} rx="4"
+                          fill={GHOST_GREY+'22'} stroke={GHOST_GREY} strokeWidth="1.5"
+                          strokeDasharray="4 3" />
+                        {gw > 50 && (
+                          <text x={gx+gw/2} y={midY+1} textAnchor="middle" dominantBaseline="middle"
+                            fill={GHOST_GREY} fontSize="9" fontStyle="italic" fontWeight="600">
+                            → {pendingReassigns[taskId]?.to || ''}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
                   {/* Ghost bars — old positions during a staged timeline shift.
                       Drawn first so the real (new-position) bars sit on top. */}
                   {isSimulating && pTasks.map(t => {
@@ -861,6 +951,37 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                         x={gx} y={by0} width={gw} height={SBH} rx="4"
                         fill={GHOST_GREY+'22'} stroke={GHOST_GREY} strokeWidth="1.5"
                         strokeDasharray="4 3" style={{pointerEvents:'none'}} />
+                    );
+                  })}
+                  {/* Movement lines — thin connector from each ghost to its new
+                      position, with an arrowhead pointing the direction of the
+                      shift. Makes it obvious at a glance "this moved from here
+                      to there." Skipped for milestones (cd=0) and when the
+                      task's position somehow didn't actually change. */}
+                  {isSimulating && pTasks.map(t => {
+                    const g = ghostMap[t.id];
+                    if (!g || !g.cd) return null;
+                    const gx = txR(g.sd), gw = Math.max(g.cd*dpx, 4);
+                    const nx = txR(t.sd), nw = Math.max(t.cd*dpx, 4);
+                    const forward = t.sd > g.sd;
+                    // Draw from the trailing edge of the source to the leading
+                    // edge of the target — for forward shifts, ghost's right
+                    // edge → new bar's left edge; for backward, the opposite.
+                    const x1 = forward ? gx + gw : gx;
+                    const x2 = forward ? nx      : nx + nw;
+                    // If the bars overlap (small shift), the line would be
+                    // backwards or zero-length — skip in that case.
+                    if (forward ? (x2 <= x1) : (x2 >= x1)) return null;
+                    const ah = forward ? -4 : 4; // arrowhead offset direction
+                    return (
+                      <g key={t.id+'-mv'} style={{ pointerEvents:'none' }}>
+                        <line x1={x1} y1={midY} x2={x2} y2={midY}
+                          stroke={'#F97316'} strokeWidth="1.5" strokeDasharray="2 3"
+                          opacity="0.85" />
+                        <polygon
+                          points={`${x2},${midY} ${x2+ah},${midY-3.5} ${x2+ah},${midY+3.5}`}
+                          fill={'#F97316'} opacity="0.95" />
+                      </g>
                     );
                   })}
                   {pTasks.map(t => {

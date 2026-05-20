@@ -8,8 +8,15 @@ import { computeStatus, STATUS_STYLES } from '../../engine/status.jsx';
 import { loadSchedEdits, saveSchedEdits } from '../../storage/persist.jsx';
 import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
 
-export function ProjectViewTab({ tasks, onDelete, onEdit, onToggleComplete, statusOverrides, onSetStatus, todayMs }) {
+export function ProjectViewTab({ tasks, history, onDelete, onEdit, onToggleComplete, statusOverrides, onSetStatus, todayMs }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
+
+  // Sub-tab: 'table' shows the spreadsheet (default); 'history' shows the
+  // append-only change log.
+  const [subTab, setSubTab] = useState('table');
+  // Which history entries are expanded inline to show their details.
+  const [expandedHist, setExpandedHist] = useState({});
+  const safeHistory = Array.isArray(history) ? history : [];
 
   const [sortCol,      setSortCol]      = useState('projId');
   const [sortDir,      setSortDir]      = useState('asc');
@@ -120,6 +127,108 @@ export function ProjectViewTab({ tasks, onDelete, onEdit, onToggleComplete, stat
 
   return (
     <div style={{ fontFamily:'-apple-system,system-ui,sans-serif', position:'relative' }} ref={filterRef}>
+      {/* ── Sub-tab bar: Table | History ──────────────────────────────────── */}
+      <div style={{ display:'flex', alignItems:'center', borderBottom:`1px solid ${BORDER}`, background:CARD }}>
+        {[
+          { id:'table',   label:'Table',   count: tasks.length },
+          { id:'history', label:'History', count: safeHistory.length },
+        ].map(t => (
+          <button key={t.id} onClick={() => setSubTab(t.id)}
+            style={{
+              padding:'12px 18px', border:'none', background:'none', cursor:'pointer',
+              fontSize:'13px', fontWeight: subTab===t.id ? '700' : '500',
+              color: subTab===t.id ? ORANGE : MUTED,
+              borderBottom: subTab===t.id ? `2px solid ${ORANGE}` : '2px solid transparent',
+              marginBottom: '-1px',
+            }}>
+            {t.label} <span style={{ fontSize:'11px', color: subTab===t.id ? ORANGE : MUTED, fontWeight:'500', opacity:0.7 }}>· {t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── History view ──────────────────────────────────────────────────── */}
+      {subTab === 'history' && (
+        <div style={{ padding:'12px 16px', background:'#13131A', minHeight:'400px' }}>
+          {safeHistory.length === 0 ? (
+            <div style={{ padding:'40px 16px', textAlign:'center', color:MUTED, fontSize:'13px' }}>
+              No history yet. Changes you commit will appear here.
+            </div>
+          ) : (
+            <div>
+              {[...safeHistory].reverse().map(entry => {
+                const isExpanded = !!expandedHist[entry.id];
+                const dt = new Date(entry.timestamp);
+                const when = dt.toLocaleString();
+                const kindColor =
+                  entry.kind === 'upload'        ? '#10B981' :
+                  entry.kind === 'shiftTimeline' ? '#F97316' :
+                  entry.kind === 'reassignTasks' ? '#7DA3C8' :
+                  entry.kind === 'deleteTask' || entry.kind === 'deleteProject' ? '#EF4444' :
+                  entry.kind === 'addTasks'      ? '#10B981' :
+                  entry.kind === 'revert'        ? '#FBBF24' :
+                  MUTED;
+                const kindLabel = {
+                  upload:'Upload', shiftTimeline:'Shift', reassignTasks:'Reassign',
+                  deleteTask:'Delete', deleteProject:'Delete project',
+                  addTasks:'Add', revert:'Revert',
+                }[entry.kind] || entry.kind;
+                return (
+                  <div key={entry.id}
+                    style={{
+                      marginBottom:'6px', borderRadius:'8px', background:CARD,
+                      border:`1px solid ${BORDER}`, overflow:'hidden',
+                    }}>
+                    {/* Row header */}
+                    <div onClick={() => setExpandedHist(prev => ({ ...prev, [entry.id]: !prev[entry.id] }))}
+                      style={{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 14px', cursor:'pointer' }}>
+                      <span style={{
+                        fontSize:'10px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.06em',
+                        color:kindColor, background:kindColor+'18', padding:'2px 8px', borderRadius:'4px',
+                        flexShrink:0, minWidth:'60px', textAlign:'center',
+                      }}>{kindLabel}</span>
+                      <span style={{ fontSize:'13px', color:TEXT, flex:1, fontWeight:'500' }}>{entry.summary}</span>
+                      <span style={{ fontSize:'11px', color:MUTED, flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{when}</span>
+                      <span style={{ fontSize:'11px', color:MUTED, flexShrink:0, width:'10px', textAlign:'right' }}>
+                        {isExpanded ? '▾' : '▸'}
+                      </span>
+                    </div>
+                    {/* Expanded details */}
+                    {isExpanded && entry.details && entry.details.length > 0 && (
+                      <div style={{ background:'#0F0F18', padding:'8px 14px 12px', borderTop:`1px solid ${BORDER}` }}>
+                        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'11px' }}>
+                          <thead>
+                            <tr style={{ color:MUTED, textAlign:'left' }}>
+                              <th style={{ padding:'4px 6px', fontWeight:'600' }}>Task</th>
+                              <th style={{ padding:'4px 6px', fontWeight:'600' }}>Project</th>
+                              <th style={{ padding:'4px 6px', fontWeight:'600' }}>Person</th>
+                              {(entry.kind === 'reassignTasks') && <th style={{ padding:'4px 6px', fontWeight:'600' }}>→</th>}
+                              {(entry.kind === 'upload' || entry.kind === 'addTasks') && <th style={{ padding:'4px 6px', fontWeight:'600' }}>Dates</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {entry.details.map((d, di) => (
+                              <tr key={di} style={{ color:TEXT, borderTop:`1px solid ${BORDER}` }}>
+                                <td style={{ padding:'4px 6px' }}>{d.name || d.taskId}</td>
+                                <td style={{ padding:'4px 6px', color:MUTED }}>{d.proj || '—'}</td>
+                                <td style={{ padding:'4px 6px' }}>{d.from || d.person || '—'}</td>
+                                {(entry.kind === 'reassignTasks') && <td style={{ padding:'4px 6px', color:'#7DA3C8' }}>{d.to}</td>}
+                                {(entry.kind === 'upload' || entry.kind === 'addTasks') && <td style={{ padding:'4px 6px', color:MUTED, fontVariantNumeric:'tabular-nums' }}>{d.start} → {d.end}</td>}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Table view (existing UI; preserved exactly) ──────────────────── */}
+      {subTab === 'table' && <>
       {/* Toolbar */}
       <div style={{ display:'flex', alignItems:'center', padding:'0', borderBottom:`1px solid ${BORDER}`, background:CARD }}>
         {/* Completed toggle */}
@@ -324,6 +433,7 @@ export function ProjectViewTab({ tasks, onDelete, onEdit, onToggleComplete, stat
           </tbody>
         </table>
       </div>
+      </>}
     </div>
   );
 }

@@ -7,17 +7,22 @@ import { fmtDate as fd } from '../../engine/dates.jsx';
 import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
 import { ConflictMiniGantt } from '../ConflictMiniGantt.jsx';
 
-export function ConflictsTab({ tasks }) {
+export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCancelReassign, onEdit }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
 
   const [subTab, setSubTab]     = useState('conflicts');
   const [search, setSearch]     = useState('');
   const [expanded, setExpanded] = useState(null); // person name whose row is expanded
-  const [reassigned, setReassigned] = useState({});
+  // `reassigned` is now sourced from App's staging state — local fallback to {}
+  // keeps the component usable in isolation if props aren't passed.
+  const reassigned = pendingReassigns || {};
   const [activeTask, setActiveTask] = useState(null);
 
   const conflicts   = useMemo(() => tasks.filter(t => t.isC).sort((a, b) => a.s - b.s), [tasks]);
   const depViolations = useMemo(() => tasks.filter(t => t.isDV && !t.isC).sort((a, b) => a.s - b.s), [tasks]);
+  // Fragile = near-miss (same person, ≤1 day gap to a neighbour) but NOT in
+  // actual conflict. Sorted chronologically for easy scanning.
+  const fragile = useMemo(() => tasks.filter(t => t.isF && !t.isC).sort((a, b) => a.s - b.s), [tasks]);
 
   // Group conflicts by person
   const byPerson = useMemo(() => {
@@ -34,19 +39,75 @@ export function ConflictsTab({ tasks }) {
     name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const getCandidates = task => {
-    const per = people.find(p => p.name === task.person);
-    return per ? people.filter(p => p.role === per.role && p.name !== task.person) : [];
+  // ── Reassignment candidate scoring ─────────────────────────────────────────
+  // For a candidate C being considered to take task T:
+  //   - prevGap = working days between (C's task ending just before T.start) → T.start
+  //   - nextGap = working days between T.end → (C's task starting just after T.end)
+  //   - margin  = min(prevGap, nextGap)  — the TIGHTEST squeeze in C's schedule
+  // Candidates with negative gaps (would overlap T) are disqualified.
+  // Best candidate = LARGEST margin (most breathing room even on the tight side).
+  // Ties go to whoever has fewer total active tasks.
+  const MS_PER_DAY = 864e5;
+  const wdBetween = (earlier, later) => {
+    // Working-day gap; if later <= earlier, returns 0 or negative as appropriate.
+    if (!earlier || !later) return Infinity;
+    if (later <= earlier) return -Math.ceil((earlier - later) / MS_PER_DAY); // negative = overlap
+    let g = 0;
+    const c = new Date(earlier);
+    while (c < later) {
+      c.setDate(c.getDate() + 1);
+      if (c.getDay() % 6) g++;
+    }
+    return g;
   };
-  const getAvail = (personName, s, e) => {
-    const overlap = tasks.filter(t => t.person === personName && t.cd > 0 && t.s <= e && t.e >= s);
-    return { count: overlap.length };
+
+  const scoreCandidate = (candidatePerson, task) => {
+    // Pull all the candidate's active tasks (excluding the conflicted one itself,
+    // though it isn't theirs yet — defensive).
+    const theirTasks = tasks
+      .filter(t => t.person === candidatePerson.name && t.id !== task.id && t.cd > 0)
+      .sort((a, b) => a.s - b.s);
+    // Find the task that ends just before our task starts:
+    const prev = [...theirTasks].reverse().find(t => t.e <= task.s);
+    const next = theirTasks.find(t => t.s >= task.e);
+    // Anyone whose existing task overlaps the conflicted task's window is
+    // disqualified — they'd just create a new conflict.
+    const overlapping = theirTasks.find(t => t.s < task.e && t.e > task.s);
+    if (overlapping) return { disqualified: true, margin: -Infinity, prevGap: -Infinity, nextGap: -Infinity, load: theirTasks.length };
+    const prevGap = prev ? wdBetween(prev.e, task.s) : Infinity;
+    const nextGap = next ? wdBetween(task.e, next.s) : Infinity;
+    return {
+      disqualified: false,
+      prevGap, nextGap,
+      margin: Math.min(prevGap, nextGap),
+      load: theirTasks.length,
+    };
   };
+
+  // Returns the candidates list, ranked. Each item has {...person, score}.
+  // Same-role only — reassignment is between people who can actually do the work.
+  const getRankedCandidates = task => {
+    const owner = people.find(p => p.name === task.person);
+    if (!owner) return [];
+    const candidates = people
+      .filter(p => p.role === owner.role && p.name !== task.person)
+      .map(p => ({ ...p, score: scoreCandidate(p, task) }));
+    // Sort: disqualified last; among the rest, largest margin first; ties → fewer tasks.
+    candidates.sort((a, b) => {
+      if (a.score.disqualified !== b.score.disqualified) return a.score.disqualified ? 1 : -1;
+      if (b.score.margin !== a.score.margin) return b.score.margin - a.score.margin;
+      return a.score.load - b.score.load;
+    });
+    return candidates;
+  };
+
   const handleReassign = (taskId, toPerson, fromPerson) => {
-    setReassigned(prev => ({ ...prev, [taskId]: { to:toPerson, from:fromPerson } }));
+    if (onStageReassign) onStageReassign(taskId, toPerson, fromPerson);
     setActiveTask(null);
   };
-  const undoReassign = taskId => setReassigned(prev => { const n={...prev}; delete n[taskId]; return n; });
+  const undoReassign = taskId => {
+    if (onCancelReassign) onCancelReassign(taskId);
+  };
 
   const RED = '#EF4444';
 
@@ -56,10 +117,13 @@ export function ConflictsTab({ tasks }) {
       {/* Sub-tab bar */}
       <div style={{ display:'flex', alignItems:'center', padding:'0 20px', borderBottom:`1px solid ${BORDER}`, background:CARD }}>
         <div style={{ display:'flex', alignItems:'center', gap:'0', flex:1 }}>
-          {[{id:'conflicts',l:'Conflicts'},{id:'gantt',l:'Gantt View'}].map(t => (
+          {[{id:'conflicts',l:'Conflicts',n:conflicts.length,c:'#EF4444'},{id:'fragile',l:'Fragile',n:fragile.length,c:'#FBBF24'},{id:'gantt',l:'Gantt View'}].map(t => (
             <button key={t.id} onClick={() => setSubTab(t.id)}
-              style={{ padding:'13px 16px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight: subTab===t.id ? '600' : '400', color: subTab===t.id ? ORANGE : MUTED, borderBottom: subTab===t.id ? `2px solid ${ORANGE}` : '2px solid transparent', marginBottom:'-1px' }}>
+              style={{ padding:'13px 16px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight: subTab===t.id ? '600' : '400', color: subTab===t.id ? ORANGE : MUTED, borderBottom: subTab===t.id ? `2px solid ${ORANGE}` : '2px solid transparent', marginBottom:'-1px', display:'flex', alignItems:'center', gap:'7px' }}>
               {t.l}
+              {typeof t.n === 'number' && t.n > 0 && (
+                <span style={{ fontSize:'10px', fontWeight:'700', color: t.c, background: t.c+'22', padding:'2px 6px', borderRadius:'10px', minWidth:'18px', textAlign:'center', lineHeight:'1.1' }}>{t.n}</span>
+              )}
             </button>
           ))}
         </div>
@@ -135,7 +199,8 @@ export function ConflictsTab({ tasks }) {
                         const pc = projs.find(p => p.id === t.projId)?.color || '#888';
                         const cNames = t.cw.map(id => { const c = tasks.find(x => x.id === id); return c ? `${c.projId} – ${c.name}` : id; });
                         const isTaskOpen = activeTask === t.id;
-                        const candidates = getCandidates(t).map(p => ({ ...p, avail: getAvail(p.name, t.s, t.e) })).sort((a,b) => a.avail.count - b.avail.count);
+                        const candidates = getRankedCandidates(t);
+                        const bestCandidate = candidates.find(c => !c.score.disqualified);
                         return (
                           <div key={t.id} style={{ marginBottom:'8px' }}>
                             <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 12px', borderRadius: isTaskOpen ? '6px 6px 0 0' : '6px', background:'#1C1C27', border:`1px solid #3B1219`, borderBottom: isTaskOpen ? 'none' : undefined }}>
@@ -152,20 +217,35 @@ export function ConflictsTab({ tasks }) {
                             </div>
                             {isTaskOpen && (
                               <div style={{ background:'#13131A', border:`1px solid #3B1219`, borderTop:'none', borderRadius:'0 0 6px 6px', padding:'10px 12px' }}>
-                                <div style={{ fontSize:'10px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'8px' }}>Reassign to same-role colleague</div>
-                                {candidates.map(c => (
-                                  <div key={c.name} onClick={() => handleReassign(t.id, c.name, t.person)}
-                                    style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', borderRadius:'6px', cursor:'pointer', marginBottom:'4px', background:'#1C1C27', border:`1px solid ${BORDER}` }}
-                                    onMouseEnter={e => e.currentTarget.style.background='#2A2A3A'}
-                                    onMouseLeave={e => e.currentTarget.style.background='#1C1C27'}>
-                                    <div style={{ width:'26px', height:'26px', borderRadius:'50%', background:c.color+'30', border:`1.5px solid ${c.color}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'9px', fontWeight:'700', color:c.color, flexShrink:0 }}>{c.init}</div>
-                                    <div style={{ flex:1 }}>
-                                      <div style={{ fontSize:'12px', fontWeight:'600', color:TEXT }}>{c.name}</div>
-                                      <div style={{ fontSize:'10px', color:MUTED }}>{c.avail.count > 0 ? `${c.avail.count} tasks in window` : 'Available'}</div>
+                                <div style={{ fontSize:'10px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'8px' }}>Reassign to same-role colleague <span style={{ fontWeight:'500', textTransform:'none', letterSpacing:'normal', color:'#6B7280' }}>· ranked by schedule margin</span></div>
+                                {candidates.map((c, ci) => {
+                                  const dq = c.score.disqualified;
+                                  const isRec = !dq && bestCandidate && c.name === bestCandidate.name;
+                                  const marginLabel = dq
+                                    ? 'Would overlap existing task'
+                                    : c.score.margin === Infinity
+                                      ? 'No surrounding tasks — fully open'
+                                      : `Margin: ${c.score.margin}d (prev ${c.score.prevGap === Infinity ? '∞' : c.score.prevGap+'d'}, next ${c.score.nextGap === Infinity ? '∞' : c.score.nextGap+'d'})`;
+                                  return (
+                                    <div key={c.name}
+                                      onClick={dq ? undefined : () => handleReassign(t.id, c.name, t.person)}
+                                      style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', borderRadius:'6px', cursor: dq ? 'not-allowed' : 'pointer', marginBottom:'4px', background:'#1C1C27', border: isRec ? `1px solid #10B981` : `1px solid ${BORDER}`, opacity: dq ? 0.5 : 1 }}
+                                      onMouseEnter={e => { if (!dq) e.currentTarget.style.background='#2A2A3A'; }}
+                                      onMouseLeave={e => e.currentTarget.style.background='#1C1C27'}>
+                                      <div style={{ width:'26px', height:'26px', borderRadius:'50%', background:c.color+'30', border:`1.5px solid ${c.color}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'9px', fontWeight:'700', color:c.color, flexShrink:0 }}>{c.init}</div>
+                                      <div style={{ flex:1, minWidth:0 }}>
+                                        <div style={{ fontSize:'12px', fontWeight:'600', color:TEXT, display:'flex', alignItems:'center', gap:'6px' }}>
+                                          {c.name}
+                                          {isRec && <span style={{ fontSize:'9px', fontWeight:'700', color:'#10B981', background:'#0D2B1E', padding:'2px 6px', borderRadius:'10px', border:'1px solid #065F46', letterSpacing:'0.04em' }}>RECOMMENDED</span>}
+                                        </div>
+                                        <div style={{ fontSize:'10px', color:MUTED }}>{marginLabel}</div>
+                                      </div>
+                                      <span style={{ fontSize:'11px', color: dq ? '#EF4444' : (c.score.margin >= 3 ? '#10B981' : '#F59E0B'), fontWeight:'600', flexShrink:0 }}>
+                                        {dq ? 'Conflict' : (c.score.margin === Infinity ? 'Open' : `${c.score.margin}d`)}
+                                      </span>
                                     </div>
-                                    <span style={{ fontSize:'11px', color: c.avail.count > 0 ? '#F59E0B' : '#10B981', fontWeight:'600' }}>{c.avail.count > 0 ? 'Busy' : 'Free'}</span>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -227,6 +307,69 @@ export function ConflictsTab({ tasks }) {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {subTab === 'fragile' && (
+        <div style={{ padding:'16px 24px' }}>
+          <div style={{ marginBottom:'12px' }}>
+            <div style={{ fontSize:'12px', fontWeight:'700', color:'#FBBF24', display:'flex', alignItems:'center', gap:'8px' }}>
+              <span style={{ fontSize:'14px', lineHeight:'1' }}>~</span>
+              Fragile Tasks ({fragile.length})
+            </div>
+            <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>
+              Tasks that don't currently conflict, but have ≤1 working day of slack to the next or previous task for the same person. A small delay anywhere could tip them into a real conflict.
+            </div>
+          </div>
+          {fragile.length === 0 ? (
+            <div style={{ padding:'40px 16px', textAlign:'center', color:MUTED, fontSize:'13px', background:CARD, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
+              ✓ No fragile tasks — every schedule has comfortable margins.
+            </div>
+          ) : (
+            <div style={{ background:CARD, borderRadius:'8px', border:`1px solid ${BORDER}`, overflow:'hidden' }}>
+              {fragile.map((t, i) => {
+                // Find which neighbour task makes this one fragile (the one
+                // within 1 day of either end) so we can show "tight against X".
+                const sameP = tasks
+                  .filter(o => o.person === t.person && o.id !== t.id && o.cd > 0)
+                  .sort((a,b) => a.s - b.s);
+                const before = [...sameP].reverse().find(o => o.e <= t.s);
+                const after  = sameP.find(o => o.s >= t.e);
+                const beforeGapMs = before ? (t.s - before.e) : Infinity;
+                const afterGapMs  = after  ? (after.s - t.e)   : Infinity;
+                const tightSide = beforeGapMs <= afterGapMs ? 'before' : 'after';
+                const neighbour = tightSide === 'before' ? before : after;
+                const gapDays = neighbour ? Math.max(0, Math.round((tightSide === 'before' ? beforeGapMs : afterGapMs) / 864e5)) : null;
+                return (
+                  <div key={t.id}
+                    style={{ display:'flex', alignItems:'center', gap:'14px', padding:'12px 14px', borderBottom: i < fragile.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
+                    {/* yellow ~ badge */}
+                    <div style={{ width:'26px', height:'26px', borderRadius:'50%', background:'#FBBF24'+'22', border:'1.5px solid #FBBF24', display:'flex', alignItems:'center', justifyContent:'center', color:'#FBBF24', fontSize:'13px', fontWeight:'800', flexShrink:0, lineHeight:'1' }}>~</div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:'13px', fontWeight:'600', color:TEXT, display:'flex', alignItems:'center', gap:'8px' }}>
+                        <span style={{ color:'#FBBF24' }}>{t.projId}</span>
+                        <span style={{ color:MUTED, fontWeight:'400' }}>·</span>
+                        <span>{t.name}</span>
+                      </div>
+                      <div style={{ fontSize:'11px', color:MUTED, marginTop:'2px' }}>
+                        {t.person}
+                        {neighbour && (
+                          <>
+                            <span style={{ margin:'0 6px' }}>·</span>
+                            {gapDays === 0 ? 'Back-to-back' : `${gapDays}d slack`} {tightSide} <span style={{ color:'#9CA3AF' }}>{neighbour.name}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <button onClick={() => onEdit && onEdit({ type:'task', id:t.id })}
+                      style={{ padding:'6px 12px', borderRadius:'6px', border:`1px solid ${BORDER}`, background:'transparent', color:TEXT, fontSize:'11px', fontWeight:'600', cursor:'pointer', flexShrink:0 }}>
+                      Open
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

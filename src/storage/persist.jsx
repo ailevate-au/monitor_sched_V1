@@ -20,9 +20,10 @@ export const LS_STATUS_KEY       = 'interscale_status_overrides';
 export const LS_DEPS_KEY         = 'interscale_dep_overrides';
 export const LS_WORKFLOWS_KEY    = 'interscale_workflows';
 export const LS_EDITS_KEY        = 'interscale_edits';
+export const LS_HISTORY_KEY      = 'interscale_history';
 
 export const ALL_LS_KEYS = [
-  LS_KEY, LS_COMPLETED_KEY, LS_STATUS_KEY, LS_DEPS_KEY, LS_WORKFLOWS_KEY, LS_EDITS_KEY,
+  LS_KEY, LS_COMPLETED_KEY, LS_STATUS_KEY, LS_DEPS_KEY, LS_WORKFLOWS_KEY, LS_EDITS_KEY, LS_HISTORY_KEY,
 ];
 
 /** Clear every key this app uses. */
@@ -80,4 +81,20 @@ export function saveSchedEdits(edits) { safeSet(LS_EDITS_KEY, JSON.stringify(edi
 export function loadSchedEdits() {
   const s = safeGet(LS_EDITS_KEY);
   try { return s ? JSON.parse(s) : null; } catch { return null; }
+}
+
+// ── History log (append-only array of commit entries) ────────────────────────
+// Each entry is a plain object produced by engine/edits.jsx buildHistoryEntry.
+// We cap the persisted log at MAX_HISTORY_ENTRIES so localStorage doesn't grow
+// without bound — if the cap is hit, the oldest entries roll off.
+const MAX_HISTORY_ENTRIES = 500;
+export function saveHistory(entries) {
+  const trimmed = entries.length > MAX_HISTORY_ENTRIES
+    ? entries.slice(entries.length - MAX_HISTORY_ENTRIES)
+    : entries;
+  safeSet(LS_HISTORY_KEY, JSON.stringify(trimmed));
+}
+export function loadHistory() {
+  const s = safeGet(LS_HISTORY_KEY);
+  try { return s ? JSON.parse(s) : []; } catch { return []; }
 }

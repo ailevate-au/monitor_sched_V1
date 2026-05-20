@@ -11,12 +11,13 @@ import {
   loadCompleted, saveCompleted,
   loadStatusOverrides, saveStatusOverrides,
   loadDepOverrides, saveDepOverrides,
+  loadHistory, saveHistory,
   clearAllStorage,
   LS_KEY, LS_EDITS_KEY,
 } from './storage/persist.jsx';
 import { parseXlsx } from './engine/xlsx.jsx';
 import { buildSched } from './engine/schedule.jsx';
-import { applyEditsToData, mutateSchedData } from './engine/edits.jsx';
+import { applyEditsToData, mutateSchedData, buildHistoryEntry, buildUploadHistoryEntry, buildRevertHistoryEntry } from './engine/edits.jsx';
 import { addW, parseDate, fmtDDMMYYYY } from './engine/dates.jsx';
 import { NAV, SURFACE, CARD, BORDER, ORANGE, TEXT, MUTED } from './theme.jsx';
 
@@ -185,8 +186,8 @@ function EmptyState({ fileInputRef, showNewProj, setShowNewProj, handleFileChang
       </div>
 
       {/* Placeholder KPI row */}
-      <div style={{ display:'flex', gap:'12px', padding:'20px 28px 0' }}>
-        {[{l:'Total Projects',v:'—'},{l:'Projects On Schedule',v:'—%'},{l:'Project Risk',v:'—',sub:'No data'},{l:'Cross Project Risk',v:'—',sub:'No data'}].map((k,i) => (
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', padding:'20px 28px 0' }}>
+        {[{l:'Total Projects',v:'—'},{l:'Projects On Schedule',v:'—%'},{l:'Project Risk',v:'—',sub:'No data'},{l:'Cross Project Risk',v:'—',sub:'No data'},{l:'Fragile Tasks',v:'—',sub:'No data'}].map((k,i) => (
           <div key={i} style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, flex:i>1?1:undefined, minWidth:i===0?'140px':'160px' }}>
             <div style={{ fontSize:'10px', color:MUTED, marginBottom:'6px', textTransform:'uppercase', letterSpacing:'0.06em' }}>{k.l}</div>
             <div style={{ fontSize:'28px', fontWeight:'800', color:MUTED, lineHeight:'1' }}>{k.v}</div>
@@ -254,6 +255,36 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
   const [cascadeMode,     setCascadeMode]     = useState('full');
   const [completedIds,    setCompletedIds]    = useState(() => loadCompleted());
   const [statusOverrides, setStatusOverrides] = useState(() => loadStatusOverrides());
+
+  // ── History log ────────────────────────────────────────────────────────────
+  // Append-only commit log (think: single-branch git). Each entry describes a
+  // committed change (shift, reassign, add, delete, upload, revert).
+  // Persisted to localStorage; seeded with an 'upload' entry on first load.
+  const [history, setHistory] = useState(() => loadHistory());
+
+  // Append + persist in one shot. Used by every mutation site below.
+  const appendHistory = useCallback(entry => {
+    if (!entry) return;
+    setHistory(prev => {
+      const next = [...prev, entry];
+      saveHistory(next);
+      return next;
+    });
+  }, []);
+
+  // Seed the history log with an 'upload' entry the first time we ever load
+  // data (i.e. log is empty but schedData exists). Runs once per fresh install.
+  useEffect(() => {
+    if (history.length === 0 && schedData) {
+      const seed = buildUploadHistoryEntry(schedData, 'Initial upload');
+      setHistory([seed]);
+      saveHistory([seed]);
+    }
+    // We intentionally only check this once on mount — subsequent xlsx
+    // uploads are handled by handleFileChange in the outer component, which
+    // will need its own logging path if we add it later.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const todayMs = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }, []);
 
@@ -356,36 +387,99 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
       allIds = [...new Set(allIds)];
     }
 
-    const updated = mutateSchedData(currentBaseData, currentEdits, { type:'shiftTimeline', taskIds: allIds, days });
+    const mutation = { type:'shiftTimeline', taskIds: allIds, days };
+    const updated = mutateSchedData(currentBaseData, currentEdits, mutation);
     onMutate(updated);
+    appendHistory(buildHistoryEntry(mutation, currentBaseData, { affectedTaskCount: allIds.length }));
     setSimDelays(prev => {
       const nd = { ...prev };
       allIds.forEach(id => delete nd[id]);
       return nd;
     });
     setPendingShift(null);  // preview consumed
-  }, [pendingShift, rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate]);
+  }, [pendingShift, rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
 
   // Discard a staged shift without applying it.
   const cancelShift = useCallback(() => setPendingShift(null), []);
 
-  // ── Preview task set ────────────────────────────────────────────────────────
-  // When a shift is staged, previewTasks is the schedule WITH the shift applied.
-  // The Gantt diffs `tasks` (current) against `previewTasks` to draw ghosts.
-  const previewTasks = useMemo(() => {
-    if (!pendingShift) return null;
-    const { taskIds, days, mode } = pendingShift;
-    const tempDelays = {};
-    // For a forward shift we use positive delays; backward shifts need the
-    // dates rewritten, so we shift the rawTasks directly for the preview.
-    const shiftedRaw = rawTasks.map(t => {
-      if (!taskIds.includes(t.id)) return t;
-      const sD = parseDate(t.start), eD = parseDate(t.end);
-      if (!sD || !eD) return t;
-      return { ...t, start: fmtDDMMYYYY(addW(sD, days)), end: fmtDDMMYYYY(addW(eD, days)) };
+  // ── Reassignment preview/commit ─────────────────────────────────────────────
+  // Same pattern as pendingShift but for person reassignments. Shape:
+  //   pendingReassigns: { [taskId]: { from:String, to:String } }
+  // Multiple reassignments can be staged at once (e.g. resolving several
+  // conflicts in one session before committing).
+  const [pendingReassigns, setPendingReassigns] = useState({});
+
+  // Stage a single reassignment. Called by ConflictsTab when the user picks
+  // a candidate from the dropdown.
+  const stageReassign = useCallback((taskId, toPerson, fromPerson) => {
+    if (!taskId || !toPerson || toPerson === fromPerson) return;
+    setPendingReassigns(prev => ({ ...prev, [taskId]: { from: fromPerson, to: toPerson } }));
+  }, []);
+
+  // Cancel one staged reassignment (per-change revert).
+  const cancelReassign = useCallback(taskId => {
+    setPendingReassigns(prev => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
     });
-    return buildSched(shiftedRaw, tdepMap, base, {}, mode || cascadeMode, effectiveCompletedIds, todayMs);
-  }, [pendingShift, rawTasks, tdepMap, base, cascadeMode, effectiveCompletedIds, todayMs]);
+  }, []);
+
+  // Cancel ALL staged reassignments (used by the "Revert all" path).
+  const cancelAllReassigns = useCallback(() => setPendingReassigns({}), []);
+
+  // Commit all staged reassignments through the edits layer in one mutation.
+  const commitReassigns = useCallback(() => {
+    const entries = Object.entries(pendingReassigns);
+    if (!entries.length) return;
+    const assignments = entries.map(([taskId, { to }]) => ({ taskId, toPerson: to }));
+    const currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
+    const currentEdits = loadSchedEdits();
+    const mutation = { type:'reassignTasks', assignments };
+    const updated = mutateSchedData(currentBaseData, currentEdits, mutation);
+    onMutate(updated);
+    appendHistory(buildHistoryEntry(mutation, currentBaseData));
+    setPendingReassigns({});
+  }, [pendingReassigns, rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
+
+  // ── Unified preview task set ───────────────────────────────────────────────
+  // Applies BOTH staged shifts and staged reassignments to rawTasks, then runs
+  // buildSched on the synthesized version. Returns null if nothing is staged.
+  const hasShift     = !!pendingShift;
+  const hasReassigns = Object.keys(pendingReassigns).length > 0;
+  const isSimulating = hasShift || hasReassigns;
+
+  const previewTasks = useMemo(() => {
+    if (!isSimulating) return null;
+    let rt = rawTasks;
+    // Apply staged reassignments first — rewrite the `person` field.
+    if (hasReassigns) {
+      rt = rt.map(t => pendingReassigns[t.id]
+        ? { ...t, person: pendingReassigns[t.id].to }
+        : t);
+    }
+    // Then apply the staged shift (if any).
+    let mode = cascadeMode;
+    if (hasShift) {
+      const { taskIds, days, mode: m } = pendingShift;
+      mode = m || cascadeMode;
+      rt = rt.map(t => {
+        if (!taskIds.includes(t.id)) return t;
+        const sD = parseDate(t.start), eD = parseDate(t.end);
+        if (!sD || !eD) return t;
+        return { ...t, start: fmtDDMMYYYY(addW(sD, days)), end: fmtDDMMYYYY(addW(eD, days)) };
+      });
+    }
+    return buildSched(rt, tdepMap, base, {}, mode, effectiveCompletedIds, todayMs);
+  }, [isSimulating, hasShift, hasReassigns, pendingShift, pendingReassigns, rawTasks, tdepMap, base, cascadeMode, effectiveCompletedIds, todayMs]);
+
+  // Commit BOTH staged change types in one go. Used by the unified "Confirm all".
+  const commitAllPending = useCallback(() => {
+    // Order matters for the edits layer: commit reassigns first, then shift —
+    // so a shift sees the post-reassignment ownership when computing cascade.
+    if (hasReassigns) commitReassigns();
+    if (hasShift)     commitShift();
+  }, [hasReassigns, hasShift, commitReassigns, commitShift]);
 
   // (Bug fix: original re-declared `baseData` inside the callback, shadowing
   //  the prop. Renamed to `currentBaseData` for clarity.)
@@ -394,6 +488,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
     const currentEdits = loadSchedEdits();
     const updated = mutateSchedData(currentBaseData, currentEdits, mutation);
     onMutate(updated);
+    appendHistory(buildHistoryEntry(mutation, currentBaseData));
     if (mutation.type === 'deleteTask') {
       setSimDelays(prev => { const nd = {...prev}; delete nd[mutation.taskId]; return nd; });
     }
@@ -404,14 +499,16 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         return nd;
       });
     }
-  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate]);
+  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
 
   const handleAddTasks = useCallback(({ tasks: newTasks, people: newPeople }) => {
     const currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
     const currentEdits = loadSchedEdits();
-    const updated = mutateSchedData(currentBaseData, currentEdits, { type:'addTasks', tasks:newTasks, people:newPeople });
+    const mutation = { type:'addTasks', tasks:newTasks, people:newPeople };
+    const updated = mutateSchedData(currentBaseData, currentEdits, mutation);
     onMutate(updated);
-  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate]);
+    appendHistory(buildHistoryEntry(mutation, currentBaseData));
+  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
 
   // ── Derived KPIs ──────────────────────────────────────────────────────────
   // A task is "effectively completed" if the engine marks it or an override says so.
@@ -547,7 +644,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
       </div>
 
       {/* KPI row */}
-      <div style={{ display:'flex', gap:'12px', padding:'20px 28px 0' }}>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', padding:'20px 28px 0' }}>
         <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'140px' }}>
           <div style={{ fontSize:'11px', color:MUTED, marginBottom:'6px' }}>
             <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="1" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/></svg>
@@ -599,6 +696,25 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
           }
         </div>
 
+        {/* Fragile Tasks — yellow-themed (warning, not failure). Counts individual
+            tasks rather than projects: fragile is a per-task property of the
+            schedule's tightness, not a project-level health metric. */}
+        <div onClick={() => { if (kpi.fragile > 0) setTab('conflicts'); }}
+          style={{ background:kpi.fragile>0?'#2D2200':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.fragile>0?'#92400E':BORDER}`, minWidth:'160px', cursor:kpi.fragile>0?'pointer':'default', flex:1 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
+            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.fragile>0?'#FBBF24':MUTED }}>Fragile Tasks</span>
+            {kpi.fragile>0 && <span style={{ fontSize:'14px', color:'#FBBF24', fontWeight:'800', lineHeight:'1' }}>~</span>}
+          </div>
+          <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
+            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.fragile>0?'#FBBF24':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.fragile>0?kpi.fragile:'—'}</span>
+            {kpi.fragile>0 && <span style={{ fontSize:'13px', color:'#FBBF24', fontWeight:'600' }}>task{kpi.fragile===1?'':'s'}</span>}
+          </div>
+          {kpi.fragile>0
+            ? <div style={{ fontSize:'11px', color:'#FBBF24', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
+            : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>None</div>
+          }
+        </div>
+
         <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px dashed ${BORDER}`, minWidth:'120px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', cursor:'pointer', gap:'6px' }}>
           <span style={{ fontSize:'11px', color:MUTED }}>Add KPI</span>
           <div style={{ width:'28px', height:'28px', borderRadius:'50%', border:`1.5px solid ${BORDER}`, display:'flex', alignItems:'center', justifyContent:'center', color:MUTED, fontSize:'18px', lineHeight:'1' }}>+</div>
@@ -624,10 +740,10 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
 
       {/* Tab panel */}
       <div style={{ margin:'14px 28px 28px', background:CARD, borderRadius:'12px', border:`1px solid ${BORDER}`, overflow:'hidden' }}>
-        {tab==='gantt'     && <ProjectGanttTab tasks={tasks} previewTasks={previewTasks} pendingShift={pendingShift} onCommitShift={commitShift} onCancelShift={cancelShift} simDelays={simDelays} setSimDelays={setSimDelays} onEdit={handleEdit} setAddTasksProj={setAddTasksProj} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} todayMs={todayMs} />}
-        {tab==='project'   && <ProjectViewTab tasks={tasks} onDelete={handleDelete} onEdit={handleEdit} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} onSetStatus={setStatusOverride} todayMs={todayMs} />}
+        {tab==='gantt'     && <ProjectGanttTab tasks={tasks} previewTasks={previewTasks} pendingShift={pendingShift} pendingReassigns={pendingReassigns} onCommitAll={commitAllPending} onCancelShift={cancelShift} onCancelReassign={cancelReassign} simDelays={simDelays} setSimDelays={setSimDelays} onEdit={handleEdit} setAddTasksProj={setAddTasksProj} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} todayMs={todayMs} />}
+        {tab==='project'   && <ProjectViewTab tasks={tasks} history={history} onDelete={handleDelete} onEdit={handleEdit} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} onSetStatus={setStatusOverride} todayMs={todayMs} />}
         {tab==='workflows' && <WorkflowsTab />}
-        {tab==='conflicts' && <ConflictsTab tasks={tasks} />}
+        {tab==='conflicts' && <ConflictsTab tasks={tasks} pendingReassigns={pendingReassigns} onStageReassign={stageReassign} onCancelReassign={cancelReassign} onEdit={handleEdit} />}
         {tab==='people'    && <PeopleTab tasks={tasks} sel={sel} onSel={setSel} statusOverrides={statusOverrides} todayMs={todayMs} />}
       </div>
     </div>
