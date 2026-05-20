@@ -8,8 +8,9 @@ import { fmtDate as fd } from '../../engine/dates.jsx';
 import { normDep } from '../../engine/schedule.jsx';
 import { computeStatus } from '../../engine/status.jsx';
 import { DPX, HH, LW, PRH, RRH, SRH, SBH, ALL_MONS } from '../../theme.jsx';
+import { ConfirmModal } from '../ConfirmModal.jsx';
 
-export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, pendingReassigns, onCommitAll, onCancelShift, onCancelReassign, simDelays, setSimDelays, onEdit, setAddTasksProj, onToggleComplete, statusOverrides, todayMs }) {
+export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, pendingReassigns, onCommitAll, onCancelShift, onCancelReassign, simDelays, setSimDelays, onEdit, setAddTasksProj, onToggleComplete, statusOverrides, todayMs, effectiveCompletedIds, onCompleteProject }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
 
   // ── Timeline-shift + reassignment simulation ───────────────────────────────
@@ -122,8 +123,32 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
   const [showDeps, setShowDeps] = useState(false);
   const [projMenuOpen, setProjMenuOpen] = useState(false);
   const [addTasksMenuOpen, setAddTasksMenuOpen] = useState(false);
+  const [pendingCompleteProj, setPendingCompleteProj] = useState(null);
   const projMenuRef     = useRef(null);
   const addTasksMenuRef = useRef(null);
+
+  // Projects whose every task is effectively completed — eligible for the
+  // "Conclude" action. Uses tasksProp (the actual current data, NOT the
+  // simulation preview) and the effectiveCompletedIds set passed from App.
+  const completedSet = effectiveCompletedIds instanceof Set ? effectiveCompletedIds : new Set();
+  const readyToConclude = useMemo(() => {
+    if (!onCompleteProject) return [];
+    const byProj = {};
+    for (const t of tasksProp) {
+      const pid = t.projId;
+      if (!byProj[pid]) byProj[pid] = [];
+      byProj[pid].push(t);
+    }
+    const ready = [];
+    for (const [pid, ts] of Object.entries(byProj)) {
+      if (ts.length === 0) continue;
+      if (ts.every(t => t.isCompleted || completedSet.has(t.id))) {
+        const proj = projs.find(p => p.id === pid);
+        ready.push({ id: pid, name: proj?.name || pid });
+      }
+    }
+    return ready;
+  }, [tasksProp, completedSet, projs, onCompleteProject]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -407,6 +432,45 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
 
   return (
     <div>
+      {/* Confirm modal for project completion */}
+      <ConfirmModal
+        open={!!pendingCompleteProj}
+        title="Conclude this project?"
+        body={pendingCompleteProj
+          ? `This will archive ${pendingCompleteProj.id}${pendingCompleteProj.name ? ' (' + pendingCompleteProj.name + ')' : ''}. The project will be removed from the Gantt chart, conflict detection, and dashboard KPIs. It can be reopened anytime from the Completed sub-tab of Project View.`
+          : ''}
+        confirmLabel="✓ Conclude project"
+        confirmColor="#10B981"
+        onConfirm={() => {
+          if (pendingCompleteProj && onCompleteProject) {
+            onCompleteProject(pendingCompleteProj.id, pendingCompleteProj.name);
+          }
+          setPendingCompleteProj(null);
+        }}
+        onCancel={() => setPendingCompleteProj(null)} />
+
+      {/* Ready-to-conclude banner — same UX as in Project View */}
+      {readyToConclude.length > 0 && (
+        <div style={{ padding:'10px 16px', background:'#0D2B1E', borderBottom:'1px solid #065F46' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'14px', flexWrap:'wrap' }}>
+            <span style={{ fontSize:'12px', fontWeight:'600', color:'#10B981' }}>
+              ✓ {readyToConclude.length} project{readyToConclude.length===1?'':'s'} ready to conclude:
+            </span>
+            {readyToConclude.map(p => (
+              <button key={p.id}
+                onClick={() => setPendingCompleteProj(p)}
+                style={{
+                  padding:'5px 12px', borderRadius:'6px', border:'1px solid #10B98155',
+                  background:'#10B98122', color:'#10B981', fontSize:'11px', fontWeight:'700',
+                  cursor:'pointer',
+                }}>
+                ✓ Conclude {p.id}{p.name && p.name !== p.id ? ' · ' + p.name : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Consolidated simulation bar ─────────────────────────────────────
           Lists every staged change (shifts + reassignments) with per-change
           revert. A single Confirm All commits everything in one transaction.

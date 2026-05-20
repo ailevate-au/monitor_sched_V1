@@ -7,16 +7,29 @@ import { fmtDate as fd } from '../../engine/dates.jsx';
 import { computeStatus, STATUS_STYLES } from '../../engine/status.jsx';
 import { loadSchedEdits, saveSchedEdits } from '../../storage/persist.jsx';
 import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
+import { ConfirmModal } from '../ConfirmModal.jsx';
 
-export function ProjectViewTab({ tasks, history, onDelete, onEdit, onToggleComplete, statusOverrides, onSetStatus, todayMs }) {
+export function ProjectViewTab({
+  tasks, allTasks, allProjs, completedProjs,
+  history, onDelete, onEdit, onToggleComplete,
+  statusOverrides, onSetStatus, todayMs,
+  effectiveCompletedIds, onCompleteProject, onUncompleteProject,
+}) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
 
-  // Sub-tab: 'table' shows the spreadsheet (default); 'history' shows the
-  // append-only change log.
+  // Sub-tab: 'table' shows the active spreadsheet; 'history' shows the
+  // append-only change log; 'completed' shows fully-concluded projects.
   const [subTab, setSubTab] = useState('table');
   // Which history entries are expanded inline to show their details.
   const [expandedHist, setExpandedHist] = useState({});
   const safeHistory = Array.isArray(history) ? history : [];
+  const safeCompletedProjs = completedProjs instanceof Set ? completedProjs : new Set();
+  const safeAllTasks = Array.isArray(allTasks) ? allTasks : tasks;
+  const safeAllProjs = Array.isArray(allProjs) ? allProjs : projs;
+  const completedSet = effectiveCompletedIds instanceof Set ? effectiveCompletedIds : new Set();
+
+  // Pending-confirm state: { type:'complete'|'uncomplete', projId, projName }
+  const [pendingConfirm, setPendingConfirm] = useState(null);
 
   const [sortCol,      setSortCol]      = useState('projId');
   const [sortDir,      setSortDir]      = useState('asc');
@@ -125,13 +138,55 @@ export function ProjectViewTab({ tasks, history, onDelete, onEdit, onToggleCompl
 
   const SS = STATUS_STYLES;
 
+  // ── Project completion eligibility ────────────────────────────────────────
+  // A project is "ready to conclude" when every task in it is effectively
+  // completed (the ✓ toggle OR status override = Completed). Used to show the
+  // Complete button only on projects that are actually done.
+  const readyToConclude = useMemo(() => {
+    const ready = new Set();
+    for (const p of safeAllProjs) {
+      if (safeCompletedProjs.has(p.id)) continue;
+      const projTasks = safeAllTasks.filter(t => t.projId === p.id);
+      if (projTasks.length === 0) continue;  // empty projects don't auto-conclude
+      const allDone = projTasks.every(t => t.isCompleted || completedSet.has(t.id));
+      if (allDone) ready.add(p.id);
+    }
+    return ready;
+  }, [safeAllProjs, safeAllTasks, safeCompletedProjs, completedSet]);
+
+  // Resolved list of completed projects (full project objects, in original order).
+  const completedProjList = useMemo(
+    () => safeAllProjs.filter(p => safeCompletedProjs.has(p.id)),
+    [safeAllProjs, safeCompletedProjs]
+  );
+
   return (
     <div style={{ fontFamily:'-apple-system,system-ui,sans-serif', position:'relative' }} ref={filterRef}>
-      {/* ── Sub-tab bar: Table | History ──────────────────────────────────── */}
+      {/* Confirm modal for both complete and uncomplete actions */}
+      <ConfirmModal
+        open={!!pendingConfirm}
+        title={pendingConfirm?.type === 'complete' ? 'Conclude this project?' : 'Reopen this project?'}
+        body={pendingConfirm?.type === 'complete'
+          ? `This will archive ${pendingConfirm.projId} (${pendingConfirm.projName || ''}). The project will be removed from the Gantt chart, conflict detection, and dashboard KPIs. It can be reopened anytime from the Completed sub-tab.`
+          : `This will bring ${pendingConfirm?.projId} back to the active set. It will reappear on the Gantt chart and start counting toward KPIs again.`}
+        confirmLabel={pendingConfirm?.type === 'complete' ? '✓ Conclude project' : '↺ Reopen project'}
+        confirmColor={pendingConfirm?.type === 'complete' ? '#10B981' : ORANGE}
+        onConfirm={() => {
+          if (pendingConfirm?.type === 'complete' && onCompleteProject) {
+            onCompleteProject(pendingConfirm.projId, pendingConfirm.projName);
+          } else if (pendingConfirm?.type === 'uncomplete' && onUncompleteProject) {
+            onUncompleteProject(pendingConfirm.projId, pendingConfirm.projName);
+          }
+          setPendingConfirm(null);
+        }}
+        onCancel={() => setPendingConfirm(null)} />
+
+      {/* ── Sub-tab bar: Table | History | Completed ─────────────────────── */}
       <div style={{ display:'flex', alignItems:'center', borderBottom:`1px solid ${BORDER}`, background:CARD }}>
         {[
-          { id:'table',   label:'Table',   count: tasks.length },
-          { id:'history', label:'History', count: safeHistory.length },
+          { id:'table',     label:'Table',     count: tasks.length },
+          { id:'history',   label:'History',   count: safeHistory.length },
+          { id:'completed', label:'Completed', count: completedProjList.length },
         ].map(t => (
           <button key={t.id} onClick={() => setSubTab(t.id)}
             style={{
@@ -145,6 +200,31 @@ export function ProjectViewTab({ tasks, history, onDelete, onEdit, onToggleCompl
           </button>
         ))}
       </div>
+
+      {/* ── Ready-to-conclude banner ──────────────────────────────────────── */}
+      {subTab === 'table' && readyToConclude.size > 0 && (
+        <div style={{ padding:'10px 16px', background:'#0D2B1E', borderBottom:`1px solid #065F46` }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'14px', flexWrap:'wrap' }}>
+            <span style={{ fontSize:'12px', fontWeight:'600', color:'#10B981' }}>
+              ✓ {readyToConclude.size} project{readyToConclude.size===1?'':'s'} ready to conclude:
+            </span>
+            {[...readyToConclude].map(pid => {
+              const p = safeAllProjs.find(x => x.id === pid);
+              return (
+                <button key={pid}
+                  onClick={() => setPendingConfirm({ type:'complete', projId:pid, projName:p?.name })}
+                  style={{
+                    padding:'5px 12px', borderRadius:'6px', border:'1px solid #10B98155',
+                    background:'#10B98122', color:'#10B981', fontSize:'11px', fontWeight:'700',
+                    cursor:'pointer',
+                  }}>
+                  ✓ Conclude {pid}{p?.name ? ' · ' + p.name : ''}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── History view ──────────────────────────────────────────────────── */}
       {subTab === 'history' && (
@@ -219,6 +299,60 @@ export function ProjectViewTab({ tasks, history, onDelete, onEdit, onToggleCompl
                         </table>
                       </div>
                     )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Completed view ────────────────────────────────────────────────── */}
+      {subTab === 'completed' && (
+        <div style={{ padding:'16px 24px', background:'#13131A', minHeight:'400px' }}>
+          {completedProjList.length === 0 ? (
+            <div style={{ padding:'40px 16px', textAlign:'center', color:MUTED, fontSize:'13px', background:CARD, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
+              No completed projects yet. When you finish a project's tasks, you'll be able to conclude it from the Table tab.
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+              {completedProjList.map(p => {
+                const projTasks = safeAllTasks.filter(t => t.projId === p.id);
+                const taskCount = projTasks.length;
+                const totalDays = projTasks.reduce((s, t) => s + (t.cd || 0), 0);
+                const peopleNames = [...new Set(projTasks.map(t => t.person))];
+                return (
+                  <div key={p.id}
+                    style={{ padding:'14px 16px', background:CARD, borderRadius:'10px', border:`1px solid ${BORDER}` }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:'14px' }}>
+                      <div style={{
+                        width:'42px', height:'42px', borderRadius:'10px',
+                        background:'#10B98122', border:`1px solid #10B98155`,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        fontSize:'18px', color:'#10B981', fontWeight:'800', flexShrink:0,
+                      }}>✓</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:'14px', fontWeight:'700', color:TEXT, marginBottom:'2px' }}>
+                          {p.id} {p.name && <span style={{ color:MUTED, fontWeight:'500' }}>· {p.name}</span>}
+                        </div>
+                        <div style={{ fontSize:'11px', color:MUTED }}>
+                          {taskCount} task{taskCount===1?'':'s'}
+                          <span style={{ margin:'0 6px' }}>·</span>
+                          {totalDays} working day{totalDays===1?'':'s'}
+                          <span style={{ margin:'0 6px' }}>·</span>
+                          {peopleNames.length} {peopleNames.length===1?'person':'people'}: {peopleNames.slice(0,3).join(', ')}{peopleNames.length>3?` +${peopleNames.length-3}`:''}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setPendingConfirm({ type:'uncomplete', projId:p.id, projName:p.name })}
+                        style={{
+                          padding:'7px 14px', borderRadius:'7px', border:`1px solid ${BORDER}`,
+                          background:'transparent', color:TEXT, fontSize:'11px', fontWeight:'600',
+                          cursor:'pointer', flexShrink:0,
+                        }}>
+                        ↺ Reopen
+                      </button>
+                    </div>
                   </div>
                 );
               })}
