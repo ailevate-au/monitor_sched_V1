@@ -13,7 +13,6 @@ const STATUS_GREEN = '#10B981';
 const STATUS_AMBER = '#F59E0B';
 const STATUS_RED   = '#EF4444';
 const TASK_BLUE    = '#5B7B9A';
-const TODO_GREY    = '#6B7280';
 
 // ── Small primitives ─────────────────────────────────────────────────────────
 /** Card frame used by every dashboard tile. */
@@ -36,40 +35,23 @@ function Card({ title, subtitle, children, action, style }) {
   );
 }
 
-/** Big-number stat tile (for the KPI strip). */
-function Stat({ icon, label, value, hint, accent }) {
+/** Demo wrapper — shows a "DEMO" tag and a one-line "not computed yet" note,
+    then renders fake-but-realistic-looking content underneath. */
+function DemoOverlay({ note, children }) {
   return (
-    <div style={{
-      background:CARD, borderRadius:'10px', padding:'16px 18px',
-      border:`1px solid ${BORDER}`, minWidth:'160px', flex:1,
-      display:'flex', flexDirection:'column', gap:'10px',
-    }}>
-      {icon && <div style={{ color:MUTED, fontSize:'14px' }}>{icon}</div>}
-      <div style={{ fontSize:'28px', fontWeight:'800', color: accent || TEXT, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{value}</div>
-      <div style={{ fontSize:'12px', color:MUTED }}>{label}</div>
-      {hint && <div style={{ fontSize:'10px', color: accent || MUTED, fontWeight:'600' }}>{hint}</div>}
-    </div>
-  );
-}
-
-/** "Not connected yet" placeholder body — used by un-wired cards.
-    Renders a structured TODO list of what's needed to wire this feature. */
-function NotConnected({ todos }) {
-  return (
-    <div style={{ padding:'4px 0 0' }}>
-      <div style={{
-        display:'inline-block', fontSize:'10px', fontWeight:'700',
-        color:TODO_GREY, background:TODO_GREY+'18', padding:'3px 8px',
-        borderRadius:'4px', letterSpacing:'0.06em', marginBottom:'14px',
-      }}>NOT CONNECTED YET</div>
-      <div style={{ fontSize:'11px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'8px' }}>
-        To wire this up:
+    <div style={{ position:'relative' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px' }}>
+        <span style={{
+          display:'inline-block', fontSize:'10px', fontWeight:'700',
+          color:'#FBBF24', background:'#FBBF24'+'18',
+          padding:'3px 8px', borderRadius:'4px', letterSpacing:'0.08em',
+          border:'1px solid '+'#FBBF24'+'40',
+        }}>DEMO</span>
+        <span style={{ fontSize:'11px', color:MUTED, fontStyle:'italic' }}>
+          {note || 'Values not computed yet — preview only.'}
+        </span>
       </div>
-      <ul style={{ margin:'0', padding:'0 0 0 18px', fontSize:'12px', color:MUTED, lineHeight:'1.7' }}>
-        {todos.map((t, i) => (
-          <li key={i} style={{ marginBottom:'4px' }}>{t}</li>
-        ))}
-      </ul>
+      <div style={{ opacity:0.85 }}>{children}</div>
     </div>
   );
 }
@@ -140,12 +122,6 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
   const safeCross    = crossRisk || [];
   const safeOnPct    = typeof onSchedulePct === 'number' ? onSchedulePct : 0;
 
-  // Active = not completed. Defensive against odd states.
-  const activeTasks = useMemo(
-    () => safeTasks.filter(t => !t.isCompleted),
-    [safeTasks]
-  );
-
   // Project Health breakdown: each project is in EXACTLY one bucket.
   // Conflict > At Risk (fragile) > On Track. Mirrors the bar-colouring rule
   // (one status per task) at the project level.
@@ -198,33 +174,114 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
           )}
         </div>
       )}
-      {/* ── Top stat strip (5 wired stats) ──────────────────────────────────── */}
+      {/* ── Top KPI row — IDENTICAL to the row on other tabs ────────────────
+          Same five tiles, same styling. Keeping them in sync means the user
+          sees one consistent header strip whether they're on Dashboard or any
+          other tab — no double-take when switching. */}
       <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', marginBottom:'18px' }}>
-        <Stat icon="◰" label="Active Projects" value={projs.length} />
-        <Stat icon="☰" label="Active Tasks" value={activeTasks.length} />
-        <Stat icon="◷" label="Projects On Schedule" value={`${safeOnPct}%`} accent={safeOnPct >= 75 ? STATUS_GREEN : safeOnPct >= 50 ? STATUS_AMBER : STATUS_RED} />
-        <Stat
-          label="Project Risk"
-          value={safeProjRisk.length}
-          hint={safeProjRisk.length > 0 ? `View ›` : undefined}
-          accent={safeProjRisk.length > 0 ? STATUS_RED : undefined} />
-        <Stat
-          label="Cross Project Risk"
-          value={safeCross.length}
-          hint={safeCross.length > 0 ? `View ›` : undefined}
-          accent={safeCross.length > 0 ? STATUS_RED : undefined} />
+        {/* Total Projects */}
+        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'160px', flex:1 }}>
+          <div style={{ fontSize:'11px', color:MUTED, marginBottom:'6px' }}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="1" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/></svg>
+          </div>
+          <div style={{ fontSize:'28px', fontWeight:'800', color:TEXT, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{projs.length}</div>
+          <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>Total Projects</div>
+        </div>
+
+        {/* Projects On Schedule */}
+        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'160px', flex:1 }}>
+          <div style={{ fontSize:'11px', color:MUTED, marginBottom:'6px' }}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="1" stroke={MUTED} strokeWidth="1.4"/><path d="M2 6h12M6 1v3M10 1v3" stroke={MUTED} strokeWidth="1.4" strokeLinecap="round"/></svg>
+          </div>
+          <div style={{ fontSize:'28px', fontWeight:'800', color: safeOnPct >= 75 ? STATUS_GREEN : safeOnPct >= 50 ? STATUS_AMBER : STATUS_RED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeOnPct}<span style={{ fontSize:'16px', fontWeight:'600' }}>%</span></div>
+          <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>Projects On Schedule</div>
+        </div>
+
+        {/* Project Risk */}
+        <div onClick={() => safeProjRisk.length > 0 && goConflicts()}
+          style={{ background:safeProjRisk.length>0?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeProjRisk.length>0?'#7F1D1D':BORDER}`, minWidth:'160px', cursor:safeProjRisk.length>0?'pointer':'default', flex:1 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
+            <span style={{ fontSize:'12px', fontWeight:'600', color:safeProjRisk.length>0?'#FCA5A5':MUTED }}>Project Risk</span>
+            {safeProjRisk.length>0 && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
+          </div>
+          <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
+            <span style={{ fontSize:'28px', fontWeight:'800', color:safeProjRisk.length>0?'#FCA5A5':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeProjRisk.length>0?safeProjRisk.length:'—'}</span>
+            {safeProjRisk.length>0 && safeProjRisk[0] && <span style={{ fontSize:'13px', color:'#FCA5A5', fontWeight:'600' }}>({safeProjRisk[0].id})</span>}
+          </div>
+          {safeProjRisk.length>0
+            ? <div style={{ fontSize:'11px', color:'#F87171', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
+            : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>No issues</div>
+          }
+        </div>
+
+        {/* Cross Project Risk */}
+        <div onClick={() => safeCross.length > 0 && goConflicts()}
+          style={{ background:safeCross.length>0?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeCross.length>0?'#7F1D1D':BORDER}`, minWidth:'160px', cursor:safeCross.length>0?'pointer':'default', flex:1 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
+            <span style={{ fontSize:'12px', fontWeight:'600', color:safeCross.length>0?'#FCA5A5':MUTED }}>Cross Project Risk</span>
+            {safeCross.length>0 && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
+          </div>
+          <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
+            <span style={{ fontSize:'28px', fontWeight:'800', color:safeCross.length>0?'#FCA5A5':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeCross.length>0?safeCross.length:'—'}</span>
+            {safeCross.length>0 && safeCross[0] && <span style={{ fontSize:'13px', color:'#FCA5A5', fontWeight:'600' }}>({safeCross[0].id})</span>}
+          </div>
+          {safeCross.length>0
+            ? <div style={{ fontSize:'11px', color:'#F87171', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
+            : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>No issues</div>
+          }
+        </div>
+
+        {/* Fragile Tasks */}
+        <div onClick={() => safeKpi.fragile > 0 && goConflicts()}
+          style={{ background:safeKpi.fragile>0?'#2D2200':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeKpi.fragile>0?'#92400E':BORDER}`, minWidth:'160px', cursor:safeKpi.fragile>0?'pointer':'default', flex:1 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
+            <span style={{ fontSize:'12px', fontWeight:'600', color:safeKpi.fragile>0?'#FBBF24':MUTED }}>Fragile Tasks</span>
+            {safeKpi.fragile>0 && <span style={{ fontSize:'14px', color:'#FBBF24', fontWeight:'800', lineHeight:'1' }}>~</span>}
+          </div>
+          <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
+            <span style={{ fontSize:'28px', fontWeight:'800', color:safeKpi.fragile>0?'#FBBF24':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeKpi.fragile>0?safeKpi.fragile:'—'}</span>
+            {safeKpi.fragile>0 && <span style={{ fontSize:'13px', color:'#FBBF24', fontWeight:'600' }}>task{safeKpi.fragile===1?'':'s'}</span>}
+          </div>
+          {safeKpi.fragile>0
+            ? <div style={{ fontSize:'11px', color:'#FBBF24', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
+            : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>None</div>
+          }
+        </div>
       </div>
 
       {/* ── Row 1: Resource Allocation (un-wired) + Project Health (wired) ── */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'18px', marginBottom:'18px' }}>
         <Card title="Resource Allocation (Team)" subtitle="Per-person workload distribution">
-          <NotConnected todos={[
-            'Define utilization buckets (under / optimal / heavy / over) with agreed thresholds',
-            'Compute each person\'s working-day load over the active project window',
-            'Decide normalization: total working days available vs project span vs rolling 30 days',
-            'Decide how to count overlapping tasks (engine prevents them, so likely sum durations)',
-            'Optionally weight by task complexity or rate if that data becomes available',
-          ]} />
+          <DemoOverlay note="Utilization values not computed yet — preview only.">
+            {(() => {
+              const demoPeople = [
+                { name:'Morgan', pct:92, status:'over'    },
+                { name:'Sam',    pct:78, status:'heavy'   },
+                { name:'Alex',   pct:64, status:'optimal' },
+                { name:'Priya',  pct:51, status:'optimal' },
+                { name:'Chris',  pct:34, status:'under'   },
+              ];
+              const colorFor = s => s==='over'?STATUS_RED:s==='heavy'?STATUS_AMBER:s==='optimal'?STATUS_GREEN:TASK_BLUE;
+              const labelFor = s => s==='over'?'Over-utilized':s==='heavy'?'Heavy load':s==='optimal'?'Optimal':'Under-utilized';
+              return (
+                <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+                  {demoPeople.map(p => {
+                    const c = colorFor(p.status);
+                    return (
+                      <div key={p.name} style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+                        <div style={{ width:'70px', fontSize:'12px', color:TEXT, flexShrink:0 }}>{p.name}</div>
+                        <div style={{ flex:1, height:'10px', background:'#1A1A24', borderRadius:'5px', overflow:'hidden', position:'relative' }}>
+                          <div style={{ width:`${p.pct}%`, height:'100%', background:c, borderRadius:'5px' }} />
+                        </div>
+                        <div style={{ width:'40px', textAlign:'right', fontSize:'11px', color:c, fontWeight:'700', flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{p.pct}%</div>
+                        <div style={{ width:'90px', textAlign:'right', fontSize:'10px', color:MUTED, flexShrink:0 }}>{labelFor(p.status)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </DemoOverlay>
         </Card>
 
         <Card title="Project Health" subtitle="Executive summary of active projects">
@@ -235,23 +292,86 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
       {/* ── Row 2: Budget burn (un-wired) + Upcoming Projects (un-wired) ──── */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'18px' }}>
         <Card title="Budget Burn vs Forecast" subtitle="Actual spend against budgeted forecast, per project">
-          <NotConnected todos={[
-            'Add budget & forecast fields to the xlsx schema (per project)',
-            'Add a spend-tracking input — manual entry, csv import, or accounting integration',
-            'Decide burn cadence: daily? weekly? on commit?',
-            'Define absolute limit per project (hard ceiling above forecast)',
-            'Decide colour rules (green under forecast / amber near / red over) and thresholds',
-          ]} />
+          <DemoOverlay note="Budget data not yet imported — preview only.">
+            {(() => {
+              const demoProjects = [
+                { id:'P1', forecast: 480000, spent: 312000 },
+                { id:'P2', forecast: 320000, spent: 298000 },
+                { id:'P3', forecast: 210000, spent: 224000 },
+              ];
+              const fmt = n => '$' + (n >= 1000 ? (n/1000).toFixed(0)+'k' : n);
+              return (
+                <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
+                  {demoProjects.map(p => {
+                    const pct = (p.spent / p.forecast) * 100;
+                    const over = pct > 100;
+                    const c = over ? STATUS_RED : pct > 85 ? STATUS_AMBER : STATUS_GREEN;
+                    const widthPct = Math.min(pct, 130); // cap visual at 130% so over-budget bars don't escape
+                    return (
+                      <div key={p.id}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px' }}>
+                          <div style={{ fontSize:'12px', fontWeight:'600', color:TEXT }}>{p.id}</div>
+                          <div style={{ fontSize:'11px', fontVariantNumeric:'tabular-nums' }}>
+                            <span style={{ color:c, fontWeight:'700' }}>{fmt(p.spent)}</span>
+                            <span style={{ color:MUTED }}> / {fmt(p.forecast)}</span>
+                            <span style={{ color:c, marginLeft:'8px', fontWeight:'700' }}>{pct.toFixed(0)}%</span>
+                          </div>
+                        </div>
+                        <div style={{ position:'relative', height:'8px', background:'#1A1A24', borderRadius:'4px', overflow:'hidden' }}>
+                          {/* 100% marker line */}
+                          <div style={{ position:'absolute', left:'77%', top:0, bottom:0, width:'1px', background:MUTED, opacity:0.5, zIndex:2 }} />
+                          <div style={{ width:`${(widthPct/130)*100}%`, height:'100%', background:c, borderRadius:'4px', transition:'width 0.3s' }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </DemoOverlay>
         </Card>
 
         <Card title="Upcoming Projects" subtitle="Projects scheduled to start in the near future">
-          <NotConnected todos={[
-            'Define "upcoming" — projects with start date in the next N weeks?',
-            'Decide what makes a project "ready to assign" (people available? deps clear?)',
-            'Wire the Assign Tasks button to the existing AddTasksModal or a new flow',
-            'Add a "no team assigned yet" badge so understaffed projects surface here',
-            'Optionally sort by urgency: closest start date first, or biggest gap to staffing',
-          ]} />
+          <DemoOverlay note="Upcoming-project surfacing not wired yet — preview only.">
+            {(() => {
+              const demoUpcoming = [
+                { id:'P4', name:'Riverside Tower',   start:'in 8 days',  team:0, ready:false },
+                { id:'P5', name:'Greenfield Office', start:'in 14 days', team:3, ready:true  },
+                { id:'P6', name:'Harbour Renewal',   start:'in 21 days', team:2, ready:true  },
+              ];
+              return (
+                <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+                  {demoUpcoming.map(p => (
+                    <div key={p.id} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 12px', background:'#1A1A24', borderRadius:'8px', border:`1px solid ${BORDER}` }}>
+                      <div style={{
+                        width:'34px', height:'34px', borderRadius:'8px',
+                        background:TASK_BLUE+'22', border:`1px solid ${TASK_BLUE}40`,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        fontSize:'11px', fontWeight:'700', color:TASK_BLUE, flexShrink:0,
+                      }}>{p.id}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:'12px', fontWeight:'600', color:TEXT }}>{p.name}</div>
+                        <div style={{ fontSize:'10px', color:MUTED, marginTop:'2px' }}>
+                          Starts {p.start}
+                          <span style={{ margin:'0 6px' }}>·</span>
+                          {p.team > 0
+                            ? <span>{p.team} member{p.team>1?'s':''} assigned</span>
+                            : <span style={{ color:STATUS_AMBER, fontWeight:'600' }}>No team yet</span>}
+                        </div>
+                      </div>
+                      <button disabled
+                        style={{ padding:'6px 12px', borderRadius:'6px', border:'none',
+                          background: p.ready ? ORANGE+'cc' : '#1E1E2A',
+                          color: p.ready ? 'white' : MUTED,
+                          fontSize:'11px', fontWeight:'600', cursor:'not-allowed', flexShrink:0 }}>
+                        Assign Tasks
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </DemoOverlay>
         </Card>
       </div>
 

@@ -644,9 +644,11 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         </div>
       </div>
 
-      {/* KPI row */}
+      {/* KPI row — shown on every tab EXCEPT Dashboard.
+          The Dashboard has its own KPI strip; doubling them is redundant. */}
+      {tab !== 'dashboard' && (
       <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', padding:'20px 28px 0' }}>
-        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'140px' }}>
+        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'160px', flex:1 }}>
           <div style={{ fontSize:'11px', color:MUTED, marginBottom:'6px' }}>
             <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="1" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/></svg>
           </div>
@@ -714,13 +716,11 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
             ? <div style={{ fontSize:'11px', color:'#FBBF24', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
             : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>None</div>
           }
-        </div>
-
-        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px dashed ${BORDER}`, minWidth:'120px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', cursor:'pointer', gap:'6px' }}>
-          <span style={{ fontSize:'11px', color:MUTED }}>Add KPI</span>
+        
           <div style={{ width:'28px', height:'28px', borderRadius:'50%', border:`1.5px solid ${BORDER}`, display:'flex', alignItems:'center', justifyContent:'center', color:MUTED, fontSize:'18px', lineHeight:'1' }}>+</div>
         </div>
       </div>
+      )}
 
       {/* Action row */}
       <div style={{ display:'flex', justifyContent:'flex-end', gap:'10px', padding:'14px 28px 0' }}>
