@@ -35,9 +35,14 @@ export function applyEditsToData(base, edits) {
     ...editedTasks,
   ].filter(t => !deletedIds.has(t.id) && !deletedProjs.has(t.proj));
 
+  // Project merge: edited projects REPLACE base versions by id (mirrors task
+  // merge). Without this, editing a project's status/name/etc. would silently
+  // be lost — the merge would only ever add net-new projects.
+  const editedProjs = edits.projs || [];
+  const editedProjIds = new Set(editedProjs.map(p => p.id));
   let projs = [
-    ...base.projs,
-    ...(edits.projs || []).filter(p => !base.projs.find(x => x.id === p.id)),
+    ...base.projs.filter(p => !editedProjIds.has(p.id)),
+    ...editedProjs,
   ].filter(p => !deletedProjs.has(p.id));
 
   let people = [
@@ -45,9 +50,10 @@ export function applyEditsToData(base, edits) {
     ...(edits.people || []).filter(p => !base.people.find(x => x.name === p.name)),
   ];
 
-  // Prune people with no remaining tasks
-  const activePeople = new Set(rawTasks.map(t => t.person));
-  people = people.filter(p => activePeople.has(p.name));
+  // (REMOVED) people pruning: previously, a person with no remaining tasks was
+  // silently removed. That broke the bench-people concept (a person can exist
+  // without an assignment). With Phase 1+2 we keep all people from base + edits;
+  // a future phase will offer an explicit "remove person" mutation if needed.
 
   const tdepMap = Object.fromEntries(rawTasks.map(t => [t.id, t.deps]));
 
@@ -72,6 +78,10 @@ export function applyEditsToData(base, edits) {
  *   { type:'deleteProject', projId }
  *   { type:'addTasks', tasks, people }
  *   { type:'shiftTimeline', taskIds, days }
+ *   { type:'reassignTasks', assignments: [{taskId, toPerson}] }
+ *   { type:'addProject', project: {id, name?, status?, start?, end?, color?} }
+ *   { type:'updateProject', projId, patch: {name?, status?, ...} }
+ *   { type:'setProjectStatus', projId, status: 'draft'|'active'|'completed' }
  * @returns {object} New schedData
  */
 export function mutateSchedData(baseData, currentEdits, mutation) {
@@ -152,6 +162,59 @@ export function mutateSchedData(baseData, currentEdits, mutation) {
           edits.people.push(known || { name: toPerson, role: '', init: toPerson.slice(0,2).toUpperCase(), color: '#5B7B9A', rate: '$42/hr' });
         }
       }
+      break;
+    }
+    case 'addProject': {
+      // Create a brand-new project (typically a draft) with no tasks.
+      // mutation.project shape: { id, name, status, start?, end?, color? }
+      const { project } = mutation;
+      if (!project || !project.id) break;
+      // Don't allow id collisions with existing projects.
+      const exists = baseData.projs.find(p => p.id === project.id)
+        || edits.projs.find(p => p.id === project.id);
+      if (exists) {
+        console.warn('mutateSchedData: addProject id already exists', project.id);
+        break;
+      }
+      edits.projs.push({
+        id:     project.id,
+        name:   project.name   || `${project.id} — New Build`,
+        status: project.status || 'draft',
+        color:  project.color,
+        ...(project.start ? { start: project.start } : {}),
+        ...(project.end   ? { end:   project.end   } : {}),
+      });
+      // If it was previously deleted, undelete on re-add.
+      edits.deletedProjs = edits.deletedProjs.filter(x => x !== project.id);
+      break;
+    }
+    case 'updateProject': {
+      // Patch a project's editable fields. mutation shape: { projId, patch }
+      const { projId, patch } = mutation;
+      if (!projId || !patch) break;
+      // Find the most-up-to-date project (edited version OR base).
+      const editIdx = edits.projs.findIndex(p => p.id === projId);
+      const baseProj = baseData.projs.find(p => p.id === projId);
+      const current = editIdx >= 0 ? edits.projs[editIdx] : baseProj;
+      if (!current) break;
+      const updated = { ...current, ...patch };
+      if (editIdx >= 0) edits.projs[editIdx] = updated;
+      else edits.projs.push(updated);
+      break;
+    }
+    case 'setProjectStatus': {
+      // Convenience wrapper around updateProject for just the status field.
+      // Used by the lifecycle UI (drafts becoming active, active becoming
+      // completed). mutation shape: { projId, status }
+      const { projId, status } = mutation;
+      if (!projId || !['draft', 'active', 'completed'].includes(status)) break;
+      const editIdx = edits.projs.findIndex(p => p.id === projId);
+      const baseProj = baseData.projs.find(p => p.id === projId);
+      const current = editIdx >= 0 ? edits.projs[editIdx] : baseProj;
+      if (!current) break;
+      const updated = { ...current, status };
+      if (editIdx >= 0) edits.projs[editIdx] = updated;
+      else edits.projs.push(updated);
       break;
     }
     default: {
@@ -262,6 +325,37 @@ export function buildHistoryEntry(mutation, baseData, extra = {}) {
         id, timestamp: ts, kind: 'deleteProject',
         summary: `Deleted project ${mutation.projId}${p?.name ? ' (' + p.name + ')' : ''} · ${affectedTasks.length} task${affectedTasks.length===1?'':'s'}`,
         details: affectedTasks.map(t => ({ taskId: t.id, name: t.name, person: t.person })),
+        refersTo: null,
+      };
+    }
+    case 'addProject': {
+      const p = mutation.project || {};
+      return {
+        id, timestamp: ts, kind: 'addProject',
+        summary: `Created project ${p.id}${p.name ? ' (' + p.name + ')' : ''} · status: ${p.status || 'draft'}`,
+        details: [{ projId: p.id, name: p.name, status: p.status, start: p.start, end: p.end }],
+        refersTo: null,
+      };
+    }
+    case 'updateProject': {
+      const { projId, patch } = mutation;
+      const p = findProj(projId);
+      const fields = Object.keys(patch || {}).join(', ');
+      return {
+        id, timestamp: ts, kind: 'updateProject',
+        summary: `Updated ${projId}${p?.name ? ' (' + p.name + ')' : ''} · ${fields || 'no changes'}`,
+        details: [{ projId, patch }],
+        refersTo: null,
+      };
+    }
+    case 'setProjectStatus': {
+      const { projId, status } = mutation;
+      const p = findProj(projId);
+      const verb = status === 'completed' ? 'Concluded' : status === 'active' ? 'Activated' : 'Drafted';
+      return {
+        id, timestamp: ts, kind: 'setProjectStatus',
+        summary: `${verb} ${projId}${p?.name ? ' (' + p.name + ')' : ''}`,
+        details: [{ projId, status, prevStatus: p?.status }],
         refersTo: null,
       };
     }

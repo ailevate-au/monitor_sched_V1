@@ -32,6 +32,7 @@ import { PeopleTab } from './components/tabs/PeopleTab.jsx';
 import { WorkflowsTab } from './components/tabs/WorkflowsTab.jsx';
 import { AddTasksModal } from './components/modals/AddTasksModal.jsx';
 import { NewProjectModal } from './components/modals/NewProjectModal.jsx';
+import { ImportConfirmModal } from './components/modals/ImportConfirmModal.jsx';
 
 const FONT_STACK = '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
 
@@ -42,14 +43,21 @@ export default function App() {
   const [importing,   setImporting]   = useState(false);
   const [importError, setImportError] = useState(null);
   const [showNewProj, setShowNewProj] = useState(false);
+  // Pending import awaiting user confirmation. Shape:
+  //   { parsed: <full schedData>, pending: <implicit-people/auto-projs/etc.>, buf: <ArrayBuffer> }
+  // Null when no import is in-flight (either nothing imported, or confirmed).
+  const [pendingImport, setPendingImport] = useState(null);
   const fileInputRef = useRef(null);
 
-  // Restore from localStorage on mount
+  // Restore from localStorage on mount.
+  // This path does NOT go through the confirmation modal — the user
+  // already confirmed at original import time. We just rehydrate.
   useEffect(() => {
     const buf = loadFromStorage();
     if (!buf) return;
     parseXlsx(buf)
-      .then(data => {
+      .then(result => {
+        const data = result.parsed || result;
         setBaseData(data);
         const edits = loadSchedEdits();
         setSchedData(edits ? applyEditsToData(data, edits) : data);
@@ -67,11 +75,28 @@ export default function App() {
     setImportError(null);
     try {
       const buf = await file.arrayBuffer();
-      const data = await parseXlsx(buf);
-      saveToStorage(buf);
-      try { localStorage.removeItem(LS_EDITS_KEY); } catch {}
-      setBaseData(data);
-      setSchedData(data);
+      const result = await parseXlsx(buf);
+      // The parser now returns the data PLUS a `pending` object describing
+      // items that need user attention (implicit people, auto-created
+      // projects, etc.). If anything is pending, open the confirmation
+      // modal and defer commit. Otherwise commit immediately.
+      const pending = result.pending || {};
+      const hasPending =
+        (pending.implicitPeople && pending.implicitPeople.length > 0) ||
+        (pending.autoCreatedProjs && pending.autoCreatedProjs.length > 0) ||
+        (pending.draftWithTasksWarnings && pending.draftWithTasksWarnings.length > 0) ||
+        (pending.unassignedTaskCount > 0);
+      if (hasPending) {
+        // Stash everything; commit happens in confirmImport.
+        setPendingImport({ parsed: result.parsed || result, pending, buf });
+      } else {
+        // Clean import — go straight in.
+        saveToStorage(buf);
+        try { localStorage.removeItem(LS_EDITS_KEY); } catch {}
+        const data = result.parsed || result;
+        setBaseData(data);
+        setSchedData(data);
+      }
     } catch (err) {
       setImportError(err.message || 'Failed to parse file.');
     } finally {
@@ -79,6 +104,42 @@ export default function App() {
       e.target.value = '';
     }
   };
+
+  // Confirm a pending import. Applies the user's implicit-people selection,
+  // then commits the data to storage + state.
+  const confirmImport = ({ acceptedImplicitPeople }) => {
+    if (!pendingImport) return;
+    const { parsed, buf } = pendingImport;
+    // acceptedImplicitPeople is a Set of names the user kept checked. Any
+    // implicit person not in the set is REMOVED from people[], AND any task
+    // assigned to them has its person field cleared (becomes unassigned).
+    const implicitNames = new Set((pendingImport.pending.implicitPeople || []).map(p => p.name));
+    const accepted = acceptedImplicitPeople || new Set();
+    // Build the rejected set explicitly so we don't accidentally remove
+    // people who came from the People sheet.
+    const rejected = new Set();
+    for (const name of implicitNames) {
+      if (!accepted.has(name)) rejected.add(name);
+    }
+
+    let finalData = parsed;
+    if (rejected.size > 0) {
+      finalData = {
+        ...parsed,
+        people: parsed.people.filter(p => !rejected.has(p.name)),
+        rawTasks: parsed.rawTasks.map(t => rejected.has(t.person) ? { ...t, person: '' } : t),
+      };
+    }
+
+    saveToStorage(buf);
+    try { localStorage.removeItem(LS_EDITS_KEY); } catch {}
+    setBaseData(finalData);
+    setSchedData(finalData);
+    setPendingImport(null);
+  };
+
+  // Discard a pending import. Nothing was written; just clear the modal.
+  const cancelImport = () => setPendingImport(null);
 
   const handleAddProject = ({ proj, rawTasks: newTasks, people: newPeople }) => {
     setSchedData(prev => {
@@ -112,6 +173,12 @@ export default function App() {
   if (!schedData) {
     return (
       <ErrorBoundary>
+        {pendingImport && (
+          <ImportConfirmModal
+            pending={pendingImport.pending}
+            onConfirm={confirmImport}
+            onCancel={cancelImport} />
+        )}
         <EmptyState
           fileInputRef={fileInputRef}
           showNewProj={showNewProj}
@@ -129,6 +196,12 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ScheduleCtx.Provider value={schedData}>
+        {pendingImport && (
+          <ImportConfirmModal
+            pending={pendingImport.pending}
+            onConfirm={confirmImport}
+            onCancel={cancelImport} />
+        )}
         {showNewProj && (
           <NewProjectModal
             existingProjs={schedData.projs}
