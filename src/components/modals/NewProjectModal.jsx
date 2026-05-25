@@ -19,6 +19,10 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
   // Project colour is no longer user-selectable (colour-coding was removed).
   // Kept as a fixed value so the created project object still has the field.
   const color = PROJ_COLORS[0]; // uniform green
+  // Draft mode: when on, skips task validation and creates the project with
+  // status='draft'. User can add tasks later via the Drafts sub-tab or the
+  // Gantt's drafts section.
+  const [isDraft,   setIsDraft]  = useState(false);
   const [tasks,     setTasks]    = useState([
     { seq:'A', name:'', person:'', role:'', rate:'', start:'', end:'', deps:[], depType:'FS' },
   ]);
@@ -54,12 +58,23 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
   const handleAdd = () => {
     if (!projId.trim()) { setError('Project ID is required.'); return; }
     if (existingProjs.find(p => p.id === projId.trim())) { setError(`Project "${projId}" already exists.`); return; }
-    if (!tasks.some(t => t.name.trim())) { setError('Add at least one task.'); return; }
+
+    const pid = projId.trim().toUpperCase();
+
+    // ── Draft mode: skip task validation, submit metadata only ────────────
+    if (isDraft) {
+      const newProj = { id:pid, name: projName.trim() || `${pid} — New Build`, color, status:'draft' };
+      onAdd({ proj:newProj, rawTasks:[], people:[], isDraft:true });
+      onClose();
+      return;
+    }
+
+    // ── Full mode: validate tasks ─────────────────────────────────────────
+    if (!tasks.some(t => t.name.trim())) { setError('Add at least one task, or enable "Create as draft".'); return; }
     const validTasks = tasks.filter(t => t.name.trim() && t.start.trim() && t.end.trim());
     if (!validTasks.length) { setError('Each task needs a name, start date, and end date.'); return; }
 
-    const pid = projId.trim().toUpperCase();
-    const newProj = { id:pid, name: projName.trim() || `${pid} — New Build`, color };
+    const newProj = { id:pid, name: projName.trim() || `${pid} — New Build`, color, status:'active' };
 
     const newRawTasks = validTasks.map(t => ({
       id:     `${pid}-${t.seq}`,
@@ -90,7 +105,7 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
       }
     }
 
-    onAdd({ proj:newProj, rawTasks:newRawTasks, people:newPeople });
+    onAdd({ proj:newProj, rawTasks:newRawTasks, people:newPeople, isDraft:false });
     onClose();
   };
 
@@ -125,7 +140,26 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
             </div>
           </div>
 
-          <div>
+          {/* Create-as-draft toggle */}
+          <label style={{
+            display:'flex', alignItems:'center', gap:'10px',
+            padding:'10px 12px', marginBottom:'16px',
+            background: isDraft ? '#6B728018' : '#0F0F18',
+            border: `1px solid ${isDraft ? '#6B728055' : BORDER}`,
+            borderRadius:'8px', cursor:'pointer',
+          }}>
+            <input type="checkbox" checked={isDraft} onChange={e => setIsDraft(e.target.checked)}
+              style={{ accentColor: '#9CA3AF', cursor:'pointer' }} />
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:'12px', fontWeight:'600', color:TEXT }}>Create as draft</div>
+              <div style={{ fontSize:'11px', color:MUTED, marginTop:'2px' }}>
+                Reserve the project ID and metadata now; add tasks later. Drafts don't appear on the Gantt as active work and don't count toward KPIs.
+              </div>
+            </div>
+            {isDraft && <span style={{ fontSize:'9px', fontWeight:'700', color:'#9CA3AF', background:'#0B0B12', padding:'2px 7px', borderRadius:'4px', letterSpacing:'0.06em', border:`1px solid ${BORDER}` }}>DRAFT</span>}
+          </label>
+
+          {!isDraft && <div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
               <div style={{ fontSize:'11px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.07em' }}>Tasks</div>
               {wfList.length > 0 && (
@@ -188,7 +222,7 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
               onMouseLeave={e => e.currentTarget.style.borderColor=BORDER}>
               + Add task row
             </button>
-          </div>
+          </div>}
 
           {error && <div style={{ marginTop:'12px', padding:'9px 12px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D', color:'#FCA5A5', fontSize:'12px' }}>{error}</div>}
         </div>
@@ -196,7 +230,7 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
         <div style={{ padding:'14px 22px', borderTop:`1px solid ${BORDER}`, display:'flex', gap:'10px', justifyContent:'flex-end', flexShrink:0, background:'#17171F' }}>
           <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', color:MUTED, fontSize:'13px', cursor:'pointer' }}>Cancel</button>
           <button onClick={handleAdd} style={{ padding:'8px 22px', borderRadius:'8px', border:'none', background:ORANGE, color:'white', fontSize:'13px', fontWeight:'700', cursor:'pointer' }}>
-            Create Project
+            {isDraft ? 'Create Draft' : 'Create Project'}
           </button>
         </div>
       </div>

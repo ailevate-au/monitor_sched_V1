@@ -10,23 +10,25 @@ import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
 import { ConfirmModal } from '../ConfirmModal.jsx';
 
 export function ProjectViewTab({
-  tasks, allTasks, allProjs, completedProjs,
+  tasks, allTasks, allProjs, completedProjIds, draftProjIds,
   history, onDelete, onEdit, onToggleComplete,
   statusOverrides, onSetStatus, todayMs,
   effectiveCompletedIds, onCompleteProject, onUncompleteProject,
+  setAddTasksProj,
 }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
 
-  // Sub-tab: 'table' shows the active spreadsheet; 'history' shows the
-  // append-only change log; 'completed' shows fully-concluded projects.
+  // Sub-tabs: Table (active project tasks) | History (audit log) |
+  //           Drafts (projects with no tasks yet) | Completed (concluded)
   const [subTab, setSubTab] = useState('table');
   // Which history entries are expanded inline to show their details.
   const [expandedHist, setExpandedHist] = useState({});
   const safeHistory = Array.isArray(history) ? history : [];
-  const safeCompletedProjs = completedProjs instanceof Set ? completedProjs : new Set();
+  const completedSet = effectiveCompletedIds instanceof Set ? effectiveCompletedIds : new Set();
+  const completedProjSet = completedProjIds instanceof Set ? completedProjIds : new Set();
+  const draftProjSet = draftProjIds instanceof Set ? draftProjIds : new Set();
   const safeAllTasks = Array.isArray(allTasks) ? allTasks : tasks;
   const safeAllProjs = Array.isArray(allProjs) ? allProjs : projs;
-  const completedSet = effectiveCompletedIds instanceof Set ? effectiveCompletedIds : new Set();
 
   // Pending-confirm state: { type:'complete'|'uncomplete', projId, projName }
   const [pendingConfirm, setPendingConfirm] = useState(null);
@@ -145,37 +147,64 @@ export function ProjectViewTab({
   const readyToConclude = useMemo(() => {
     const ready = new Set();
     for (const p of safeAllProjs) {
-      if (safeCompletedProjs.has(p.id)) continue;
+      // Skip projects already in a non-active state
+      if (completedProjSet.has(p.id) || draftProjSet.has(p.id)) continue;
       const projTasks = safeAllTasks.filter(t => t.projId === p.id);
       if (projTasks.length === 0) continue;  // empty projects don't auto-conclude
       const allDone = projTasks.every(t => t.isCompleted || completedSet.has(t.id));
       if (allDone) ready.add(p.id);
     }
     return ready;
-  }, [safeAllProjs, safeAllTasks, safeCompletedProjs, completedSet]);
+  }, [safeAllProjs, safeAllTasks, completedProjSet, draftProjSet, completedSet]);
 
-  // Resolved list of completed projects (full project objects, in original order).
+  // Resolved lists in original order for the sub-tab views.
   const completedProjList = useMemo(
-    () => safeAllProjs.filter(p => safeCompletedProjs.has(p.id)),
-    [safeAllProjs, safeCompletedProjs]
+    () => safeAllProjs.filter(p => completedProjSet.has(p.id)),
+    [safeAllProjs, completedProjSet]
+  );
+  const draftProjList = useMemo(
+    () => safeAllProjs.filter(p => draftProjSet.has(p.id)),
+    [safeAllProjs, draftProjSet]
   );
 
   return (
     <div style={{ fontFamily:'-apple-system,system-ui,sans-serif', position:'relative' }} ref={filterRef}>
-      {/* Confirm modal for both complete and uncomplete actions */}
+      {/* Confirm modal — handles complete / uncomplete / delete actions */}
       <ConfirmModal
         open={!!pendingConfirm}
-        title={pendingConfirm?.type === 'complete' ? 'Conclude this project?' : 'Reopen this project?'}
-        body={pendingConfirm?.type === 'complete'
-          ? `This will archive ${pendingConfirm.projId} (${pendingConfirm.projName || ''}). The project will be removed from the Gantt chart, conflict detection, and dashboard KPIs. It can be reopened anytime from the Completed sub-tab.`
-          : `This will bring ${pendingConfirm?.projId} back to the active set. It will reappear on the Gantt chart and start counting toward KPIs again.`}
-        confirmLabel={pendingConfirm?.type === 'complete' ? '✓ Conclude project' : '↺ Reopen project'}
-        confirmColor={pendingConfirm?.type === 'complete' ? '#10B981' : ORANGE}
+        title={
+          pendingConfirm?.type === 'complete'   ? 'Conclude this project?' :
+          pendingConfirm?.type === 'uncomplete' ? 'Reopen this project?' :
+          pendingConfirm?.type === 'delete'     ? 'Delete this draft?' :
+          ''
+        }
+        body={
+          pendingConfirm?.type === 'complete'
+            ? `This will archive ${pendingConfirm.projId} (${pendingConfirm.projName || ''}). The project will be removed from the Gantt chart, conflict detection, and dashboard KPIs. It can be reopened anytime from the Completed sub-tab.`
+          : pendingConfirm?.type === 'uncomplete'
+            ? `This will bring ${pendingConfirm?.projId} back to the active set. It will reappear on the Gantt chart and start counting toward KPIs again.`
+          : pendingConfirm?.type === 'delete'
+            ? `This will permanently delete ${pendingConfirm.projId}${pendingConfirm.projName ? ' (' + pendingConfirm.projName + ')' : ''} and any associated metadata. This cannot be undone.`
+          : ''
+        }
+        confirmLabel={
+          pendingConfirm?.type === 'complete'   ? '✓ Conclude project' :
+          pendingConfirm?.type === 'uncomplete' ? '↺ Reopen project' :
+          pendingConfirm?.type === 'delete'     ? '🗑 Delete draft' :
+          'Confirm'
+        }
+        confirmColor={
+          pendingConfirm?.type === 'complete'   ? '#10B981' :
+          pendingConfirm?.type === 'delete'     ? '#EF4444' :
+          ORANGE
+        }
         onConfirm={() => {
           if (pendingConfirm?.type === 'complete' && onCompleteProject) {
             onCompleteProject(pendingConfirm.projId, pendingConfirm.projName);
           } else if (pendingConfirm?.type === 'uncomplete' && onUncompleteProject) {
             onUncompleteProject(pendingConfirm.projId, pendingConfirm.projName);
+          } else if (pendingConfirm?.type === 'delete' && onDelete) {
+            onDelete({ type:'deleteProject', projId: pendingConfirm.projId });
           }
           setPendingConfirm(null);
         }}
@@ -186,6 +215,7 @@ export function ProjectViewTab({
         {[
           { id:'table',     label:'Table',     count: tasks.length },
           { id:'history',   label:'History',   count: safeHistory.length },
+          { id:'drafts',    label:'Drafts',    count: draftProjList.length },
           { id:'completed', label:'Completed', count: completedProjList.length },
         ].map(t => (
           <button key={t.id} onClick={() => setSubTab(t.id)}
@@ -299,6 +329,79 @@ export function ProjectViewTab({
                         </table>
                       </div>
                     )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Drafts view ───────────────────────────────────────────────────── */}
+      {subTab === 'drafts' && (
+        <div style={{ padding:'16px 24px', background:'#13131A', minHeight:'400px' }}>
+          {draftProjList.length === 0 ? (
+            <div style={{ padding:'40px 16px', textAlign:'center', color:MUTED, fontSize:'13px', background:CARD, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
+              No draft projects yet. Create a project with "Create as draft" enabled in the New Project dialog to plan ahead before assigning tasks.
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+              {draftProjList.map(p => {
+                // Drafts may have explicit start/end fields from the Projects sheet
+                // — surface them so the user knows the intended window.
+                const fmt = d => d ? new Date(d).toLocaleDateString('en-AU', { month:'short', day:'numeric', year:'numeric' }) : null;
+                const startStr = fmt(p.start);
+                const endStr   = fmt(p.end);
+                return (
+                  <div key={p.id}
+                    style={{ padding:'14px 16px', background:CARD, borderRadius:'10px', border:`1px solid ${BORDER}` }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:'14px' }}>
+                      <div style={{
+                        width:'42px', height:'42px', borderRadius:'10px',
+                        background:'#6B728022', border:`1px solid #6B728055`,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        fontSize:'14px', color:MUTED, fontWeight:'800', flexShrink:0,
+                      }}>◌</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:'14px', fontWeight:'700', color:TEXT, marginBottom:'2px', display:'flex', alignItems:'center', gap:'8px' }}>
+                          {p.id}
+                          {p.name && p.name !== p.id && <span style={{ color:MUTED, fontWeight:'500' }}>· {p.name}</span>}
+                          <span style={{ fontSize:'9px', fontWeight:'700', color:MUTED, background:'#1A1A24', padding:'2px 7px', borderRadius:'4px', letterSpacing:'0.06em' }}>DRAFT</span>
+                        </div>
+                        <div style={{ fontSize:'11px', color:MUTED }}>
+                          {startStr && endStr ? `${startStr} → ${endStr}` :
+                           startStr ? `Starts ${startStr}` :
+                           endStr   ? `Ends ${endStr}` :
+                           'No dates set yet'}
+                          <span style={{ margin:'0 6px' }}>·</span>
+                          No tasks assigned
+                        </div>
+                      </div>
+                      {setAddTasksProj && (
+                        <button onClick={() => setAddTasksProj(p.id)}
+                          style={{
+                            padding:'7px 14px', borderRadius:'7px', border:'none',
+                            background:ORANGE, color:'white', fontSize:'11px',
+                            fontWeight:'700', cursor:'pointer', flexShrink:0,
+                          }}>
+                          + Add tasks
+                        </button>
+                      )}
+                      <button
+                        title="Delete this draft"
+                        onClick={() => setPendingConfirm({ type:'delete', projId:p.id, projName:p.name })}
+                        style={{
+                          width:'30px', height:'30px', borderRadius:'7px',
+                          border:`1px solid ${BORDER}`, background:'transparent',
+                          color:MUTED, fontSize:'13px', cursor:'pointer',
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          flexShrink:0,
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.borderColor = '#EF4444'+'55'; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = MUTED; e.currentTarget.style.borderColor = BORDER; }}>
+                        🗑
+                      </button>
+                    </div>
                   </div>
                 );
               })}

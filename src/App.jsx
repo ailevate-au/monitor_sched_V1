@@ -141,22 +141,26 @@ export default function App() {
   // Discard a pending import. Nothing was written; just clear the modal.
   const cancelImport = () => setPendingImport(null);
 
-  const handleAddProject = ({ proj, rawTasks: newTasks, people: newPeople }) => {
+  const handleAddProject = ({ proj, rawTasks: newTasks, people: newPeople, isDraft }) => {
     setSchedData(prev => {
-      const allRaw = [...prev.rawTasks, ...newTasks];
-      const updated = {
-        ...prev,
-        rawTasks: allRaw,
-        projs:    [...prev.projs, proj],
-        people:   [...prev.people, ...newPeople],
-        tdepMap:  Object.fromEntries(allRaw.map(t => [t.id, t.deps])),
-      };
-      const existing = loadSchedEdits() || { rawTasks:[], projs:[], people:[] };
-      saveSchedEdits({
-        rawTasks: [...existing.rawTasks, ...newTasks],
-        projs:    [...existing.projs,    proj],
-        people:   [...existing.people,   ...newPeople],
-      });
+      if (!prev) return prev;
+      const currentBaseData = { rawTasks: prev.rawTasks, projs: prev.projs, people: prev.people, tdepMap: prev.tdepMap, base: prev.base, todayDay: prev.todayDay, periods: prev.periods };
+      let currentEdits = loadSchedEdits();
+      // For drafts: addProject mutation (no tasks).
+      // For full projects: addProject FIRST (so the project exists with status='active'),
+      //   THEN addTasks (so the tasks attach to a known project).
+      let updated = mutateSchedData(currentBaseData, currentEdits, { type:'addProject', project: proj });
+      // appendHistory deferred — outer ScheduleApp owns the history state.
+      // (We can't call appendHistory here; this handler lives in the outer App
+      // component which doesn't have access. The mutation still applies and
+      // persists via saveSchedEdits, but no history entry is logged for
+      // project creation from the modal. This is a known small gap — drafts
+      // will appear in the data on next render but not in the History log.)
+      if (!isDraft && newTasks && newTasks.length > 0) {
+        currentEdits = loadSchedEdits();
+        const updatedBaseForTasks = { ...currentBaseData, rawTasks: updated.rawTasks, projs: updated.projs, people: updated.people, tdepMap: updated.tdepMap };
+        updated = mutateSchedData(updatedBaseForTasks, currentEdits, { type:'addTasks', tasks:newTasks, people:newPeople || [] });
+      }
       return updated;
     });
   };
@@ -335,7 +339,12 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
   // Complete Project). Stored as a Set of project IDs. Filtered out of every
   // active surface (Gantt, conflicts, KPIs) — only ProjectView's Completed
   // sub-tab shows them.
-  const [completedProjs, setCompletedProjs] = useState(() => loadCompletedProjs());
+  //
+  // The `status` field on each project object is now the source of truth for
+  // completion (and draft state). A derived `completedProjIds` set is computed
+  // for filtering purposes — but no separate state slot exists. The legacy
+  // `completedProjs` localStorage Set is migrated on first load (see effect
+  // below) and the storage key cleared.
 
   // ── History log ────────────────────────────────────────────────────────────
   // Append-only commit log (think: single-branch git). Each entry describes a
@@ -353,16 +362,16 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
     });
   }, []);
 
-  // Complete a project — adds its id to the completedProjs set, persists,
-  // and logs the commit. Called by ProjectView and Gantt header.
+  // ── Project completion (now status-based) ──────────────────────────────────
+  // Both callbacks go through mutateSchedData with the setProjectStatus
+  // mutation type — same path used for any project status change, fully
+  // history-aware. The old completedProjs Set is gone.
   const completeProject = useCallback((projId, projName) => {
-    setCompletedProjs(prev => {
-      if (prev.has(projId)) return prev;
-      const next = new Set(prev);
-      next.add(projId);
-      saveCompletedProjs(next);
-      return next;
-    });
+    const currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
+    const currentEdits = loadSchedEdits();
+    const mutation = { type:'setProjectStatus', projId, status:'completed' };
+    const updated = mutateSchedData(currentBaseData, currentEdits, mutation);
+    onMutate(updated);
     appendHistory({
       id: `h-${Date.now()}-cp`,
       timestamp: Date.now(),
@@ -371,18 +380,14 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
       details: [{ projId, name: projName || projId }],
       refersTo: null,
     });
-  }, [appendHistory]);
+  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
 
-  // Reverse a completion — pulls the project back into the active set and
-  // logs the uncompletion. Confirmation handled by the calling UI.
   const uncompleteProject = useCallback((projId, projName) => {
-    setCompletedProjs(prev => {
-      if (!prev.has(projId)) return prev;
-      const next = new Set(prev);
-      next.delete(projId);
-      saveCompletedProjs(next);
-      return next;
-    });
+    const currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
+    const currentEdits = loadSchedEdits();
+    const mutation = { type:'setProjectStatus', projId, status:'active' };
+    const updated = mutateSchedData(currentBaseData, currentEdits, mutation);
+    onMutate(updated);
     appendHistory({
       id: `h-${Date.now()}-up`,
       timestamp: Date.now(),
@@ -391,7 +396,30 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
       details: [{ projId, name: projName || projId }],
       refersTo: null,
     });
-  }, [appendHistory]);
+  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
+
+  // ── Legacy migration: completedProjs Set → status field ────────────────────
+  // Runs once on mount. If the old localStorage Set has any IDs, set each
+  // project's status to 'completed' via the edits layer, then clear the key.
+  // After this runs, the Set is gone forever and status is the only signal.
+  useEffect(() => {
+    const legacy = loadCompletedProjs();
+    if (!legacy || legacy.size === 0) return;
+    const currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
+    let currentEdits = loadSchedEdits();
+    let updated = null;
+    for (const projId of legacy) {
+      // Skip if already completed on the project itself
+      const proj = projs.find(p => p.id === projId);
+      if (!proj || proj.status === 'completed') continue;
+      updated = mutateSchedData(currentBaseData, currentEdits, { type:'setProjectStatus', projId, status:'completed' });
+      currentEdits = loadSchedEdits();
+    }
+    if (updated) onMutate(updated);
+    // Clear the legacy key — migration done.
+    try { saveCompletedProjs(new Set()); } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Seed the history log with an 'upload' entry the first time we ever load
   // data (i.e. log is empty but schedData exists). Runs once per fresh install.
@@ -425,28 +453,40 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
   // ── Active vs all (filter out completed projects) ─────────────────────────
   // `allTasks` and `allProjs` are the raw computed lists. `tasks` and `projs`
   // (the names used throughout the rest of this component) are filtered to
-  // EXCLUDE any project the user has formally concluded. That way Gantt,
-  // conflicts, KPIs etc. don't need to know about completion — they just see
-  // the active set. ProjectView's Completed sub-tab reads `allTasks`/`allProjs`
-  // through dedicated props.
+  // EXCLUDE any project the user has formally concluded OR that's still in
+  // draft state. That way Gantt, conflicts, KPIs etc. don't need to know
+  // about lifecycle — they just see the active set. ProjectView's Drafts
+  // and Completed sub-tabs read `allTasks`/`allProjs` through dedicated props.
   const allTasks = useMemo(
     () => buildSched(rawTasks, tdepMap, base, simDelays, cascadeMode, effectiveCompletedIds, todayMs),
     [rawTasks, tdepMap, base, simDelays, cascadeMode, effectiveCompletedIds, todayMs]
   );
   const allProjs = projs;  // alias — destructured from schedData earlier
-  // Active set: hide tasks and projects belonging to completed projects.
+
+  // Derive lifecycle sets from the `status` field on each project — single
+  // source of truth, no separate Set. A project without an explicit status
+  // counts as 'active' (the engine's pre-Phase-1 default).
+  const completedProjIds = useMemo(
+    () => new Set(allProjs.filter(p => p.status === 'completed').map(p => p.id)),
+    [allProjs]
+  );
+  const draftProjIds = useMemo(
+    () => new Set(allProjs.filter(p => p.status === 'draft').map(p => p.id)),
+    [allProjs]
+  );
+  // Active set: hide tasks and projects belonging to completed OR draft projects.
+  // Drafts have no tasks anyway, but the projection rule is the same.
   const tasks = useMemo(
-    () => allTasks.filter(t => !completedProjs.has(t.projId)),
-    [allTasks, completedProjs]
+    () => allTasks.filter(t => !completedProjIds.has(t.projId) && !draftProjIds.has(t.projId)),
+    [allTasks, completedProjIds, draftProjIds]
   );
   const projsActive = useMemo(
-    () => allProjs.filter(p => !completedProjs.has(p.id)),
-    [allProjs, completedProjs]
+    () => allProjs.filter(p => !completedProjIds.has(p.id) && !draftProjIds.has(p.id)),
+    [allProjs, completedProjIds, draftProjIds]
   );
   // For backwards-compat with code below that still destructured `projs` from
   // schedData, alias the active list to a local name. Anything that reads the
   // top-level `projs` variable from this point on gets the filtered set.
-  // (We can't reassign the destructured const, so a renamed local is used.)
   const activeProjs = projsActive;
 
   const toggleComplete = useCallback(taskId => {
@@ -791,7 +831,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
           The Dashboard has its own KPI strip; doubling them is redundant. */}
       {tab !== 'dashboard' && (
       <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', padding:'20px 28px 0' }}>
-        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'160px', flex:1 }}>
+        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'130px', flex:1 }}>
           <div style={{ fontSize:'11px', color:MUTED, marginBottom:'6px' }}>
             <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="1" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/></svg>
           </div>
@@ -799,7 +839,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
           <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>Total Projects</div>
         </div>
 
-        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'160px' }}>
+        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'130px', flex:1 }}>
           <div style={{ fontSize:'11px', color:MUTED, marginBottom:'6px' }}>
             <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2" stroke={MUTED} strokeWidth="1.4"/><path d="M1 6h14" stroke={MUTED} strokeWidth="1.4"/><path d="M5 1v2M11 1v2" stroke={MUTED} strokeWidth="1.4" strokeLinecap="round"/></svg>
           </div>
@@ -808,7 +848,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         </div>
 
         <div onClick={() => { if (kpi.hasProjRisk) setTab('conflicts'); }}
-          style={{ background:kpi.hasProjRisk?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasProjRisk?'#7F1D1D':BORDER}`, minWidth:'160px', cursor:kpi.hasProjRisk?'pointer':'default', position:'relative', flex:1 }}>
+          style={{ background:kpi.hasProjRisk?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasProjRisk?'#7F1D1D':BORDER}`, minWidth:'130px', cursor:kpi.hasProjRisk?'pointer':'default', position:'relative', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
             <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.hasProjRisk?'#FCA5A5':MUTED }}>Project Risk</span>
             {kpi.hasProjRisk && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
@@ -827,7 +867,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         </div>
 
         <div onClick={() => { if (kpi.hasCrossRisk) setTab('conflicts'); }}
-          style={{ background:kpi.hasCrossRisk?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasCrossRisk?'#7F1D1D':BORDER}`, minWidth:'180px', cursor:kpi.hasCrossRisk?'pointer':'default', flex:1 }}>
+          style={{ background:kpi.hasCrossRisk?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasCrossRisk?'#7F1D1D':BORDER}`, minWidth:'130px', cursor:kpi.hasCrossRisk?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
             <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.hasCrossRisk?'#FCA5A5':MUTED }}>Cross Project Risk</span>
             {kpi.hasCrossRisk && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
@@ -846,7 +886,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
             tasks rather than projects: fragile is a per-task property of the
             schedule's tightness, not a project-level health metric. */}
         <div onClick={() => { if (kpi.fragile > 0) setTab('conflicts'); }}
-          style={{ background:kpi.fragile>0?'#2D2200':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.fragile>0?'#92400E':BORDER}`, minWidth:'160px', cursor:kpi.fragile>0?'pointer':'default', flex:1 }}>
+          style={{ background:kpi.fragile>0?'#2D2200':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.fragile>0?'#92400E':BORDER}`, minWidth:'130px', cursor:kpi.fragile>0?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
             <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.fragile>0?'#FBBF24':MUTED }}>Fragile Tasks</span>
             {kpi.fragile>0 && <span style={{ fontSize:'14px', color:'#FBBF24', fontWeight:'800', lineHeight:'1' }}>~</span>}
@@ -859,11 +899,6 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
             ? <div style={{ fontSize:'11px', color:'#FBBF24', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
             : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>None</div>
           }
-        </div>
-
-        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px dashed ${BORDER}`, minWidth:'120px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', cursor:'pointer', gap:'6px' }}>
-          <span style={{ fontSize:'11px', color:MUTED }}>Add KPI</span>
-          <div style={{ width:'28px', height:'28px', borderRadius:'50%', border:`1.5px solid ${BORDER}`, display:'flex', alignItems:'center', justifyContent:'center', color:MUTED, fontSize:'18px', lineHeight:'1' }}>+</div>
         </div>
       </div>
       )}
@@ -888,8 +923,8 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
       {/* Tab panel */}
       <div style={{ margin:'14px 28px 28px', background:CARD, borderRadius:'12px', border:`1px solid ${BORDER}`, overflow:'hidden' }}>
         {tab==='dashboard' && <DashboardTab tasks={tasks} kpi={kpi} projRisk={projRisk} crossRisk={crossRisk} onSchedulePct={onSchedulePct} onGoToTab={setTab} />}
-        {tab==='gantt'     && <ProjectGanttTab tasks={tasks} previewTasks={previewTasks} pendingShift={pendingShift} pendingReassigns={pendingReassigns} onCommitAll={commitAllPending} onCancelShift={cancelShift} onCancelReassign={cancelReassign} simDelays={simDelays} setSimDelays={setSimDelays} onEdit={handleEdit} setAddTasksProj={setAddTasksProj} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} todayMs={todayMs} effectiveCompletedIds={effectiveCompletedIds} onCompleteProject={completeProject} />}
-        {tab==='project'   && <ProjectViewTab tasks={tasks} allTasks={allTasks} allProjs={allProjs} completedProjs={completedProjs} history={history} onDelete={handleDelete} onEdit={handleEdit} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} onSetStatus={setStatusOverride} todayMs={todayMs} effectiveCompletedIds={effectiveCompletedIds} onCompleteProject={completeProject} onUncompleteProject={uncompleteProject} />}
+        {tab==='gantt'     && <ProjectGanttTab tasks={tasks} previewTasks={previewTasks} pendingShift={pendingShift} pendingReassigns={pendingReassigns} onCommitAll={commitAllPending} onCancelShift={cancelShift} onCancelReassign={cancelReassign} simDelays={simDelays} setSimDelays={setSimDelays} onEdit={handleEdit} setAddTasksProj={setAddTasksProj} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} todayMs={todayMs} effectiveCompletedIds={effectiveCompletedIds} onCompleteProject={completeProject} draftProjIds={draftProjIds} allProjs={allProjs} />}
+        {tab==='project'   && <ProjectViewTab tasks={tasks} allTasks={allTasks} allProjs={allProjs} completedProjIds={completedProjIds} draftProjIds={draftProjIds} history={history} onDelete={handleDelete} onEdit={handleEdit} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} onSetStatus={setStatusOverride} todayMs={todayMs} effectiveCompletedIds={effectiveCompletedIds} onCompleteProject={completeProject} onUncompleteProject={uncompleteProject} setAddTasksProj={setAddTasksProj} />}
         {tab==='workflows' && <WorkflowsTab />}
         {tab==='conflicts' && <ConflictsTab tasks={tasks} pendingReassigns={pendingReassigns} onStageReassign={stageReassign} onCancelReassign={cancelReassign} onEdit={handleEdit} />}
         {tab==='people'    && <PeopleTab tasks={tasks} sel={sel} onSel={setSel} statusOverrides={statusOverrides} todayMs={todayMs} />}

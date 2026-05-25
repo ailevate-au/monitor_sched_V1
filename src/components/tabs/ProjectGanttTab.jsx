@@ -7,10 +7,10 @@ import { useSched } from '../../context.jsx';
 import { fmtDate as fd } from '../../engine/dates.jsx';
 import { normDep } from '../../engine/schedule.jsx';
 import { computeStatus } from '../../engine/status.jsx';
-import { DPX, HH, LW, PRH, RRH, SRH, SBH, ALL_MONS } from '../../theme.jsx';
+import { DPX, HH, LW, PRH, RRH, SRH, SBH, ALL_MONS, BORDER } from '../../theme.jsx';
 import { ConfirmModal } from '../ConfirmModal.jsx';
 
-export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, pendingReassigns, onCommitAll, onCancelShift, onCancelReassign, simDelays, setSimDelays, onEdit, setAddTasksProj, onToggleComplete, statusOverrides, todayMs, effectiveCompletedIds, onCompleteProject }) {
+export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, pendingReassigns, onCommitAll, onCancelShift, onCancelReassign, simDelays, setSimDelays, onEdit, setAddTasksProj, onToggleComplete, statusOverrides, todayMs, effectiveCompletedIds, onCompleteProject, draftProjIds, allProjs }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
 
   // ── Timeline-shift + reassignment simulation ───────────────────────────────
@@ -259,7 +259,16 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
 
   // One entry per project with role → person breakdown
   const projData = useMemo(() => {
+    const draftSet = draftProjIds instanceof Set ? draftProjIds : new Set();
+    // Hide completed projects entirely on the Gantt (they're surfaced in
+    // ProjectView's Completed sub-tab). Hide draft projects from the normal
+    // list too — they're handled separately as placeholder rows.
+    const completedSet = new Set(
+      (allProjs || projs).filter(p => p.status === 'completed').map(p => p.id)
+    );
     return projs
+      .filter(p => !completedSet.has(p.id))           // completed hidden
+      .filter(p => !draftSet.has(p.id))                // drafts handled separately below
       .filter(p => !filterProj || p.id === filterProj)
       .map(proj => {
         const pt = tasks
@@ -338,7 +347,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
         return { proj, pt, minSd, maxEd, roleGroups };
       })
       .filter(pd => pd.pt.length > 0 || !filterPerson); // hide projects with no matching tasks when filtering by person
-  }, [tasks, filterProj, filterPerson, showCompleted, statusOverrides, todayMs, hasReassigns, pendingReassigns, people, NEUTRAL]);
+  }, [tasks, projs, allProjs, filterProj, filterPerson, showCompleted, statusOverrides, todayMs, hasReassigns, pendingReassigns, people, NEUTRAL, draftProjIds]);
 
   // Flat row list: proj → role → person, with y positions
   const { rowList, totalH } = useMemo(() => {
@@ -1345,6 +1354,74 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
             )}
           </svg>
         </div>
+
+        {/* ── Drafts section ─────────────────────────────────────────────────
+            Drafts are projects with status='draft' (no tasks scheduled yet).
+            Rendered as placeholder rows below the active Gantt, so the row-
+            position math of the main chart stays untouched. Each row offers
+            an "Add tasks" action that opens the standard AddTasksModal. */}
+        {(() => {
+          const draftSet = draftProjIds instanceof Set ? draftProjIds : new Set();
+          if (draftSet.size === 0) return null;
+          const sourceProjs = allProjs || projs;
+          const drafts = sourceProjs.filter(p => draftSet.has(p.id));
+          if (drafts.length === 0) return null;
+          return (
+            <div style={{
+              marginTop:'18px', padding:'14px 20px 18px',
+              background:'#13131A', borderTop:`1px solid ${BORDER}`,
+            }}>
+              <div style={{ fontSize:'11px', fontWeight:'700', color:'#6B7280', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'10px' }}>
+                Drafts · {drafts.length} project{drafts.length===1?'':'s'} pending tasks
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                {drafts.map(p => {
+                  const fmt = d => d ? new Date(d).toLocaleDateString('en-AU', { month:'short', day:'numeric', year:'numeric' }) : null;
+                  const startStr = fmt(p.start);
+                  const endStr   = fmt(p.end);
+                  const dates = startStr && endStr ? `${startStr} → ${endStr}`
+                              : startStr ? `Starts ${startStr}`
+                              : endStr   ? `Ends ${endStr}`
+                              : 'No dates set';
+                  return (
+                    <div key={p.id} style={{
+                      display:'flex', alignItems:'center', gap:'14px',
+                      padding:'10px 14px', background:'#1A1A24',
+                      borderRadius:'8px', border:`1px solid ${BORDER}`,
+                    }}>
+                      <div style={{
+                        width:'34px', height:'34px', borderRadius:'8px',
+                        background:'#6B728022', border:'1px solid #6B728055',
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        fontSize:'14px', color:'#9CA3AF', fontWeight:'800', flexShrink:0,
+                      }}>◌</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'2px' }}>
+                          <span style={{ fontSize:'13px', fontWeight:'700', color:'#E8E8F0' }}>{p.id}</span>
+                          {p.name && p.name !== p.id && <span style={{ fontSize:'12px', color:'#9CA3AF' }}>· {p.name}</span>}
+                          <span style={{ fontSize:'9px', fontWeight:'700', color:'#6B7280', background:'#0B0B12', padding:'2px 7px', borderRadius:'4px', letterSpacing:'0.06em', border:`1px solid ${BORDER}` }}>DRAFT</span>
+                        </div>
+                        <div style={{ fontSize:'11px', color:'#6B7280' }}>
+                          No tasks yet · {dates}
+                        </div>
+                      </div>
+                      {setAddTasksProj && (
+                        <button onClick={() => setAddTasksProj(p.id)}
+                          style={{
+                            padding:'7px 14px', borderRadius:'7px', border:'none',
+                            background:'#F97316', color:'white', fontSize:'11px',
+                            fontWeight:'700', cursor:'pointer', flexShrink:0,
+                          }}>
+                          + Add tasks →
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Tooltip */}
         {ht && (() => {
