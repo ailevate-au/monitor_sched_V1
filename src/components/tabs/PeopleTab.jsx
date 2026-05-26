@@ -6,17 +6,27 @@ import { useSched } from '../../context.jsx';
 import { fmtDate as fd } from '../../engine/dates.jsx';
 import { computeStatus, STATUS_STYLES } from '../../engine/status.jsx';
 import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
+import { AssignTaskModal } from '../modals/AssignTaskModal.jsx';
 
-export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs }) {
+export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssignExisting, onCreateNew }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
 
   const [subTab, setSubTab] = useState('projects');
   const [search, setSearch] = useState('');
+  const [assignOpen, setAssignOpen] = useState(false);
 
   const RED    = '#EF4444';
 
   const pt  = useMemo(() => sel ? tasks.filter(t => t.person === sel).sort((a, b) => a.s - b.s) : [], [tasks, sel]);
   const per = people.find(p => p.name === sel);
+
+  // Unassigned tasks = tasks with empty person field. Used by the Assign modal
+  // to populate its "pick from unassigned" list. Filter out completed too —
+  // they're irrelevant to forward planning.
+  const unassignedTasks = useMemo(
+    () => tasks.filter(t => !t.person && !t.isCompleted),
+    [tasks]
+  );
 
   const filteredPeople = people.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
   const personProjects  = sel ? [...new Set(pt.map(t => t.projId))] : [];
@@ -24,6 +34,22 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs }) {
 
   return (
     <div style={{ display:'flex', minHeight:'520px', background:'#13131A' }}>
+      {assignOpen && per && (
+        <AssignTaskModal
+          person={per}
+          unassignedTasks={unassignedTasks}
+          personsTasks={pt}
+          projs={projs}
+          onAssignExisting={({ taskIds }) => {
+            onAssignExisting && onAssignExisting({ taskIds, toPerson: sel });
+            setAssignOpen(false);
+          }}
+          onCreateNew={({ task }) => {
+            onCreateNew && onCreateNew({ task: { ...task, person: sel } });
+            setAssignOpen(false);
+          }}
+          onClose={() => setAssignOpen(false)} />
+      )}
       {/* ── Left sidebar ── */}
       <div style={{ width:'192px', flexShrink:0, borderRight:`1px solid ${BORDER}`, background:'#0A0A0F', display:'flex', flexDirection:'column' }}>
         <div style={{ padding:'12px' }}>
@@ -82,11 +108,11 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs }) {
                 </div>
               </div>
               <div style={{ display:'flex', gap:'10px' }}>
-                <button style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 14px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', color:TEXT, fontSize:'12px', cursor:'pointer' }}>
-                  <svg width="12" height="12" fill="none" viewBox="0 0 16 16"><path d="M8 2v9M4 8l4 4 4-4" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M2 13h12" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round"/></svg>
-                  Import
+                <button
+                  onClick={() => setAssignOpen(true)}
+                  style={{ padding:'7px 14px', borderRadius:'8px', border:'none', background:ORANGE, color:'white', fontSize:'12px', cursor:'pointer', fontWeight:'700' }}>
+                  + Assign
                 </button>
-                <button style={{ padding:'7px 14px', borderRadius:'8px', border:'none', background:ORANGE, color:'white', fontSize:'12px', cursor:'pointer', fontWeight:'700' }}>+ New Task</button>
               </div>
             </div>
             {/* Sub-tabs */}

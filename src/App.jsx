@@ -693,6 +693,62 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
     appendHistory(buildHistoryEntry(mutation, currentBaseData));
   }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
 
+  // ── Assign from Resource tab: existing unassigned → selected person ───────
+  // Routes through the standard reassignTasks mutation. The unassigned tasks
+  // have person:'', the mutation rewrites that to the target person.
+  const handleAssignExisting = useCallback(({ taskIds, toPerson }) => {
+    if (!taskIds || taskIds.length === 0 || !toPerson) return;
+    const currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
+    const currentEdits = loadSchedEdits();
+    const assignments = taskIds.map(taskId => ({ taskId, toPerson }));
+    const mutation = { type:'reassignTasks', assignments };
+    const updated = mutateSchedData(currentBaseData, currentEdits, mutation);
+    onMutate(updated);
+    appendHistory(buildHistoryEntry(mutation, currentBaseData));
+  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
+
+  // ── Create new task assigned to selected person ───────────────────────────
+  // Builds a single task row in the shape addTasks expects, then routes
+  // through the standard addTasks mutation. The role comes from the person
+  // (set by the modal already in task.role).
+  const handleCreateAndAssign = useCallback(({ task }) => {
+    if (!task || !task.projId || !task.name) return;
+    // Build a unique task id: projId-<short-seq>. Pick a seq letter not yet
+    // used in this project (A-Z then A1, A2…). Simple but robust enough.
+    const used = new Set(rawTasks.filter(t => t.proj === task.projId).map(t => {
+      const m = /^.+-(.+)$/.exec(t.id);
+      return m ? m[1] : null;
+    }).filter(Boolean));
+    let seq = '';
+    for (let i = 0; i < 26; i++) {
+      const c = String.fromCharCode(65 + i);
+      if (!used.has(c)) { seq = c; break; }
+    }
+    if (!seq) {
+      // Fall back to numeric extension
+      let n = 1;
+      while (used.has(`A${n}`)) n++;
+      seq = `A${n}`;
+    }
+    const newTask = {
+      id:     `${task.projId}-${seq}`,
+      proj:   task.projId,
+      name:   task.name,
+      person: task.person,
+      role:   task.role || '',
+      dur:    1,
+      start:  task.start,
+      end:    task.end,
+      deps:   [],
+    };
+    const currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
+    const currentEdits = loadSchedEdits();
+    const mutation = { type:'addTasks', tasks:[newTask], people:[] };
+    const updated = mutateSchedData(currentBaseData, currentEdits, mutation);
+    onMutate(updated);
+    appendHistory(buildHistoryEntry(mutation, currentBaseData));
+  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
+
   // ── Derived KPIs ──────────────────────────────────────────────────────────
   // A task is "effectively completed" if the engine marks it or an override says so.
   const isEffectivelyCompleted = t => t.isCompleted || statusOverrides.get(t.id) === 'Completed';
@@ -927,7 +983,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         {tab==='project'   && <ProjectViewTab tasks={tasks} allTasks={allTasks} allProjs={allProjs} completedProjIds={completedProjIds} draftProjIds={draftProjIds} history={history} onDelete={handleDelete} onEdit={handleEdit} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} onSetStatus={setStatusOverride} todayMs={todayMs} effectiveCompletedIds={effectiveCompletedIds} onCompleteProject={completeProject} onUncompleteProject={uncompleteProject} setAddTasksProj={setAddTasksProj} />}
         {tab==='workflows' && <WorkflowsTab />}
         {tab==='conflicts' && <ConflictsTab tasks={tasks} pendingReassigns={pendingReassigns} onStageReassign={stageReassign} onCancelReassign={cancelReassign} onEdit={handleEdit} />}
-        {tab==='people'    && <PeopleTab tasks={tasks} sel={sel} onSel={setSel} statusOverrides={statusOverrides} todayMs={todayMs} />}
+        {tab==='people'    && <PeopleTab tasks={tasks} sel={sel} onSel={setSel} statusOverrides={statusOverrides} todayMs={todayMs} onAssignExisting={handleAssignExisting} onCreateNew={handleCreateAndAssign} />}
       </div>
     </div>
   );
