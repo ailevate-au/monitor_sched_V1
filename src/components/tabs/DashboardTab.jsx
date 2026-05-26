@@ -158,6 +158,7 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
       for (const t of safeTasks) {
         if (t.person !== per.name) continue;
         if (t.isCompleted) continue;
+        if (t.isMilestone) continue;  // milestones are zero-work events, don't consume capacity
         if (!t.cd || t.cd === 0) continue;
         // Clip the task's range to the window
         const taskStart = t.sd;

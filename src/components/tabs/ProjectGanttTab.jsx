@@ -1065,14 +1065,49 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                     const effectiveStatus = c.status;
                     const effectiveCompleted = effectiveStatus === 'Completed';
 
-                    if (!t.cd) return (
-                      <polygon key={t.id}
-                        points={`${x},${midY-5} ${x+5},${midY} ${x},${midY+5} ${x-5},${midY}`}
-                        fill={c.fill} opacity={dimmed?0.2:0.85}
-                        style={{cursor:'pointer'}}
-                        onMouseEnter={()=>setHov(t.id)} onMouseLeave={()=>setHov(null)}
-                        onClick={()=>onEdit({ type:'task', id:t.id })} />
-                    );
+                    // ── Milestone (zero-day event) render ─────────────────
+                    // A milestone gets a diamond glyph centered on its day,
+                    // not a bar. Engine flags this via t.isMilestone (start
+                    // date equals end date). We keep the legacy `!t.cd`
+                    // branch too in case any task ever lands with cd=0.
+                    if (t.isMilestone || !t.cd) {
+                      const mSize = ih ? 7 : 6;
+                      const mx = x + Math.max(t.cd ? (t.cd*dpx)/2 : 0, 0);
+                      // Status colour: completed → green family, overdue → amber, else status colour
+                      const mFill = effectiveCompleted ? STATUS_GREEN
+                                  : t.isOverdue        ? STATUS_AMBER
+                                                       : c.fill;
+                      return (
+                        <g key={t.id} style={{cursor:'pointer'}}
+                          opacity={effectiveCompleted ? 0.55 : dimmed ? 0.28 : 1}
+                          onMouseEnter={()=>setHov(t.id)} onMouseLeave={()=>setHov(null)}
+                          onClick={()=>onEdit({ type:'task', id:t.id })}>
+                          {/* Diamond glyph */}
+                          <polygon
+                            points={`${mx},${midY-mSize} ${mx+mSize},${midY} ${mx},${midY+mSize} ${mx-mSize},${midY}`}
+                            fill={mFill}
+                            stroke={effectiveCompleted ? STATUS_GREEN : c.stroke}
+                            strokeWidth={ih ? 2 : 1.5} />
+                          {/* Small label to the right of the diamond, room permitting */}
+                          <text x={mx + mSize + 5} y={midY} dominantBaseline="middle"
+                            fill={c.fill} fontSize="10" fontWeight="600"
+                            textDecoration={effectiveCompleted ? 'line-through' : 'none'}
+                            style={{pointerEvents:'none',userSelect:'none'}}>
+                            {(()=>{const mc=12;return t.name.length>mc?t.name.slice(0,mc)+'…':t.name;})()}
+                          </text>
+                          {/* Completed checkmark badge — same style as bars */}
+                          {effectiveCompleted && <g style={{pointerEvents:'none'}}>
+                            <circle cx={mx + mSize + 8} cy={midY - mSize - 2} r="6" fill="#10B981" stroke="#13131A" strokeWidth="1.5" />
+                            <text x={mx + mSize + 8} y={midY - mSize - 2} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8" fontWeight="800">✓</text>
+                          </g>}
+                          {/* Overdue badge */}
+                          {!effectiveCompleted && t.isOverdue && <g style={{pointerEvents:'none'}}>
+                            <circle cx={mx + mSize + 8} cy={midY - mSize - 2} r="6" fill={STATUS_AMBER} stroke="#13131A" strokeWidth="1.5" />
+                            <text x={mx + mSize + 8} y={midY - mSize - 2} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8" fontWeight="800">⚠</text>
+                          </g>}
+                        </g>
+                      );
+                    }
 
                     // ── Bar colour logic ───────────────────────────────────
                     // Status drives both fill and stroke via colorsFor(). The
@@ -1356,11 +1391,10 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
         </div>
 
         {/* ── Drafts section ─────────────────────────────────────────────────
-            Drafts are projects with status='draft' (no tasks scheduled yet).
-            Rendered as placeholder rows below the active Gantt, so the row-
-            position math of the main chart stays untouched. Each row offers
-            an "Add tasks" action that opens the standard AddTasksModal. */}
-        {(() => {
+            Currently HIDDEN — visual was a bit off, removed at user request.
+            The Drafts sub-tab in Project View still surfaces these projects.
+            To re-enable here, flip the `false &&` below back to nothing. */}
+        {false && (() => {
           const draftSet = draftProjIds instanceof Set ? draftProjIds : new Set();
           if (draftSet.size === 0) return null;
           const sourceProjs = allProjs || projs;

@@ -165,6 +165,12 @@ export function buildSched(rawTasks, tdepMap, base, extraDelays = {}, cascadeMod
       s, e,
       sd: calDiff(base, s),
       cd: Math.max(1, calDiff(s, e) + 1),
+      // Milestones are zero-day events: start date equals end date in the
+      // source data. The engine still gives them cd=1 for layout purposes,
+      // but they don't represent any real working time. They're excluded
+      // from conflict and fragile detection (a moment-in-time event can't
+      // collide with another task in a meaningful way).
+      isMilestone: s.getTime() === e.getTime(),
       isC: false, isF: false, isDV: false, cw: [], dvDeps: [],
       isCompleted: completedIds.has(t.id),
       isOverdue: !completedIds.has(t.id) && e.getTime() < todayMs,
@@ -175,11 +181,14 @@ export function buildSched(rawTasks, tdepMap, base, extraDelays = {}, cascadeMod
   // Completed tasks are excluded entirely: a finished task cannot conflict with
   // anything — it's already done. This is what makes marking a task complete
   // actually clear the conflict it was part of.
+  // Milestones (zero-day events) are also excluded — they represent a moment,
+  // not a span of work, so they can't realistically conflict with another task.
   for (let i = 0; i < all.length; i++) {
     for (let j = i + 1; j < all.length; j++) {
       const a = all[i], b = all[j];
       if (a.id === b.id) continue;                   // never conflict a task with a duplicate of itself
       if (a.isCompleted || b.isCompleted) continue;  // done tasks don't conflict
+      if (a.isMilestone || b.isMilestone) continue;  // milestones don't consume work time
       if (a.person !== b.person) continue;
       if (a.s <= b.e && b.s <= a.e) {
         a.isC = b.isC = true;
@@ -191,10 +200,12 @@ export function buildSched(rawTasks, tdepMap, base, extraDelays = {}, cascadeMod
 
   // ── Fragile detection (consecutive same-person tasks with ≤1 day gap) ──────
   // Completed tasks are likewise excluded — a finished task being close to the
-  // next one isn't a scheduling risk.
+  // next one isn't a scheduling risk. Milestones are also excluded — being
+  // close to a milestone doesn't strain the schedule.
   const byP = {};
   for (const t of all) {
     if (t.isCompleted) continue;  // done tasks don't make a schedule fragile
+    if (t.isMilestone) continue;  // milestones aren't work blocks
     (byP[t.person] = byP[t.person] || []).push(t);
   }
   for (const ts of Object.values(byP)) {
