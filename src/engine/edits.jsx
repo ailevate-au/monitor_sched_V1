@@ -80,6 +80,7 @@ export function applyEditsToData(base, edits) {
  *   { type:'shiftTimeline', taskIds, days }
  *   { type:'reassignTasks', assignments: [{taskId, toPerson}] }
  *   { type:'addProject', project: {id, name?, status?, start?, end?, color?} }
+ *   { type:'addPerson', person: {name, role?, rate?, color?, weeklyCapacity?, skills?} }
  *   { type:'updateProject', projId, patch: {name?, status?, ...} }
  *   { type:'setProjectStatus', projId, status: 'draft'|'active'|'completed' }
  * @returns {object} New schedData
@@ -186,6 +187,39 @@ export function mutateSchedData(baseData, currentEdits, mutation) {
       });
       // If it was previously deleted, undelete on re-add.
       edits.deletedProjs = edits.deletedProjs.filter(x => x !== project.id);
+      break;
+    }
+    case 'addPerson': {
+      // Create a bench resource — exists in the pool but has no tasks yet.
+      // Only `name` is required; everything else has sensible defaults so the
+      // user can fill in role/skills/capacity later.
+      // mutation.person shape: { name, role?, rate?, color?, init?, weeklyCapacity?, skills? }
+      const { person } = mutation;
+      if (!person || !person.name || !person.name.trim()) break;
+      const name = person.name.trim();
+      // Block duplicate names — they're de-facto unique identifiers everywhere.
+      const exists = baseData.people.find(p => p.name === name)
+        || edits.people.find(p => p.name === name);
+      if (exists) {
+        console.warn('mutateSchedData: addPerson name already exists', name);
+        break;
+      }
+      const init = person.init && person.init.trim()
+        ? person.init.trim().slice(0, 2).toUpperCase()
+        : name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+      edits.people.push({
+        name,
+        role:   person.role  || '',
+        rate:   person.rate  || '$42/hr',
+        color:  person.color || '#5B7B9A',
+        init,
+        ...(typeof person.weeklyCapacity === 'number' && person.weeklyCapacity > 0
+          ? { weeklyCapacity: person.weeklyCapacity }
+          : {}),
+        ...(Array.isArray(person.skills) && person.skills.length > 0
+          ? { skills: person.skills }
+          : {}),
+      });
       break;
     }
     case 'updateProject': {
@@ -334,6 +368,15 @@ export function buildHistoryEntry(mutation, baseData, extra = {}) {
         id, timestamp: ts, kind: 'addProject',
         summary: `Created project ${p.id}${p.name ? ' (' + p.name + ')' : ''} · status: ${p.status || 'draft'}`,
         details: [{ projId: p.id, name: p.name, status: p.status, start: p.start, end: p.end }],
+        refersTo: null,
+      };
+    }
+    case 'addPerson': {
+      const p = mutation.person || {};
+      return {
+        id, timestamp: ts, kind: 'addPerson',
+        summary: `Added ${p.name}${p.role ? ' (' + p.role + ')' : ''} to resource pool`,
+        details: [{ name: p.name, role: p.role, weeklyCapacity: p.weeklyCapacity, skills: p.skills }],
         refersTo: null,
       };
     }

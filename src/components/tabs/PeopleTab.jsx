@@ -7,13 +7,15 @@ import { fmtDate as fd } from '../../engine/dates.jsx';
 import { computeStatus, STATUS_STYLES } from '../../engine/status.jsx';
 import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
 import { AssignTaskModal } from '../modals/AssignTaskModal.jsx';
+import { AddPersonModal } from '../modals/AddPersonModal.jsx';
 
-export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssignExisting, onCreateNew }) {
+export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssignExisting, onCreateNew, onAddPerson }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
 
   const [subTab, setSubTab] = useState('projects');
   const [search, setSearch] = useState('');
   const [assignOpen, setAssignOpen] = useState(false);
+  const [addPersonOpen, setAddPersonOpen] = useState(false);
 
   const RED    = '#EF4444';
 
@@ -34,6 +36,17 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
 
   return (
     <div style={{ display:'flex', minHeight:'520px', background:'#13131A' }}>
+      {addPersonOpen && (
+        <AddPersonModal
+          existingPeople={people}
+          onAdd={({ person }) => {
+            onAddPerson && onAddPerson({ person });
+            setAddPersonOpen(false);
+            // Auto-select the newly added person so the user lands on their detail view.
+            onSel && onSel(person.name);
+          }}
+          onClose={() => setAddPersonOpen(false)} />
+      )}
       {assignOpen && per && (
         <AssignTaskModal
           person={per}
@@ -53,6 +66,11 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
       {/* ── Left sidebar ── */}
       <div style={{ width:'192px', flexShrink:0, borderRight:`1px solid ${BORDER}`, background:'#0A0A0F', display:'flex', flexDirection:'column' }}>
         <div style={{ padding:'12px' }}>
+          <button
+            onClick={() => setAddPersonOpen(true)}
+            style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', width:'100%', padding:'8px 10px', borderRadius:'7px', border:'none', background:ORANGE, color:'white', fontSize:'12px', cursor:'pointer', fontWeight:'700', marginBottom:'8px' }}>
+            + Add Person
+          </button>
           <button style={{ display:'flex', alignItems:'center', gap:'6px', width:'100%', padding:'7px 10px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:CARD, color:TEXT, fontSize:'12px', cursor:'pointer', fontWeight:'500', marginBottom:'8px' }}>
             <svg width="12" height="12" fill="none" viewBox="0 0 16 16"><path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
             Filter

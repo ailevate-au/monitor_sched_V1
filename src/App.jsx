@@ -749,6 +749,19 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
     appendHistory(buildHistoryEntry(mutation, currentBaseData));
   }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
 
+  // ── Add a bench person manually (Resource tab → + Add Person) ─────────────
+  // Routes through the addPerson mutation. The person enters the resource pool
+  // with no tasks attached — they're available for assignment immediately.
+  const handleAddPerson = useCallback(({ person }) => {
+    if (!person || !person.name) return;
+    const currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
+    const currentEdits = loadSchedEdits();
+    const mutation = { type:'addPerson', person };
+    const updated = mutateSchedData(currentBaseData, currentEdits, mutation);
+    onMutate(updated);
+    appendHistory(buildHistoryEntry(mutation, currentBaseData));
+  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
+
   // ── Derived KPIs ──────────────────────────────────────────────────────────
   // A task is "effectively completed" if the engine marks it or an override says so.
   const isEffectivelyCompleted = t => t.isCompleted || statusOverrides.get(t.id) === 'Completed';
@@ -983,7 +996,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         {tab==='project'   && <ProjectViewTab tasks={tasks} allTasks={allTasks} allProjs={allProjs} completedProjIds={completedProjIds} draftProjIds={draftProjIds} history={history} onDelete={handleDelete} onEdit={handleEdit} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} onSetStatus={setStatusOverride} todayMs={todayMs} effectiveCompletedIds={effectiveCompletedIds} onCompleteProject={completeProject} onUncompleteProject={uncompleteProject} setAddTasksProj={setAddTasksProj} />}
         {tab==='workflows' && <WorkflowsTab />}
         {tab==='conflicts' && <ConflictsTab tasks={tasks} pendingReassigns={pendingReassigns} onStageReassign={stageReassign} onCancelReassign={cancelReassign} onEdit={handleEdit} />}
-        {tab==='people'    && <PeopleTab tasks={tasks} sel={sel} onSel={setSel} statusOverrides={statusOverrides} todayMs={todayMs} onAssignExisting={handleAssignExisting} onCreateNew={handleCreateAndAssign} />}
+        {tab==='people'    && <PeopleTab tasks={tasks} sel={sel} onSel={setSel} statusOverrides={statusOverrides} todayMs={todayMs} onAssignExisting={handleAssignExisting} onCreateNew={handleCreateAndAssign} onAddPerson={handleAddPerson} />}
       </div>
     </div>
   );
