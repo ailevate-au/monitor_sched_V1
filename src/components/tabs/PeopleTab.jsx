@@ -16,6 +16,10 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
   const [search, setSearch] = useState('');
   const [assignOpen, setAssignOpen] = useState(false);
   const [addPersonOpen, setAddPersonOpen] = useState(false);
+  // Role filter — Set of role strings currently active. Empty set means
+  // "no filter" (show all). Toggled from the Filter button popover.
+  const [roleFilter, setRoleFilter] = useState(new Set());
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const RED    = '#EF4444';
 
@@ -30,7 +34,24 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
     [tasks]
   );
 
-  const filteredPeople = people.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+  // Role list for the filter popover. Includes a special '(no role)' bucket
+  // for people whose role is empty — important so they don't disappear when
+  // any specific role is active.
+  const availableRoles = useMemo(() => {
+    const set = new Set();
+    for (const p of people) set.add(p.role || '');
+    return [...set].sort((a, b) => {
+      if (a === '') return 1;   // '(no role)' last
+      if (b === '') return -1;
+      return a.localeCompare(b);
+    });
+  }, [people]);
+
+  const filteredPeople = people.filter(p => {
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (roleFilter.size > 0 && !roleFilter.has(p.role || '')) return false;
+    return true;
+  });
   const personProjects  = sel ? [...new Set(pt.map(t => t.projId))] : [];
   const personConflicts = pt.filter(t => t.isC);
 
@@ -71,10 +92,76 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
             style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', width:'100%', padding:'8px 10px', borderRadius:'7px', border:'none', background:ORANGE, color:'white', fontSize:'12px', cursor:'pointer', fontWeight:'700', marginBottom:'8px' }}>
             + Add Person
           </button>
-          <button style={{ display:'flex', alignItems:'center', gap:'6px', width:'100%', padding:'7px 10px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:CARD, color:TEXT, fontSize:'12px', cursor:'pointer', fontWeight:'500', marginBottom:'8px' }}>
-            <svg width="12" height="12" fill="none" viewBox="0 0 16 16"><path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-            Filter
-          </button>
+          <div style={{ position:'relative', marginBottom:'8px' }}>
+            <button
+              onClick={() => setFilterOpen(o => !o)}
+              style={{ display:'flex', alignItems:'center', gap:'6px', width:'100%', padding:'7px 10px', borderRadius:'7px', border:`1px solid ${roleFilter.size > 0 ? ORANGE : BORDER}`, background: roleFilter.size > 0 ? ORANGE+'18' : CARD, color: roleFilter.size > 0 ? ORANGE : TEXT, fontSize:'12px', cursor:'pointer', fontWeight:'500' }}>
+              <svg width="12" height="12" fill="none" viewBox="0 0 16 16"><path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+              Filter
+              {roleFilter.size > 0 && (
+                <span style={{ marginLeft:'auto', fontSize:'10px', fontWeight:'700', background:ORANGE, color:'white', padding:'1px 6px', borderRadius:'10px', minWidth:'14px', textAlign:'center' }}>
+                  {roleFilter.size}
+                </span>
+              )}
+            </button>
+            {filterOpen && (
+              <>
+                {/* Backdrop captures outside-click to close */}
+                <div onClick={() => setFilterOpen(false)}
+                  style={{ position:'fixed', inset:0, zIndex:90 }} />
+                <div style={{
+                  position:'absolute', top:'calc(100% + 4px)', left:0, right:0, zIndex:100,
+                  background:CARD, border:`1px solid ${BORDER}`, borderRadius:'8px',
+                  boxShadow:'0 8px 24px rgba(0,0,0,0.5)', padding:'10px',
+                  maxHeight:'320px', overflowY:'auto',
+                }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px', paddingBottom:'8px', borderBottom:`1px solid ${BORDER}` }}>
+                    <span style={{ fontSize:'10px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.06em' }}>Filter by role</span>
+                    {roleFilter.size > 0 && (
+                      <button onClick={() => setRoleFilter(new Set())}
+                        style={{ background:'none', border:'none', color:ORANGE, fontSize:'10px', fontWeight:'700', cursor:'pointer', padding:'0' }}>
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  {availableRoles.length === 0 ? (
+                    <div style={{ fontSize:'11px', color:MUTED, padding:'8px', textAlign:'center' }}>
+                      No people in pool yet.
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:'2px' }}>
+                      {availableRoles.map(role => {
+                        const on = roleFilter.has(role);
+                        const label = role === '' ? '(no role)' : role;
+                        const count = people.filter(p => (p.role || '') === role).length;
+                        return (
+                          <label key={role}
+                            style={{
+                              display:'flex', alignItems:'center', gap:'8px',
+                              padding:'6px 8px', borderRadius:'6px', cursor:'pointer',
+                              background: on ? ORANGE+'18' : 'transparent',
+                              border:`1px solid ${on ? ORANGE+'66' : 'transparent'}`,
+                            }}>
+                            <input type="checkbox" checked={on}
+                              onChange={() => {
+                                setRoleFilter(prev => {
+                                  const next = new Set(prev);
+                                  next.has(role) ? next.delete(role) : next.add(role);
+                                  return next;
+                                });
+                              }}
+                              style={{ accentColor: ORANGE, cursor:'pointer' }} />
+                            <span style={{ fontSize:'11px', color: role==='' ? MUTED : TEXT, fontStyle: role==='' ? 'italic' : 'normal', flex:1 }}>{label}</span>
+                            <span style={{ fontSize:'10px', color:MUTED }}>{count}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <div style={{ display:'flex', alignItems:'center', gap:'6px', padding:'6px 10px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:CARD }}>
             <svg width="12" height="12" fill="none" viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="5" stroke={MUTED} strokeWidth="1.5"/><path d="M10.5 10.5 14 14" stroke={MUTED} strokeWidth="1.5" strokeLinecap="round"/></svg>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..."
