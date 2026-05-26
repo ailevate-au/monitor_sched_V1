@@ -198,8 +198,11 @@ export function mutateSchedData(baseData, currentEdits, mutation) {
       if (!person || !person.name || !person.name.trim()) break;
       const name = person.name.trim();
       // Block duplicate names — they're de-facto unique identifiers everywhere.
-      const exists = baseData.people.find(p => p.name === name)
-        || edits.people.find(p => p.name === name);
+      // Case-insensitive: "sam" and "Sam" are treated as the same person to
+      // prevent near-duplicates from sneaking in.
+      const nameLower = name.toLowerCase();
+      const exists = baseData.people.find(p => p.name.toLowerCase() === nameLower)
+        || edits.people.find(p => p.name.toLowerCase() === nameLower);
       if (exists) {
         console.warn('mutateSchedData: addPerson name already exists', name);
         break;

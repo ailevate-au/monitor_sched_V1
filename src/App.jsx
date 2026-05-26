@@ -762,6 +762,78 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
     appendHistory(buildHistoryEntry(mutation, currentBaseData));
   }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
 
+  // ── Import people from xlsx (Resource tab → Import People) ────────────────
+  // Loops through, calling addPerson for each. The mutation itself handles
+  // duplicate skipping (case-insensitive), so even if our pre-filter missed
+  // an edge case, the engine won't end up with two of anyone.
+  const handleImportPeople = useCallback(({ people: newPeople }) => {
+    if (!Array.isArray(newPeople) || newPeople.length === 0) return;
+    // Chain the mutations: each one builds on the result of the previous so
+    // an import of N people produces ONE updated schedData, not N intermediate
+    // ones.
+    let currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
+    let currentEdits = loadSchedEdits();
+    let updated = null;
+    let added = 0;
+    for (const person of newPeople) {
+      const mutation = { type:'addPerson', person };
+      const beforeCount = (updated?.people || currentBaseData.people).length;
+      updated = mutateSchedData(currentBaseData, currentEdits, mutation);
+      const afterCount = updated.people.length;
+      if (afterCount > beforeCount) added++;
+      // For the next iteration, the "current" data is what we just produced.
+      currentBaseData = updated;
+      currentEdits = loadSchedEdits();
+    }
+    if (updated) onMutate(updated);
+    if (added > 0) {
+      appendHistory({
+        id: `h-${Date.now()}-impp`,
+        timestamp: Date.now(),
+        kind: 'importPeople',
+        summary: `Imported ${added} ${added===1?'person':'people'} from xlsx`,
+        details: newPeople.slice(0, 20).map(p => ({ name: p.name, role: p.role })),
+        refersTo: null,
+      });
+    }
+  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
+
+  // ── Import tasks for the selected person (Resource tab → Import Tasks) ────
+  // Tasks come in already shaped by the modal: blanks auto-assigned to the
+  // selected person, explicit names honoured. Routes through the existing
+  // addTasks mutation which already auto-creates referenced-but-missing
+  // projects. Person objects are NOT added here — names that match existing
+  // people get used; new names appear only on the tasks (until/unless the
+  // user explicitly adds them to the pool).
+  const handleImportTasksForPerson = useCallback(({ tasks: newTasks }) => {
+    if (!Array.isArray(newTasks) || newTasks.length === 0) return;
+    const currentBaseData = { rawTasks, projs, people, tdepMap, base, todayDay, periods };
+    const currentEdits = loadSchedEdits();
+    // The addTasks mutation accepts a `people` array for any new people
+    // discovered in task assignments. Build it now from any names not already
+    // in the pool.
+    const existingNames = new Set(people.map(p => p.name.toLowerCase()));
+    const newPeopleSeen = new Map();  // name → minimal person object
+    for (const t of newTasks) {
+      const n = (t.person || '').trim();
+      if (n && !existingNames.has(n.toLowerCase()) && !newPeopleSeen.has(n)) {
+        const init = n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        newPeopleSeen.set(n, {
+          name: n, role: t.role || '', init,
+          color: '#5B7B9A', rate: '$42/hr',
+        });
+      }
+    }
+    const mutation = {
+      type: 'addTasks',
+      tasks: newTasks,
+      people: [...newPeopleSeen.values()],
+    };
+    const updated = mutateSchedData(currentBaseData, currentEdits, mutation);
+    onMutate(updated);
+    appendHistory(buildHistoryEntry(mutation, currentBaseData));
+  }, [rawTasks, projs, people, tdepMap, base, todayDay, periods, onMutate, appendHistory]);
+
   // ── Derived KPIs ──────────────────────────────────────────────────────────
   // A task is "effectively completed" if the engine marks it or an override says so.
   const isEffectivelyCompleted = t => t.isCompleted || statusOverrides.get(t.id) === 'Completed';
@@ -996,7 +1068,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         {tab==='project'   && <ProjectViewTab tasks={tasks} allTasks={allTasks} allProjs={allProjs} completedProjIds={completedProjIds} draftProjIds={draftProjIds} history={history} onDelete={handleDelete} onEdit={handleEdit} onToggleComplete={toggleComplete} statusOverrides={statusOverrides} onSetStatus={setStatusOverride} todayMs={todayMs} effectiveCompletedIds={effectiveCompletedIds} onCompleteProject={completeProject} onUncompleteProject={uncompleteProject} setAddTasksProj={setAddTasksProj} />}
         {tab==='workflows' && <WorkflowsTab />}
         {tab==='conflicts' && <ConflictsTab tasks={tasks} pendingReassigns={pendingReassigns} onStageReassign={stageReassign} onCancelReassign={cancelReassign} onEdit={handleEdit} />}
-        {tab==='people'    && <PeopleTab tasks={tasks} sel={sel} onSel={setSel} statusOverrides={statusOverrides} todayMs={todayMs} onAssignExisting={handleAssignExisting} onCreateNew={handleCreateAndAssign} onAddPerson={handleAddPerson} />}
+        {tab==='people'    && <PeopleTab tasks={tasks} sel={sel} onSel={setSel} statusOverrides={statusOverrides} todayMs={todayMs} onAssignExisting={handleAssignExisting} onCreateNew={handleCreateAndAssign} onAddPerson={handleAddPerson} onImportPeople={handleImportPeople} onImportTasksForPerson={handleImportTasksForPerson} />}
       </div>
     </div>
   );

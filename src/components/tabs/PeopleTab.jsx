@@ -8,14 +8,18 @@ import { computeStatus, STATUS_STYLES } from '../../engine/status.jsx';
 import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
 import { AssignTaskModal } from '../modals/AssignTaskModal.jsx';
 import { AddPersonModal } from '../modals/AddPersonModal.jsx';
+import { ImportPeopleModal } from '../modals/ImportPeopleModal.jsx';
+import { ImportTasksForPersonModal } from '../modals/ImportTasksForPersonModal.jsx';
 
-export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssignExisting, onCreateNew, onAddPerson }) {
+export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssignExisting, onCreateNew, onAddPerson, onImportPeople, onImportTasksForPerson }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
 
   const [subTab, setSubTab] = useState('projects');
   const [search, setSearch] = useState('');
   const [assignOpen, setAssignOpen] = useState(false);
   const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [importPeopleOpen, setImportPeopleOpen] = useState(false);
+  const [importTasksOpen, setImportTasksOpen] = useState(false);
   // Role filter — Set of role strings currently active. Empty set means
   // "no filter" (show all). Toggled from the Filter button popover.
   const [roleFilter, setRoleFilter] = useState(new Set());
@@ -68,6 +72,25 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
           }}
           onClose={() => setAddPersonOpen(false)} />
       )}
+      {importPeopleOpen && (
+        <ImportPeopleModal
+          existingPeople={people}
+          onImport={({ people: newPeople }) => {
+            onImportPeople && onImportPeople({ people: newPeople });
+            setImportPeopleOpen(false);
+          }}
+          onClose={() => setImportPeopleOpen(false)} />
+      )}
+      {importTasksOpen && per && (
+        <ImportTasksForPersonModal
+          person={per}
+          existingProjs={projs}
+          onImport={({ tasks: newTasks }) => {
+            onImportTasksForPerson && onImportTasksForPerson({ tasks: newTasks });
+            setImportTasksOpen(false);
+          }}
+          onClose={() => setImportTasksOpen(false)} />
+      )}
       {assignOpen && per && (
         <AssignTaskModal
           person={per}
@@ -89,8 +112,14 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
         <div style={{ padding:'12px' }}>
           <button
             onClick={() => setAddPersonOpen(true)}
-            style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', width:'100%', padding:'8px 10px', borderRadius:'7px', border:'none', background:ORANGE, color:'white', fontSize:'12px', cursor:'pointer', fontWeight:'700', marginBottom:'8px' }}>
+            style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', width:'100%', padding:'8px 10px', borderRadius:'7px', border:'none', background:ORANGE, color:'white', fontSize:'12px', cursor:'pointer', fontWeight:'700', marginBottom:'6px' }}>
             + Add Person
+          </button>
+          <button
+            onClick={() => setImportPeopleOpen(true)}
+            style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', width:'100%', padding:'7px 10px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:CARD, color:TEXT, fontSize:'11px', cursor:'pointer', fontWeight:'600', marginBottom:'8px' }}>
+            <svg width="11" height="11" fill="none" viewBox="0 0 16 16"><path d="M8 2v9M4 8l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M2 13h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            Import People (xlsx)
           </button>
           <div style={{ position:'relative', marginBottom:'8px' }}>
             <button
@@ -212,7 +241,13 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
                   <div style={{ fontSize:'11px', color:personConflicts.length>0?RED:MUTED, marginTop:'2px' }}>Conflicts</div>
                 </div>
               </div>
-              <div style={{ display:'flex', gap:'10px' }}>
+              <div style={{ display:'flex', gap:'8px' }}>
+                <button
+                  onClick={() => setImportTasksOpen(true)}
+                  style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 12px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', color:TEXT, fontSize:'12px', cursor:'pointer', fontWeight:'600' }}>
+                  <svg width="11" height="11" fill="none" viewBox="0 0 16 16"><path d="M8 2v9M4 8l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M2 13h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                  Import Tasks
+                </button>
                 <button
                   onClick={() => setAssignOpen(true)}
                   style={{ padding:'7px 14px', borderRadius:'8px', border:'none', background:ORANGE, color:'white', fontSize:'12px', cursor:'pointer', fontWeight:'700' }}>

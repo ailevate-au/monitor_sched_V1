@@ -301,3 +301,138 @@ export async function parseXlsx(buffer) {
   // New callers should read `result.parsed` and `result.pending` explicitly.
   return { ...parsed, parsed, pending };
 }
+
+// ── Shared helpers (also used by parsePeopleOnly / parseTasksOnly) ──────────
+const _normRow = obj => {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) out[k.trim().toLowerCase().replace(/\s+/g,'_')] = v;
+  return out;
+};
+const _col = (row, ...keys) => {
+  for (const k of keys) { if (row[k] !== undefined && row[k] !== '') return row[k]; }
+  return '';
+};
+
+/**
+ * Read ONLY the People sheet from an xlsx. Used by the Resource tab's
+ * "+ Import People" button. The Schedule sheet (if present) is intentionally
+ * ignored — that's what the main toolbar's Import button is for.
+ *
+ * @param {ArrayBuffer} buffer
+ * @returns {Promise<{
+ *   people: Array<{name, role, init, color, rate, weeklyCapacity?, skills?}>,
+ *   ignoredSchedule: boolean,   // true if the file also had a Schedule sheet
+ *   ignoredProjects: boolean,   // true if the file also had a Projects sheet
+ * }>}
+ */
+export async function parsePeopleOnly(buffer) {
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
+  const wb = XLSX.read(buffer, { type:'array', cellDates:true });
+
+  // Find the People sheet by name (same regex as the main parser).
+  const peopleSheet = wb.SheetNames.find(n => /people|resource|team/i.test(n));
+  if (!peopleSheet) {
+    throw new Error('No People sheet found. Expected a sheet named "People", "Resources", or "Team".');
+  }
+  const ws = wb.Sheets[peopleSheet];
+  const rows = XLSX.utils.sheet_to_json(ws, { defval:'' }).map(_normRow);
+  if (!rows.length) {
+    throw new Error('People sheet is empty.');
+  }
+
+  const ignoredSchedule = wb.SheetNames.some(n => /schedule/i.test(n));
+  const ignoredProjects = wb.SheetNames.some(n => /^projects?$/i.test(n));
+
+  const people = [];
+  for (const row of rows) {
+    const name = String(_col(row, 'name')).trim();
+    if (!name) continue;
+    const role  = String(_col(row, 'role')).trim();
+    const rate  = String(_col(row, 'rate')).trim();
+    const color = String(_col(row, 'color')).trim();
+    // Weekly capacity is optional, defaults to 5 on insert (the addPerson
+    // mutation handles the default). Accept numbers or numeric strings.
+    const capRaw = _col(row, 'weekly_capacity', 'weeklycapacity', 'capacity', 'days_per_week', 'dayperweek');
+    const capNum = capRaw === '' ? null : Number(capRaw);
+    const weeklyCapacity = Number.isFinite(capNum) && capNum > 0 && capNum <= 7 ? capNum : null;
+    // Skills: comma-separated string in xlsx, becomes an array
+    const skillsRaw = String(_col(row, 'skills')).trim();
+    const skills = skillsRaw
+      ? skillsRaw.split(',').map(s => s.trim()).filter(Boolean)
+      : null;
+    const init = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const person = { name, role, init, color, rate };
+    if (weeklyCapacity !== null) person.weeklyCapacity = weeklyCapacity;
+    if (skills && skills.length) person.skills = skills;
+    people.push(person);
+  }
+
+  return { people, ignoredSchedule, ignoredProjects };
+}
+
+/**
+ * Read ONLY the Schedule sheet from an xlsx. Used by the Resource tab's
+ * "+ Import Tasks" button on a person's detail. Returns parsed tasks with
+ * a breakdown of who they'd be assigned to, plus warnings (auto-created
+ * projects, unassigned tasks) for the import-confirm UI.
+ *
+ * @param {ArrayBuffer} buffer
+ * @returns {Promise<{
+ *   rawTasks: Array,
+ *   peopleByName: { [name]: { count, role } },   // for the "tasks for other people" section
+ *   unassignedCount: number,
+ *   projectIds: Array<string>,                    // distinct project IDs found
+ * }>}
+ */
+export async function parseTasksOnly(buffer) {
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
+  const wb = XLSX.read(buffer, { type:'array', cellDates:true });
+  const sheetName = wb.SheetNames.find(n => /schedule/i.test(n)) || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, { defval:'' }).map(_normRow);
+  if (!rows.length) {
+    throw new Error('Schedule sheet is empty.');
+  }
+
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const rawTasks = [];
+  const peopleByName = {};
+  const projectIdSet = new Set();
+  let unassignedCount = 0;
+
+  for (const row of rows) {
+    const projId   = String(_col(row, 'project', 'proj')).trim();
+    const seqId    = String(_col(row, 'task_id', 'taskid', 'id')).trim();
+    const name     = String(_col(row, 'task_name', 'taskname', 'name')).trim();
+    const person   = String(_col(row, 'assigned', 'person', 'resource')).trim();
+    const role     = String(_col(row, 'role')).trim();
+    const startRaw = _col(row, 'start', 'start_date');
+    const endRaw   = _col(row, 'end', 'end_date', 'finish');
+    if (!projId || !seqId || !name) continue;
+    const startD = startRaw instanceof Date ? startRaw : parseDate(startRaw);
+    const endD   = endRaw   instanceof Date ? endRaw   : parseDate(endRaw);
+    if (!startD || !endD) continue;
+
+    const id = `${projId}-${seqId}`;
+    const dur = Math.max(1, Math.round(Math.abs(endD - startD) / (864e5 * 7 / 5)));
+    rawTasks.push({
+      id, proj: projId, name, person, role, dur,
+      start: fmt(startD), end: fmt(endD),
+      deps: [],
+    });
+    projectIdSet.add(projId);
+    if (person) {
+      if (!peopleByName[person]) peopleByName[person] = { count: 0, role };
+      peopleByName[person].count++;
+    } else {
+      unassignedCount++;
+    }
+  }
+
+  return {
+    rawTasks,
+    peopleByName,
+    unassignedCount,
+    projectIds: [...projectIdSet],
+  };
+}
