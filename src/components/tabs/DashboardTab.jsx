@@ -6,7 +6,7 @@
 
 import { useMemo, useState } from 'react';
 import { useSched } from '../../context.jsx';
-import { CARD, BORDER, ORANGE, TEXT, MUTED, CANVAS, CHIP, TASK_BLUE, STATUS_GREEN, STATUS_AMBER, STATUS_RED, STATUS_TOKENS } from '../../theme.jsx';
+import { CARD, BORDER, ORANGE, TEXT, MUTED, CANVAS, CHIP, TASK_BLUE, STATUS_GREEN, STATUS_AMBER, STATUS_RED, STATUS_TOKENS, SHADOW_SM } from '../../theme.jsx';
 
 // ── Visual palette (status colours, matches the rest of the app) ─────────────
 // status + task colours now sourced from theme tokens
@@ -17,7 +17,7 @@ function Card({ title, subtitle, children, action, style }) {
   return (
     <div style={{
       background:CARD, borderRadius:'10px', padding:'18px 20px',
-      border:`1px solid ${BORDER}`, ...style,
+      border:`1px solid ${BORDER}`, boxShadow:SHADOW_SM, ...style,
     }}>
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom: subtitle ? '2px' : '14px' }}>
         <div>
@@ -249,28 +249,28 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
           other tab — no double-take when switching. */}
       <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', marginBottom:'18px' }}>
         {/* Total Projects */}
-        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'130px', flex:1 }}>
+        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, boxShadow:SHADOW_SM, minWidth:'130px', flex:1 }}>
           <div style={{ fontSize:'11px', color:MUTED, marginBottom:'6px' }}>
             <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="1" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/></svg>
           </div>
           <div style={{ fontSize:'28px', fontWeight:'800', color:TEXT, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{projs.length}</div>
-          <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>Total Projects</div>
+          <div style={{ fontSize:'10px', color:MUTED, marginTop:'5px', textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:'600' }}>Total Projects</div>
         </div>
 
         {/* Projects On Schedule */}
-        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'130px', flex:1 }}>
+        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, boxShadow:SHADOW_SM, minWidth:'130px', flex:1 }}>
           <div style={{ fontSize:'11px', color:MUTED, marginBottom:'6px' }}>
             <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="1" stroke={MUTED} strokeWidth="1.4"/><path d="M2 6h12M6 1v3M10 1v3" stroke={MUTED} strokeWidth="1.4" strokeLinecap="round"/></svg>
           </div>
           <div style={{ fontSize:'28px', fontWeight:'800', color: safeOnPct >= 75 ? STATUS_GREEN : safeOnPct >= 50 ? STATUS_AMBER : STATUS_RED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeOnPct}<span style={{ fontSize:'16px', fontWeight:'600' }}>%</span></div>
-          <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>Projects On Schedule</div>
+          <div style={{ fontSize:'10px', color:MUTED, marginTop:'5px', textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:'600' }}>Projects On Schedule</div>
         </div>
 
         {/* Project Risk */}
         <div onClick={() => safeProjRisk.length > 0 && goConflicts()}
-          style={{ background:safeProjRisk.length>0?STATUS_TOKENS.DANGER_SUBTLE:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeProjRisk.length>0?STATUS_TOKENS.DANGER_BORDER:BORDER}`, minWidth:'130px', cursor:safeProjRisk.length>0?'pointer':'default', flex:1 }}>
+          style={{ background:safeProjRisk.length>0?STATUS_TOKENS.DANGER_SUBTLE:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeProjRisk.length>0?STATUS_TOKENS.DANGER_BORDER:BORDER}`, boxShadow:SHADOW_SM, minWidth:'130px', cursor:safeProjRisk.length>0?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:safeProjRisk.length>0?STATUS_TOKENS.DANGER_TEXT:MUTED }}>Project Risk</span>
+            <span style={{ fontSize:'10px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.06em', color:safeProjRisk.length>0?STATUS_TOKENS.DANGER_TEXT:MUTED }}>Project Risk</span>
             {safeProjRisk.length>0 && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4" strokeLinecap="round"/></svg>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
@@ -285,9 +285,9 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
 
         {/* Cross Project Risk */}
         <div onClick={() => safeCross.length > 0 && goConflicts()}
-          style={{ background:safeCross.length>0?STATUS_TOKENS.DANGER_SUBTLE:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeCross.length>0?STATUS_TOKENS.DANGER_BORDER:BORDER}`, minWidth:'130px', cursor:safeCross.length>0?'pointer':'default', flex:1 }}>
+          style={{ background:safeCross.length>0?STATUS_TOKENS.DANGER_SUBTLE:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeCross.length>0?STATUS_TOKENS.DANGER_BORDER:BORDER}`, boxShadow:SHADOW_SM, minWidth:'130px', cursor:safeCross.length>0?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:safeCross.length>0?STATUS_TOKENS.DANGER_TEXT:MUTED }}>Cross Project Risk</span>
+            <span style={{ fontSize:'10px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.06em', color:safeCross.length>0?STATUS_TOKENS.DANGER_TEXT:MUTED }}>Cross Project Risk</span>
             {safeCross.length>0 && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4" strokeLinecap="round"/></svg>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
@@ -302,9 +302,9 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
 
         {/* Fragile Tasks */}
         <div onClick={() => safeKpi.fragile > 0 && goConflicts()}
-          style={{ background:safeKpi.fragile>0?STATUS_TOKENS.WARN_SUBTLE2:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeKpi.fragile>0?STATUS_TOKENS.WARN_BORDER:BORDER}`, minWidth:'130px', cursor:safeKpi.fragile>0?'pointer':'default', flex:1 }}>
+          style={{ background:safeKpi.fragile>0?STATUS_TOKENS.WARN_SUBTLE2:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeKpi.fragile>0?STATUS_TOKENS.WARN_BORDER:BORDER}`, boxShadow:SHADOW_SM, minWidth:'130px', cursor:safeKpi.fragile>0?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:safeKpi.fragile>0?STATUS_TOKENS.WARN_BADGE:MUTED }}>Fragile Tasks</span>
+            <span style={{ fontSize:'10px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.06em', color:safeKpi.fragile>0?STATUS_TOKENS.WARN_BADGE:MUTED }}>Fragile Tasks</span>
             {safeKpi.fragile>0 && <span style={{ fontSize:'14px', color:STATUS_TOKENS.WARN_BADGE, fontWeight:'800', lineHeight:'1' }}>~</span>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>

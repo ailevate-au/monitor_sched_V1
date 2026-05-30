@@ -119,6 +119,15 @@ export const TASK_BLUE_LO2   = '#CBD5E1';  // lightest blue border
 export const TASK_BLUE_BG    = '#EFF4F8';  // In Progress pill background — pale blue
 export const TASK_BLUE_BG2   = '#F1F5F9';  // On Track pill background — pale grey
 
+// ── Elevation (SiteWize-style soft shadows) ──────────────────────────────────
+// On the light theme, cards get a hairline border PLUS a very subtle shadow —
+// that soft lift is the difference between "flat box" and "polished card".
+// Three levels: SM (resting cards), MD (raised cards / sections), LG (modals).
+// Kept low-opacity and slate-tinted so they read as gentle, not heavy.
+export const SHADOW_SM = '0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06)';
+export const SHADOW_MD = '0 1px 3px rgba(15,23,42,0.06), 0 4px 12px rgba(15,23,42,0.08)';
+export const SHADOW_LG = '0 8px 24px rgba(15,23,42,0.12), 0 16px 48px rgba(15,23,42,0.10)';
+
 // ── Primary exported palette object ───────────────────────────────────────────
 // COLORS keeps its original keys (NAV/SURFACE/CARD/BORDER/ORANGE/TEXT/MUTED)
 // for backward compatibility — every existing import keeps working. New

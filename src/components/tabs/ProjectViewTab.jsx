@@ -6,7 +6,7 @@ import { useSched } from '../../context.jsx';
 import { fmtDate as fd } from '../../engine/dates.jsx';
 import { computeStatus, STATUS_STYLES } from '../../engine/status.jsx';
 import { loadSchedEdits, saveSchedEdits } from '../../storage/persist.jsx';
-import { CARD, BORDER, BORDER_HI, ORANGE, TEXT, MUTED, FAINT, CANVAS, SURFACE, INSET, CHIP, TASK_BLUE, TASK_BLUE_HI, STATUS_TOKENS } from '../../theme.jsx';
+import { CARD, BORDER, BORDER_HI, ORANGE, TEXT, MUTED, FAINT, CANVAS, SURFACE, INSET, CHIP, TASK_BLUE, TASK_BLUE_HI, STATUS_TOKENS, SHADOW_SM } from '../../theme.jsx';
 import { ConfirmModal } from '../ConfirmModal.jsx';
 
 export function ProjectViewTab({
@@ -354,7 +354,7 @@ export function ProjectViewTab({
                 const endStr   = fmt(p.end);
                 return (
                   <div key={p.id}
-                    style={{ padding:'14px 16px', background:CARD, borderRadius:'10px', border:`1px solid ${BORDER}` }}>
+                    style={{ padding:'14px 16px', background:CARD, borderRadius:'10px', border:`1px solid ${BORDER}`, boxShadow:SHADOW_SM }}>
                     <div style={{ display:'flex', alignItems:'center', gap:'14px' }}>
                       <div style={{
                         width:'42px', height:'42px', borderRadius:'10px',
@@ -426,7 +426,7 @@ export function ProjectViewTab({
                 const peopleNames = [...new Set(projTasks.map(t => t.person))];
                 return (
                   <div key={p.id}
-                    style={{ padding:'14px 16px', background:CARD, borderRadius:'10px', border:`1px solid ${BORDER}` }}>
+                    style={{ padding:'14px 16px', background:CARD, borderRadius:'10px', border:`1px solid ${BORDER}`, boxShadow:SHADOW_SM }}>
                     <div style={{ display:'flex', alignItems:'center', gap:'14px' }}>
                       <div style={{
                         width:'42px', height:'42px', borderRadius:'10px',
