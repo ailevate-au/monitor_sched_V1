@@ -7,7 +7,7 @@ import { useSched } from '../../context.jsx';
 import { fmtDate as fd } from '../../engine/dates.jsx';
 import { normDep } from '../../engine/schedule.jsx';
 import { computeStatus } from '../../engine/status.jsx';
-import { DPX, HH, LW, PRH, RRH, SRH, SBH, ALL_MONS, BORDER } from '../../theme.jsx';
+import { DPX, HH, LW, PRH, RRH, SRH, SBH, ALL_MONS, BORDER, BORDER_HI, CARD, SURFACE, PANEL, CANVAS, CHIP, TEXT, MUTED, FAINT, ORANGE, ACCENT_HI, TASK_BLUE, TASK_BLUE_HI, STATUS_TOKENS } from '../../theme.jsx';
 import { ConfirmModal } from '../ConfirmModal.jsx';
 
 export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, pendingReassigns, onCommitAll, onCancelShift, onCancelReassign, simDelays, setSimDelays, onEdit, setAddTasksProj, onToggleComplete, statusOverrides, todayMs, effectiveCompletedIds, onCompleteProject, draftProjIds, allProjs }) {
@@ -61,12 +61,10 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
   //   Fragile / Dep-Violation → badge only (bar colour unchanged)
   // In-Progress is identical to On Track in fill but uses a BRIGHTER stroke,
   // so active work whispers "I'm running" without dominating the chart.
-  const TASK_BLUE     = '#5B7B9A';
-  const TASK_BLUE_HI  = '#7DA3C8';  // brighter outline for in-progress
-  const STATUS_GREEN  = '#10B981';
-  const STATUS_AMBER  = '#F59E0B';
-  const STATUS_RED    = '#EF4444';
-  const GHOST_GREY    = '#475569';
+  const STATUS_GREEN  = STATUS_TOKENS.OK;
+  const STATUS_AMBER  = STATUS_TOKENS.WARN;
+  const STATUS_RED    = STATUS_TOKENS.DANGER;
+  const GHOST_GREY    = '#94A3B8';  // ghosted/preview bars — mid slate (light theme)
   // Aliases kept so the rest of the file (which references NEUTRAL / CONFLICT_RED) still compiles.
   const NEUTRAL       = TASK_BLUE;
   const CONFLICT_RED  = STATUS_RED;
@@ -449,7 +447,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
           ? `This will archive ${pendingCompleteProj.id}${pendingCompleteProj.name ? ' (' + pendingCompleteProj.name + ')' : ''}. The project will be removed from the Gantt chart, conflict detection, and dashboard KPIs. It can be reopened anytime from the Completed sub-tab of Project View.`
           : ''}
         confirmLabel="✓ Conclude project"
-        confirmColor="#10B981"
+        confirmColor={STATUS_TOKENS.OK}
         onConfirm={() => {
           if (pendingCompleteProj && onCompleteProject) {
             onCompleteProject(pendingCompleteProj.id, pendingCompleteProj.name);
@@ -460,17 +458,17 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
 
       {/* Ready-to-conclude banner — same UX as in Project View */}
       {readyToConclude.length > 0 && (
-        <div style={{ padding:'10px 16px', background:'#0D2B1E', borderBottom:'1px solid #065F46' }}>
+        <div style={{ padding:'10px 16px', background:STATUS_TOKENS.OK_SUBTLE, borderBottom:`1px solid ${STATUS_TOKENS.OK_BORDER}` }}>
           <div style={{ display:'flex', alignItems:'center', gap:'14px', flexWrap:'wrap' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:'#10B981' }}>
+            <span style={{ fontSize:'12px', fontWeight:'600', color:STATUS_TOKENS.OK }}>
               ✓ {readyToConclude.length} project{readyToConclude.length===1?'':'s'} ready to conclude:
             </span>
             {readyToConclude.map(p => (
               <button key={p.id}
                 onClick={() => setPendingCompleteProj(p)}
                 style={{
-                  padding:'5px 12px', borderRadius:'6px', border:'1px solid #10B98155',
-                  background:'#10B98122', color:'#10B981', fontSize:'11px', fontWeight:'700',
+                  padding:'5px 12px', borderRadius:'6px', border:`1px solid ${STATUS_TOKENS.OK}55`,
+                  background:STATUS_TOKENS.OK+'22', color:STATUS_TOKENS.OK, fontSize:'11px', fontWeight:'700',
                   cursor:'pointer',
                 }}>
                 ✓ Conclude {p.id}{p.name && p.name !== p.id ? ' · ' + p.name : ''}
@@ -486,21 +484,21 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
           Stays visible whenever any change is staged. */}
       {isSimulating && (
         <div style={{
-          padding:'10px 16px', background:'#1E1B2E',
-          borderBottom:'2px solid #F97316'
+          padding:'10px 16px', background:CARD,
+          borderBottom:`2px solid ${ORANGE}`
         }}>
           <div style={{ display:'flex', alignItems:'center', gap:'14px', marginBottom: (hasShift || hasReassigns) ? '8px' : '0' }}>
-            <span style={{ fontSize:'13px', fontWeight:'700', color:'#F97316' }}>
+            <span style={{ fontSize:'13px', fontWeight:'700', color:ORANGE }}>
               ◷ Simulating changes
             </span>
-            <span style={{ fontSize:'12px', color:'#9CA3AF' }}>
+            <span style={{ fontSize:'12px', color:FAINT }}>
               {(hasShift ? 1 : 0) + (hasReassigns ? Object.keys(pendingReassigns).length : 0)} staged
               {' · '}grey = current, solid = proposed
             </span>
             <div style={{ flex:1 }} />
             <button onClick={onCommitAll}
               style={{ padding:'6px 16px', borderRadius:'7px', border:'none',
-                background:'#F97316', color:'white', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>
+                background:ORANGE, color:'white', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>
               ✓ Confirm all
             </button>
           </div>
@@ -508,13 +506,13 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
           <div style={{ display:'flex', flexWrap:'wrap', gap:'6px' }}>
             {hasShift && (
               <div style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'4px 8px 4px 10px', borderRadius:'6px', background:'rgba(249,115,22,0.12)', border:'1px solid rgba(249,115,22,0.35)' }}>
-                <span style={{ fontSize:'11px', color:'#FED7AA', fontWeight:'600' }}>
+                <span style={{ fontSize:'11px', color:STATUS_TOKENS.WARN_TEXT2, fontWeight:'600' }}>
                   Shift {pendingShift.days > 0 ? '+' : ''}{pendingShift.days}d
-                  <span style={{ color:'#9CA3AF', fontWeight:'400' }}> · {Object.keys(ghostMap).length} task{Object.keys(ghostMap).length===1?'':'s'}</span>
+                  <span style={{ color:FAINT, fontWeight:'400' }}> · {Object.keys(ghostMap).length} task{Object.keys(ghostMap).length===1?'':'s'}</span>
                 </span>
                 <button onClick={onCancelShift}
                   title="Revert this shift"
-                  style={{ padding:'2px 6px', borderRadius:'4px', border:'none', background:'transparent', color:'#FCA5A5', fontSize:'11px', cursor:'pointer' }}>
+                  style={{ padding:'2px 6px', borderRadius:'4px', border:'none', background:'transparent', color:STATUS_TOKENS.DANGER_TEXT, fontSize:'11px', cursor:'pointer' }}>
                   ↺
                 </button>
               </div>
@@ -524,13 +522,13 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
               const label = t ? `${t.name || taskId}` : taskId;
               return (
                 <div key={taskId} style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'4px 8px 4px 10px', borderRadius:'6px', background:'rgba(249,115,22,0.12)', border:'1px solid rgba(249,115,22,0.35)' }}>
-                  <span style={{ fontSize:'11px', color:'#FED7AA', fontWeight:'600' }}>
+                  <span style={{ fontSize:'11px', color:STATUS_TOKENS.WARN_TEXT2, fontWeight:'600' }}>
                     {ra.from} → {ra.to}
-                    <span style={{ color:'#9CA3AF', fontWeight:'400' }}> · {label}</span>
+                    <span style={{ color:FAINT, fontWeight:'400' }}> · {label}</span>
                   </span>
                   <button onClick={() => onCancelReassign && onCancelReassign(taskId)}
                     title="Revert this reassignment"
-                    style={{ padding:'2px 6px', borderRadius:'4px', border:'none', background:'transparent', color:'#FCA5A5', fontSize:'11px', cursor:'pointer' }}>
+                    style={{ padding:'2px 6px', borderRadius:'4px', border:'none', background:'transparent', color:STATUS_TOKENS.DANGER_TEXT, fontSize:'11px', cursor:'pointer' }}>
                     ↺
                   </button>
                 </div>
@@ -541,24 +539,24 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
       )}
 
       {/* ── Toolbar — matches Figma exactly ── */}
-      <div style={{ display:'flex', alignItems:'center', gap:'0', padding:'0 16px', height:'48px', borderBottom:`1px solid #2A2A3A`, background:'#1C1C27' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:'0', padding:'0 16px', height:'48px', borderBottom:`1px solid ${BORDER}`, background:CARD }}>
         {/* Details › */}
-        <button style={{ display:'flex', alignItems:'center', gap:'5px', padding:'0 14px', height:'48px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color:'#E8E8F0', borderRight:'1px solid #2A2A3A' }}>
-          Details <span style={{ fontSize:'11px', color:'#6B7280' }}>›</span>
+        <button style={{ display:'flex', alignItems:'center', gap:'5px', padding:'0 14px', height:'48px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color:TEXT, borderRight:`1px solid ${BORDER}` }}>
+          Details <span style={{ fontSize:'11px', color:MUTED }}>›</span>
         </button>
 
         {/* Dependencies toggle */}
-        <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', borderRight:'1px solid #2A2A3A', cursor:'pointer' }} onClick={() => setShowDeps(v => !v)}>
-          <span style={{ fontSize:'13px', fontWeight:'500', color:'#E8E8F0' }}>Dependencies</span>
-          <div style={{ width:'36px', height:'20px', borderRadius:'10px', background: showDeps ? '#F97316' : '#374151', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', borderRight:`1px solid ${BORDER}`, cursor:'pointer' }} onClick={() => setShowDeps(v => !v)}>
+          <span style={{ fontSize:'13px', fontWeight:'500', color:TEXT }}>Dependencies</span>
+          <div style={{ width:'36px', height:'20px', borderRadius:'10px', background: showDeps ? ORANGE : BORDER_HI, position:'relative', transition:'background 0.2s', flexShrink:0 }}>
             <div style={{ position:'absolute', top:'3px', left: showDeps ? '18px' : '3px', width:'14px', height:'14px', borderRadius:'50%', background:'white', transition:'left 0.2s' }} />
           </div>
         </div>
 
         {/* Show Completed toggle */}
-        <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', borderRight:'1px solid #2A2A3A', cursor:'pointer' }} onClick={() => setShowCompleted(v => !v)}>
-          <span style={{ fontSize:'13px', fontWeight:'500', color:'#E8E8F0' }}>Completed</span>
-          <div style={{ width:'36px', height:'20px', borderRadius:'10px', background: showCompleted ? '#10B981' : '#374151', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', borderRight:`1px solid ${BORDER}`, cursor:'pointer' }} onClick={() => setShowCompleted(v => !v)}>
+          <span style={{ fontSize:'13px', fontWeight:'500', color:TEXT }}>Completed</span>
+          <div style={{ width:'36px', height:'20px', borderRadius:'10px', background: showCompleted ? STATUS_TOKENS.OK : BORDER_HI, position:'relative', transition:'background 0.2s', flexShrink:0 }}>
             <div style={{ position:'absolute', top:'3px', left: showCompleted ? '18px' : '3px', width:'14px', height:'14px', borderRadius:'50%', background:'white', transition:'left 0.2s' }} />
           </div>
         </div>
@@ -566,19 +564,19 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
         {/* Adjust Timeline */}
         <div ref={projMenuRef} style={{ position:'relative' }}>
           <button onClick={() => setProjMenuOpen(v => !v)}
-            style={{ display:'flex', alignItems:'center', gap:'6px', padding:'0 14px', height:'48px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color: projMenuOpen ? '#F97316' : '#E8E8F0', borderRight:'1px solid #2A2A3A' }}>
+            style={{ display:'flex', alignItems:'center', gap:'6px', padding:'0 14px', height:'48px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color: projMenuOpen ? ORANGE : TEXT, borderRight:`1px solid ${BORDER}` }}>
             Adjust Timeline
           </button>
           {projMenuOpen && (
-            <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:50, background:'#1C1C27', borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.5)', border:'1px solid #2A2A3A', minWidth:'210px', overflow:'hidden' }}>
+            <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:50, background:CARD, borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.5)', border:`1px solid ${BORDER}`, minWidth:'210px', overflow:'hidden' }}>
               {projs.map((p, i) => (
                 <div key={p.id}
                   onClick={() => { setProjMenuOpen(false); onEdit({ type:'project', id:p.id }); }}
-                  style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', cursor:'pointer', borderBottom: i < projs.length - 1 ? '1px solid #2A2A3A' : 'none' }}
-                  onMouseEnter={e => e.currentTarget.style.background='#2A2A3A'}
+                  style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', cursor:'pointer', borderBottom: i < projs.length - 1 ? `1px solid ${BORDER}` : 'none' }}
+                  onMouseEnter={e => e.currentTarget.style.background=BORDER}
                   onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                   <div style={{ width:'9px', height:'9px', borderRadius:'50%', background:p.color, flexShrink:0 }} />
-                  <span style={{ fontSize:'13px', color:'#E8E8F0', fontWeight:'500' }}>{p.id} — New Build</span>
+                  <span style={{ fontSize:'13px', color:TEXT, fontWeight:'500' }}>{p.id} — New Build</span>
                 </div>
               ))}
             </div>
@@ -588,19 +586,19 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
         {/* Add Tasks dropdown */}
         <div ref={addTasksMenuRef} style={{ position:'relative' }}>
           <button onClick={() => setAddTasksMenuOpen(v => !v)}
-            style={{ display:'flex', alignItems:'center', gap:'6px', padding:'0 14px', height:'48px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color: addTasksMenuOpen ? '#F97316' : '#E8E8F0', borderRight:'1px solid #2A2A3A' }}>
+            style={{ display:'flex', alignItems:'center', gap:'6px', padding:'0 14px', height:'48px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color: addTasksMenuOpen ? ORANGE : TEXT, borderRight:`1px solid ${BORDER}` }}>
             + Add Tasks
           </button>
           {addTasksMenuOpen && (
-            <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:50, background:'#1C1C27', borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.5)', border:'1px solid #2A2A3A', minWidth:'210px', overflow:'hidden' }}>
+            <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:50, background:CARD, borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.5)', border:`1px solid ${BORDER}`, minWidth:'210px', overflow:'hidden' }}>
               {projs.map((p, i) => (
                 <div key={p.id}
                   onClick={() => { setAddTasksMenuOpen(false); setAddTasksProj(p); }}
-                  style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', cursor:'pointer', borderBottom: i < projs.length-1 ? '1px solid #2A2A3A' : 'none' }}
-                  onMouseEnter={e => e.currentTarget.style.background='#2A2A3A'}
+                  style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', cursor:'pointer', borderBottom: i < projs.length-1 ? `1px solid ${BORDER}` : 'none' }}
+                  onMouseEnter={e => e.currentTarget.style.background=BORDER}
                   onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                   <div style={{ width:'9px', height:'9px', borderRadius:'50%', background:p.color, flexShrink:0 }} />
-                  <span style={{ fontSize:'13px', color:'#E8E8F0', fontWeight:'500' }}>{p.id} — {p.name.replace(' — New Build','')}</span>
+                  <span style={{ fontSize:'13px', color:TEXT, fontWeight:'500' }}>{p.id} — {p.name.replace(' — New Build','')}</span>
                 </div>
               ))}
             </div>
@@ -608,7 +606,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
         </div>
         {Object.keys(simDelays).length > 0 && (
           <button onClick={() => setSimDelays({})}
-            style={{ display:'flex', alignItems:'center', gap:'5px', padding:'0 12px', height:'48px', border:'none', background:'none', cursor:'pointer', fontSize:'12px', color:'#F97316', fontWeight:'600', borderRight:'1px solid #2A2A3A' }}>
+            style={{ display:'flex', alignItems:'center', gap:'5px', padding:'0 12px', height:'48px', border:'none', background:'none', cursor:'pointer', fontSize:'12px', color:ORANGE, fontWeight:'600', borderRight:`1px solid ${BORDER}` }}>
             ✕ Clear preview delays
           </button>
         )}
@@ -616,28 +614,28 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
         {/* Right side */}
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:'0' }}>
           {/* Month label */}
-          <span style={{ padding:'0 14px', fontSize:'13px', color:'#6B7280', borderLeft:'1px solid #2A2A3A', height:'48px', display:'flex', alignItems:'center' }}>Month</span>
+          <span style={{ padding:'0 14px', fontSize:'13px', color:MUTED, borderLeft:`1px solid ${BORDER}`, height:'48px', display:'flex', alignItems:'center' }}>Month</span>
 
           {/* Resource filter */}
-          <div ref={personMenuRef} style={{ position:'relative', borderLeft:'1px solid #2A2A3A' }}>
+          <div ref={personMenuRef} style={{ position:'relative', borderLeft:`1px solid ${BORDER}` }}>
             <button onClick={() => setPersonMenuOpen(v => !v)}
-              style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', border:'none', background: filterPerson ? '#10B98112' : 'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color: filterPerson ? '#10B981' : '#E8E8F0', minWidth:'140px' }}>
+              style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', border:'none', background: filterPerson ? STATUS_TOKENS.OK+'12' : 'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color: filterPerson ? STATUS_TOKENS.OK : TEXT, minWidth:'140px' }}>
               {filterPerson
-                ? <><div style={{ width:'9px', height:'9px', borderRadius:'50%', background: people.find(p=>p.name===filterPerson)?.color || '#10B981', flexShrink:0 }} />{filterPerson}</>
+                ? <><div style={{ width:'9px', height:'9px', borderRadius:'50%', background: people.find(p=>p.name===filterPerson)?.color || STATUS_TOKENS.OK, flexShrink:0 }} />{filterPerson}</>
                 : 'All Resources'
               }
-              <span style={{ marginLeft:'auto', color:'#6B7280', fontSize:'10px' }}>▾</span>
+              <span style={{ marginLeft:'auto', color:MUTED, fontSize:'10px' }}>▾</span>
             </button>
             {personMenuOpen && (
-              <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:100, background:'#1C1C27', borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.6)', border:'1px solid #2A2A3A', minWidth:'200px', maxHeight:'320px', overflowY:'auto' }}>
+              <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:100, background:CARD, borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.6)', border:`1px solid ${BORDER}`, minWidth:'200px', maxHeight:'320px', overflowY:'auto' }}>
                 <div onClick={() => { setFilterPerson(null); setPersonMenuOpen(false); }}
-                  style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', cursor:'pointer', borderBottom:'1px solid #2A2A3A',
-                    background: !filterPerson ? '#2A2A3A' : 'transparent',
-                    color: !filterPerson ? '#F97316' : '#E8E8F0',
+                  style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', cursor:'pointer', borderBottom:`1px solid ${BORDER}`,
+                    background: !filterPerson ? BORDER : 'transparent',
+                    color: !filterPerson ? ORANGE : TEXT,
                     fontSize:'13px', fontWeight: !filterPerson ? '600' : '400' }}
-                  onMouseEnter={e => { if (filterPerson) e.currentTarget.style.background='#2A2A3A'; }}
+                  onMouseEnter={e => { if (filterPerson) e.currentTarget.style.background=BORDER; }}
                   onMouseLeave={e => { if (filterPerson) e.currentTarget.style.background='transparent'; }}>
-                  <div style={{ width:'9px', height:'9px', borderRadius:'50%', background:'#6B7280', flexShrink:0 }} />
+                  <div style={{ width:'9px', height:'9px', borderRadius:'50%', background:MUTED, flexShrink:0 }} />
                   All Resources
                 </div>
                 {people.map((per, i) => {
@@ -647,18 +645,18 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                   return (
                     <div key={per.name} onClick={() => { setFilterPerson(per.name); setPersonMenuOpen(false); }}
                       style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 14px', cursor:'pointer',
-                        borderBottom: i < people.length - 1 ? '1px solid #2A2A3A22' : 'none',
-                        background: filterPerson === per.name ? '#2A2A3A' : 'transparent',
-                        color: filterPerson === per.name ? (per.color || '#10B981') : '#E8E8F0',
+                        borderBottom: i < people.length - 1 ? `1px solid ${BORDER}22` : 'none',
+                        background: filterPerson === per.name ? BORDER : 'transparent',
+                        color: filterPerson === per.name ? (per.color || STATUS_TOKENS.OK) : TEXT,
                         fontSize:'13px', fontWeight: filterPerson === per.name ? '600' : '400' }}
-                      onMouseEnter={e => { if (filterPerson !== per.name) e.currentTarget.style.background='#2A2A3A'; }}
+                      onMouseEnter={e => { if (filterPerson !== per.name) e.currentTarget.style.background=BORDER; }}
                       onMouseLeave={e => { if (filterPerson !== per.name) e.currentTarget.style.background='transparent'; }}>
-                      <div style={{ width:'9px', height:'9px', borderRadius:'50%', background: per.color || '#6B7280', flexShrink:0 }} />
+                      <div style={{ width:'9px', height:'9px', borderRadius:'50%', background: per.color || MUTED, flexShrink:0 }} />
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:'500', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{per.name}</div>
-                        <div style={{ fontSize:'10px', color:'#6B7280', marginTop:'1px' }}>{per.role || '—'} · {projCount} project{projCount!==1?'s':''}</div>
+                        <div style={{ fontSize:'10px', color:MUTED, marginTop:'1px' }}>{per.role || '—'} · {projCount} project{projCount!==1?'s':''}</div>
                       </div>
-                      {hasConflict && <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#EF4444', flexShrink:0 }} />}
+                      {hasConflict && <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:STATUS_TOKENS.DANGER, flexShrink:0 }} />}
                     </div>
                   );
                 })}
@@ -667,33 +665,33 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
           </div>
 
           {/* Project filter — custom dropdown */}
-          <div ref={filterMenuRef} style={{ position:'relative', borderLeft:'1px solid #2A2A3A' }}>
+          <div ref={filterMenuRef} style={{ position:'relative', borderLeft:`1px solid ${BORDER}` }}>
             <button onClick={() => setFilterMenuOpen(v => !v)}
-              style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', border:'none', background: filterProj ? '#F9731612' : 'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color: filterProj ? '#F97316' : '#E8E8F0', minWidth:'140px' }}>
+              style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', border:'none', background: filterProj ? ORANGE+'12' : 'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color: filterProj ? ORANGE : TEXT, minWidth:'140px' }}>
               {filterProj
                 ? <><div style={{ width:'9px', height:'9px', borderRadius:'50%', background: NEUTRAL, flexShrink:0 }} />{filterProj}</>
                 : 'All Projects'
               }
-              <span style={{ marginLeft:'auto', color:'#6B7280', fontSize:'10px' }}>▾</span>
+              <span style={{ marginLeft:'auto', color:MUTED, fontSize:'10px' }}>▾</span>
             </button>
             {filterMenuOpen && (
-              <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:100, background:'#1C1C27', borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.6)', border:'1px solid #2A2A3A', minWidth:'180px', overflow:'hidden' }}>
+              <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:100, background:CARD, borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.6)', border:`1px solid ${BORDER}`, minWidth:'180px', overflow:'hidden' }}>
                 <div onClick={() => { setFilterProj(null); setFilterMenuOpen(false); }}
-                  style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', cursor:'pointer', borderBottom:'1px solid #2A2A3A',
-                    background: !filterProj ? '#2A2A3A' : 'transparent', color: !filterProj ? '#F97316' : '#E8E8F0', fontSize:'13px', fontWeight: !filterProj ? '600' : '400' }}
-                  onMouseEnter={e => { if (filterProj) e.currentTarget.style.background='#2A2A3A'; }}
+                  style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', cursor:'pointer', borderBottom:`1px solid ${BORDER}`,
+                    background: !filterProj ? BORDER : 'transparent', color: !filterProj ? ORANGE : TEXT, fontSize:'13px', fontWeight: !filterProj ? '600' : '400' }}
+                  onMouseEnter={e => { if (filterProj) e.currentTarget.style.background=BORDER; }}
                   onMouseLeave={e => { if (filterProj) e.currentTarget.style.background='transparent'; }}>
-                  <div style={{ width:'9px', height:'9px', borderRadius:'50%', background:'#6B7280', flexShrink:0 }} />
+                  <div style={{ width:'9px', height:'9px', borderRadius:'50%', background:MUTED, flexShrink:0 }} />
                   All Projects
                 </div>
                 {projs.map((p, i) => (
                   <div key={p.id} onClick={() => { setFilterProj(p.id); setFilterMenuOpen(false); }}
                     style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', cursor:'pointer',
-                      borderBottom: i < projs.length - 1 ? '1px solid #2A2A3A' : 'none',
-                      background: filterProj === p.id ? '#2A2A3A' : 'transparent',
-                      color: filterProj === p.id ? p.color : '#E8E8F0',
+                      borderBottom: i < projs.length - 1 ? `1px solid ${BORDER}` : 'none',
+                      background: filterProj === p.id ? BORDER : 'transparent',
+                      color: filterProj === p.id ? p.color : TEXT,
                       fontSize:'13px', fontWeight: filterProj === p.id ? '600' : '400' }}
-                    onMouseEnter={e => { if (filterProj !== p.id) e.currentTarget.style.background='#2A2A3A'; }}
+                    onMouseEnter={e => { if (filterProj !== p.id) e.currentTarget.style.background=BORDER; }}
                     onMouseLeave={e => { if (filterProj !== p.id) e.currentTarget.style.background='transparent'; }}>
                     <div style={{ width:'9px', height:'9px', borderRadius:'50%', background:p.color, flexShrink:0 }} />
                     {p.id} — {p.name.replace(' — New Build','').replace(' — ','') || 'New Build'}
@@ -705,7 +703,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
         </div>
       </div>
 
-      <div ref={outerRef} style={{ position:'relative', display:'flex', background:'#13131A' }}
+      <div ref={outerRef} style={{ position:'relative', display:'flex', background:SURFACE }}
         onMouseMove={e => { const r = outerRef.current?.getBoundingClientRect(); if (r) setMouse({ x: e.clientX - r.left, y: e.clientY - r.top }); }}
         onMouseLeave={() => setHov(null)}>
 
@@ -713,8 +711,8 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
         <div style={{ width:LW, flexShrink:0, position:'relative', zIndex:5, boxShadow:'4px 0 12px rgba(0,0,0,0.4)' }}>
           <svg width={LW} height={totalH} style={{ display:'block', fontFamily:'-apple-system,system-ui,sans-serif' }}>
             {/* Header bg */}
-            <rect x={0} y={0} width={LW} height={HH} fill="#0A0A0F" />
-            <line x1={0} y1={HH} x2={LW} y2={HH} stroke="#2A2A3A" strokeWidth="1.5" />
+            <rect x={0} y={0} width={LW} height={HH} fill={CANVAS} />
+            <line x1={0} y1={HH} x2={LW} y2={HH} stroke={BORDER} strokeWidth="1.5" />
 
             {rowList.map(row => {
               if (row.kind === 'proj') {
@@ -730,14 +728,14 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                     <rect x={10} y={midY-11} width={22} height={22} rx="6" fill={projColor+'30'} />
                     <text x={21} y={midY+1} textAnchor="middle" dominantBaseline="middle" fill={projColor} fontSize="14" fontWeight="800" style={{userSelect:'none'}}>{isExp?'−':'+'}</text>
                     <text x={40} y={midY-6} fill={projColor} fontSize="14" fontWeight="800">{proj.id}</text>
-                    <text x={40} y={midY+9} fill="#6B7280" fontSize="10">New Build · {pt.length} tasks</text>
+                    <text x={40} y={midY+9} fill={MUTED} fontSize="10">New Build · {pt.length} tasks</text>
                     <rect x={LW-46} y={midY-11} width={36} height={22} rx="11" fill={projColor+'25'} />
                     <text x={LW-28} y={midY+1} textAnchor="middle" dominantBaseline="middle" fill={projColor} fontSize="11" fontWeight="700">{pt.length}</text>
                     {hasC && <g>
-                      <circle cx={LW-8} cy={y+14} r={7} fill="#EF4444" />
+                      <circle cx={LW-8} cy={y+14} r={7} fill={STATUS_TOKENS.DANGER} />
                       <text x={LW-8} y={y+14} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="700">!</text>
                     </g>}
-                    <line x1={0} y1={y+PRH} x2={LW} y2={y+PRH} stroke={isExp?projColor+'50':'#2A2A3A'} strokeWidth={isExp?1.5:1} />
+                    <line x1={0} y1={y+PRH} x2={LW} y2={y+PRH} stroke={isExp?projColor+'50':BORDER} strokeWidth={isExp?1.5:1} />
                   </g>
                 );
               }
@@ -752,17 +750,17 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                 const roleC = rHasC ? CONFLICT_RED : NEUTRAL;
                 return (
                   <g key={roleKey+'-lbl'} style={{ cursor:'pointer' }} onClick={() => toggle(roleKey)}>
-                    <rect x={0} y={ry} width={LW} height={RRH} fill="#1A1A24" />
+                    <rect x={0} y={ry} width={LW} height={RRH} fill={CHIP} />
                     <line x1={18} y1={ry} x2={18} y2={ry+RRH} stroke={NEUTRAL+'50'} strokeWidth="1.5" />
                     <rect x={26} y={rMidY-9} width={18} height={18} rx="5" fill={roleC+'30'} />
                     <text x={35} y={rMidY+1} textAnchor="middle" dominantBaseline="middle" fill={roleC} fontSize="12" fontWeight="800" style={{userSelect:'none'}}>{isRExp?'−':'+'}</text>
                     <text x={51} y={rMidY-5} fill={roleC} fontSize="11.5" fontWeight="700">{rg.role.label}</text>
-                    <text x={51} y={rMidY+8} fill="#6B7280" fontSize="9.5">{rg.personRows.length} member{rg.personRows.length>1?'s':''} · {allTasks.length} tasks</text>
+                    <text x={51} y={rMidY+8} fill={MUTED} fontSize="9.5">{rg.personRows.length} member{rg.personRows.length>1?'s':''} · {allTasks.length} tasks</text>
                     {rHasC && <g>
-                      <circle cx={LW-8} cy={ry+12} r={7} fill="#EF4444" />
+                      <circle cx={LW-8} cy={ry+12} r={7} fill={STATUS_TOKENS.DANGER} />
                       <text x={LW-8} y={ry+12} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="700">!</text>
                     </g>}
-                    <line x1={0} y1={ry+RRH} x2={LW} y2={ry+RRH} stroke={isRExp?roleC+'40':'#2A2A3A'} strokeWidth={isRExp?1.2:0.8} />
+                    <line x1={0} y1={ry+RRH} x2={LW} y2={ry+RRH} stroke={isRExp?roleC+'40':BORDER} strokeWidth={isRExp?1.2:0.8} />
                   </g>
                 );
               }
@@ -777,34 +775,34 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                 const personC = pHasC ? CONFLICT_RED : NEUTRAL;
                 return (
                   <g key={`${ppd.proj.id}-${pr.per.name}-lbl`}>
-                    <rect x={0} y={py} width={LW} height={SRH} fill="#13131A" />
+                    <rect x={0} y={py} width={LW} height={SRH} fill={SURFACE} />
                     <line x1={18} y1={py} x2={18} y2={py+SRH} stroke={NEUTRAL+'50'} strokeWidth="1.5" />
                     <line x1={32} y1={py} x2={32} y2={py+SRH} stroke={NEUTRAL+'50'} strokeWidth="1.5" />
                     <line x1={32} y1={pMidY} x2={44} y2={pMidY} stroke={NEUTRAL+'50'} strokeWidth="1.5" />
                     <circle cx={56} cy={pMidY} r={13} fill={personC+'20'} />
                     <circle cx={56} cy={pMidY} r={13} fill="none" stroke={personC} strokeWidth="1.5" />
                     <text x={56} y={pMidY+1} textAnchor="middle" dominantBaseline="middle" fill={personC} fontSize="8.5" fontWeight="700">{pr.per.init}</text>
-                    <text x={75} y={pMidY-7} fill="#E8E8F0" fontSize="12" fontWeight="600">{pr.per.name}</text>
-                    <text x={75} y={pMidY+8} fill="#6B7280" fontSize="9.5">{pTasks.length} tasks</text>
-                    <rect x={LW-40} y={pMidY-10} width={28} height={20} rx="10" fill="#2A2A3A" />
-                    <text x={LW-26} y={pMidY+1} textAnchor="middle" dominantBaseline="middle" fill="#6B7280" fontSize="10" fontWeight="600">{pTasks.length}</text>
+                    <text x={75} y={pMidY-7} fill={TEXT} fontSize="12" fontWeight="600">{pr.per.name}</text>
+                    <text x={75} y={pMidY+8} fill={MUTED} fontSize="9.5">{pTasks.length} tasks</text>
+                    <rect x={LW-40} y={pMidY-10} width={28} height={20} rx="10" fill={BORDER} />
+                    <text x={LW-26} y={pMidY+1} textAnchor="middle" dominantBaseline="middle" fill={MUTED} fontSize="10" fontWeight="600">{pTasks.length}</text>
                     {pHasC && <g>
-                      <circle cx={LW-8} cy={py+13} r={7} fill="#EF4444" />
+                      <circle cx={LW-8} cy={py+13} r={7} fill={STATUS_TOKENS.DANGER} />
                       <text x={LW-8} y={py+13} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="700">!</text>
                     </g>}
                     {pHasF && !pHasC && <g>
-                      <circle cx={LW-8} cy={py+13} r={7} fill="#F59E0B" />
+                      <circle cx={LW-8} cy={py+13} r={7} fill={STATUS_TOKENS.WARN} />
                       <text x={LW-8} y={py+13} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="10" fontWeight="800">~</text>
                     </g>}
-                    <line x1={0} y1={py+SRH} x2={py} y2={py+SRH} stroke="#2A2A3A" strokeWidth="1" />
-                    <line x1={0} y1={py+SRH} x2={LW} y2={py+SRH} stroke="#2A2A3A" strokeWidth="1" />
+                    <line x1={0} y1={py+SRH} x2={py} y2={py+SRH} stroke={BORDER} strokeWidth="1" />
+                    <line x1={0} y1={py+SRH} x2={LW} y2={py+SRH} stroke={BORDER} strokeWidth="1" />
                   </g>
                 );
               }
               return null;
             })}
 
-            <line x1={LW-1} y1={0} x2={LW-1} y2={totalH} stroke="#2A2A3A" strokeWidth="1" />
+            <line x1={LW-1} y1={0} x2={LW-1} y2={totalH} stroke={BORDER} strokeWidth="1" />
           </svg>
         </div>
 
@@ -817,9 +815,9 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
               const x1 = txR(m.d), x2 = txR(MONS[i+1].d);
               return (
                 <g key={m.n+'-'+i}>
-                  <rect x={x1} y={0} width={x2-x1} height={HH*0.55} fill={i%2 ? '#17171F' : '#1C1C27'} />
-                  <text x={(x1+x2)/2} y={HH*0.55/2+4} textAnchor="middle" fill="#9CA3AF" fontSize="12" fontWeight="500">{m.n} 2026</text>
-                  <line x1={x1} y1={0} x2={x1} y2={totalH} stroke="#2A2A3A" strokeWidth={i===0?1:0.5} />
+                  <rect x={x1} y={0} width={x2-x1} height={HH*0.55} fill={i%2 ? PANEL : CARD} />
+                  <text x={(x1+x2)/2} y={HH*0.55/2+4} textAnchor="middle" fill={FAINT} fontSize="12" fontWeight="500">{m.n} 2026</text>
+                  <line x1={x1} y1={0} x2={x1} y2={totalH} stroke={BORDER} strokeWidth={i===0?1:0.5} />
                 </g>
               );
             })}
@@ -839,9 +837,9 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                   const wx2 = txR(monStart + (w+1) * wSpan);
                   rows.push(
                     <g key={`${i}-w${w}`}>
-                      <rect x={wx} y={weekRowY} width={wx2-wx} height={weekRowH} fill={w%2 ? '#13131A' : '#17171F'} />
-                      <text x={(wx+wx2)/2} y={weekRowY + weekRowH/2 + 4} textAnchor="middle" fill="#4B5563" fontSize="10" fontWeight="500">W{w+1}</text>
-                      <line x1={wx} y1={weekRowY} x2={wx} y2={totalH} stroke="#2A2A3A" strokeWidth="0.4" opacity="0.7" />
+                      <rect x={wx} y={weekRowY} width={wx2-wx} height={weekRowH} fill={w%2 ? SURFACE : PANEL} />
+                      <text x={(wx+wx2)/2} y={weekRowY + weekRowH/2 + 4} textAnchor="middle" fill={MUTED} fontSize="10" fontWeight="500">W{w+1}</text>
+                      <line x1={wx} y1={weekRowY} x2={wx} y2={totalH} stroke={BORDER} strokeWidth="0.4" opacity="0.7" />
                     </g>
                   );
                 }
@@ -850,11 +848,11 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
             })()}
 
             {/* Header bottom border */}
-            <line x1={0} y1={HH} x2={TD*dpx} y2={HH} stroke="#2A2A3A" strokeWidth="1" />
+            <line x1={0} y1={HH} x2={TD*dpx} y2={HH} stroke={BORDER} strokeWidth="1" />
 
             {/* Weekly gridlines through chart body */}
             {Array.from({length:Math.floor(TD/7)},(_,i)=>(i+1)*7).map(d=>(
-              <line key={d} x1={txR(d)} y1={HH} x2={txR(d)} y2={totalH} stroke="#2A2A3A" strokeWidth="0.4" opacity="0.5" />
+              <line key={d} x1={txR(d)} y1={HH} x2={txR(d)} y2={totalH} stroke={BORDER} strokeWidth="0.4" opacity="0.5" />
             ))}
 
             {/* Period highlight band */}
@@ -864,11 +862,11 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
               const px1 = txR(period.startDay), px2 = txR(period.endDay + 1);
               return (
                 <g>
-                  <rect x={px1} y={0} width={px2-px1} height={totalH} fill="#F97316" opacity="0.04" />
-                  <line x1={px1} y1={0} x2={px1} y2={totalH} stroke="#F97316" strokeWidth="1.5" opacity="0.4" strokeDasharray="4 3"/>
-                  <line x1={px2} y1={0} x2={px2} y2={totalH} stroke="#F97316" strokeWidth="1.5" opacity="0.4" strokeDasharray="4 3"/>
-                  <rect x={px1} y={2} width={px2-px1} height={20} rx="4" fill="#F97316" opacity="0.15" />
-                  <text x={(px1+px2)/2} y={13} textAnchor="middle" fill="#F97316" fontSize="10" fontWeight="700" opacity="0.8">
+                  <rect x={px1} y={0} width={px2-px1} height={totalH} fill={ORANGE} opacity="0.04" />
+                  <line x1={px1} y1={0} x2={px1} y2={totalH} stroke={ORANGE} strokeWidth="1.5" opacity="0.4" strokeDasharray="4 3"/>
+                  <line x1={px2} y1={0} x2={px2} y2={totalH} stroke={ORANGE} strokeWidth="1.5" opacity="0.4" strokeDasharray="4 3"/>
+                  <rect x={px1} y={2} width={px2-px1} height={20} rx="4" fill={ORANGE} opacity="0.15" />
+                  <text x={(px1+px2)/2} y={13} textAnchor="middle" fill={ORANGE} fontSize="10" fontWeight="700" opacity="0.8">
                     {period.label}
                   </text>
                 </g>
@@ -876,8 +874,8 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
             })()}
 
             {/* Today line */}
-            <line x1={txR(todayDay)} y1={0} x2={txR(todayDay)} y2={totalH} stroke="#F97316" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.8" />
-            <rect x={txR(todayDay)-22} y={HH/2-10} width={44} height={19} rx="4" fill="#F97316" />
+            <line x1={txR(todayDay)} y1={0} x2={txR(todayDay)} y2={totalH} stroke={ORANGE} strokeWidth="1.5" strokeDasharray="4 3" opacity="0.8" />
+            <rect x={txR(todayDay)-22} y={HH/2-10} width={44} height={19} rx="4" fill={ORANGE} />
             <text x={txR(todayDay)} y={HH/2+0.5} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="700">Today</text>
 
             {/* Row backgrounds + bars */}
@@ -915,7 +913,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                     {bw>80 && <text x={bx+bw/2} y={midY+1} textAnchor="middle" dominantBaseline="middle" fill={pillColor} fontSize="11" fontWeight="700" style={{pointerEvents:'none',userSelect:'none'}}>
                       {proj.id} · {pt.filter(t=>t.cd>0).length} tasks{hasC ? ` · ${conflictTasks.length} conflict${conflictTasks.length>1?'s':''}` : ' with duration'}
                     </text>}
-                    <line x1={0} y1={y+PRH} x2={TD*dpx} y2={y+PRH} stroke={isExp?NEUTRAL+'50':'#2A2A3A'} strokeWidth={isExp?1.5:1} />
+                    <line x1={0} y1={y+PRH} x2={TD*dpx} y2={y+PRH} stroke={isExp?NEUTRAL+'50':BORDER} strokeWidth={isExp?1.5:1} />
                   </g>
                 );
               }
@@ -949,7 +947,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                           {/* Left stripe per person for identity */}
                           <rect x={tx2+1} y={mbY+1} width={3} height={mbH-2} rx="2"
                             fill={tc} />
-                          {t.isC && <circle cx={tx2+tw-5} cy={mbY+5} r={4} fill="#EF4444" />}
+                          {t.isC && <circle cx={tx2+tw-5} cy={mbY+5} r={4} fill={STATUS_TOKENS.DANGER} />}
 
                           {/* Label only if wide enough */}
                           {tw > 60 && <text x={tx2+8} y={rMid+1} dominantBaseline="middle"
@@ -967,7 +965,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                         fill={taskColor(t)} opacity="0.7" />
                     ))}
                     <line x1={0} y1={ry2+RRH} x2={TD*dpx} y2={ry2+RRH}
-                      stroke={isRExp ? NEUTRAL+'40' : '#2A2A3A'}
+                      stroke={isRExp ? NEUTRAL+'40' : BORDER}
                       strokeWidth={isRExp ? 1 : 1} />
                   </g>
                 );
@@ -983,8 +981,8 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
               const midY = y + SRH/2;
               return (
                 <g key={`${proj.id}-${per.name}-bars`}>
-                  <rect x={0} y={y} width={TD*dpx} height={SRH} fill="#13131A" />
-                  <line x1={0} y1={y+SRH} x2={TD*dpx} y2={y+SRH} stroke="#2A2A3A" strokeWidth="1" />
+                  <rect x={0} y={y} width={TD*dpx} height={SRH} fill={SURFACE} />
+                  <line x1={0} y1={y+SRH} x2={TD*dpx} y2={y+SRH} stroke={BORDER} strokeWidth="1" />
                   {/* Reassignment ghosts — when a task has been reassigned AWAY
                       from this row's person, paint a greyed-out bar at the
                       task's original time slot on this (old-owner's) row.
@@ -1049,11 +1047,11 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                     return (
                       <g key={t.id+'-mv'} style={{ pointerEvents:'none' }}>
                         <line x1={x1} y1={midY} x2={x2} y2={midY}
-                          stroke={'#F97316'} strokeWidth="1.5" strokeDasharray="2 3"
+                          stroke={ORANGE} strokeWidth="1.5" strokeDasharray="2 3"
                           opacity="0.85" />
                         <polygon
                           points={`${x2},${midY} ${x2+ah},${midY-3.5} ${x2+ah},${midY+3.5}`}
-                          fill={'#F97316'} opacity="0.95" />
+                          fill={ORANGE} opacity="0.95" />
                       </g>
                     );
                   })}
@@ -1097,12 +1095,12 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                           </text>
                           {/* Completed checkmark badge — same style as bars */}
                           {effectiveCompleted && <g style={{pointerEvents:'none'}}>
-                            <circle cx={mx + mSize + 8} cy={midY - mSize - 2} r="6" fill="#10B981" stroke="#13131A" strokeWidth="1.5" />
+                            <circle cx={mx + mSize + 8} cy={midY - mSize - 2} r="6" fill={STATUS_TOKENS.OK} stroke={SURFACE} strokeWidth="1.5" />
                             <text x={mx + mSize + 8} y={midY - mSize - 2} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8" fontWeight="800">✓</text>
                           </g>}
                           {/* Overdue badge */}
                           {!effectiveCompleted && t.isOverdue && <g style={{pointerEvents:'none'}}>
-                            <circle cx={mx + mSize + 8} cy={midY - mSize - 2} r="6" fill={STATUS_AMBER} stroke="#13131A" strokeWidth="1.5" />
+                            <circle cx={mx + mSize + 8} cy={midY - mSize - 2} r="6" fill={STATUS_AMBER} stroke={SURFACE} strokeWidth="1.5" />
                             <text x={mx + mSize + 8} y={midY - mSize - 2} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8" fontWeight="800">⚠</text>
                           </g>}
                         </g>
@@ -1147,7 +1145,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                           strokeWidth={ih ? 2 : 1.5}
                           strokeDasharray={barDash} />
                         <rect x={x+1.5} y={by0+1.5} width={5} height={SBH-3} rx="3" fill={barStroke} />
-                        {t.delay>0 && !effectiveCompleted && w>10 && <rect x={x+w-7} y={by0} width={7} height={SBH} fill="#FCA5A5" opacity="0.75" rx="4" />}
+                        {t.delay>0 && !effectiveCompleted && w>10 && <rect x={x+w-7} y={by0} width={7} height={SBH} fill={STATUS_TOKENS.DANGER_TEXT} opacity="0.75" rx="4" />}
                         {w>52 && <text x={x+12} y={by0+SBH/2} dominantBaseline="middle"
                           fill={labelColor} fontSize="10" fontWeight="600"
                           textDecoration={labelDecoration}
@@ -1159,23 +1157,23 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                             Works for tiny bars too: badgeCx floats the badge just past the bar's
                             right edge when the bar is too thin to hold it. */}
                         {effectiveCompleted && <g style={{pointerEvents:'none'}}>
-                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#10B981" stroke="#13131A" strokeWidth="1.5" />
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill={STATUS_TOKENS.OK} stroke={SURFACE} strokeWidth="1.5" />
                           <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'8':'9'} fontWeight="800">✓</text>
                         </g>}
                         {!effectiveCompleted && t.isC && <g style={{pointerEvents:'none'}}>
-                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#EF4444" stroke="#13131A" strokeWidth="1.5" />
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill={STATUS_TOKENS.DANGER} stroke={SURFACE} strokeWidth="1.5" />
                           <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'8':'8.5'} fontWeight="800">!</text>
                         </g>}
                         {!effectiveCompleted && t.isOverdue && !t.isC && <g style={{pointerEvents:'none'}}>
-                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#F59E0B" stroke="#13131A" strokeWidth="1.5" />
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill={STATUS_TOKENS.WARN} stroke={SURFACE} strokeWidth="1.5" />
                           <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'8':'9'} fontWeight="800">⚠</text>
                         </g>}
                         {!effectiveCompleted && t.isF && !t.isC && !t.isOverdue && <g style={{pointerEvents:'none'}}>
-                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#FBBF24" stroke="#13131A" strokeWidth="1.5" />
-                          <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="#0F172A" fontSize={tinyBar?'10':'11'} fontWeight="800" dy="0.5">~</text>
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill={STATUS_TOKENS.WARN_BADGE} stroke={SURFACE} strokeWidth="1.5" />
+                          <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill={TEXT} fontSize={tinyBar?'10':'11'} fontWeight="800" dy="0.5">~</text>
                         </g>}
                         {!effectiveCompleted && t.isDV && !t.isC && !t.isF && !t.isOverdue && <g style={{pointerEvents:'none'}}>
-                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill="#F59E0B" stroke="#13131A" strokeWidth="1.5" />
+                          <circle cx={badgeCx} cy={badgeCy} r={badgeR} fill={STATUS_TOKENS.WARN} stroke={SURFACE} strokeWidth="1.5" />
                           <text x={badgeCx} y={badgeCy} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={tinyBar?'8':'9'} fontWeight="800">⊗</text>
                         </g>}
 
@@ -1184,7 +1182,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                           <rect x={x+w-40} y={by0+SBH-15} width={16} height={13} rx="3" fill={barStroke} opacity="0.9" style={{pointerEvents:'none'}}/>
                           <text x={x+w-32} y={by0+SBH-9} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="700" style={{pointerEvents:'none'}}>✎</text>
                           <rect x={x+w-20} y={by0+SBH-15} width={16} height={13} rx="3"
-                            fill={effectiveCompleted ? '#10B981' : '#374151'} opacity="0.95"
+                            fill={effectiveCompleted ? STATUS_TOKENS.OK : BORDER_HI} opacity="0.95"
                             style={{cursor:'pointer'}}
                             onClick={e => { e.stopPropagation(); onToggleComplete(t.id); }} />
                           <text x={x+w-12} y={by0+SBH-9} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="800"
@@ -1193,7 +1191,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                         {/* Narrow bar — only checkmark */}
                         {ih && w > 20 && w <= 52 && <g>
                           <rect x={x+w-20} y={by0+SBH-15} width={16} height={13} rx="3"
-                            fill={effectiveCompleted ? '#10B981' : '#374151'} opacity="0.95"
+                            fill={effectiveCompleted ? STATUS_TOKENS.OK : BORDER_HI} opacity="0.95"
                             style={{cursor:'pointer'}}
                             onClick={e => { e.stopPropagation(); onToggleComplete(t.id); }} />
                           <text x={x+w-12} y={by0+SBH-9} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="800"
@@ -1403,9 +1401,9 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
           return (
             <div style={{
               marginTop:'18px', padding:'14px 20px 18px',
-              background:'#13131A', borderTop:`1px solid ${BORDER}`,
+              background:SURFACE, borderTop:`1px solid ${BORDER}`,
             }}>
-              <div style={{ fontSize:'11px', fontWeight:'700', color:'#6B7280', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'10px' }}>
+              <div style={{ fontSize:'11px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'10px' }}>
                 Drafts · {drafts.length} project{drafts.length===1?'':'s'} pending tasks
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
@@ -1420,22 +1418,22 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                   return (
                     <div key={p.id} style={{
                       display:'flex', alignItems:'center', gap:'14px',
-                      padding:'10px 14px', background:'#1A1A24',
+                      padding:'10px 14px', background:CHIP,
                       borderRadius:'8px', border:`1px solid ${BORDER}`,
                     }}>
                       <div style={{
                         width:'34px', height:'34px', borderRadius:'8px',
-                        background:'#6B728022', border:'1px solid #6B728055',
+                        background:MUTED+'22', border:`1px solid ${MUTED}55`,
                         display:'flex', alignItems:'center', justifyContent:'center',
-                        fontSize:'14px', color:'#9CA3AF', fontWeight:'800', flexShrink:0,
+                        fontSize:'14px', color:FAINT, fontWeight:'800', flexShrink:0,
                       }}>◌</div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'2px' }}>
-                          <span style={{ fontSize:'13px', fontWeight:'700', color:'#E8E8F0' }}>{p.id}</span>
-                          {p.name && p.name !== p.id && <span style={{ fontSize:'12px', color:'#9CA3AF' }}>· {p.name}</span>}
-                          <span style={{ fontSize:'9px', fontWeight:'700', color:'#6B7280', background:'#0B0B12', padding:'2px 7px', borderRadius:'4px', letterSpacing:'0.06em', border:`1px solid ${BORDER}` }}>DRAFT</span>
+                          <span style={{ fontSize:'13px', fontWeight:'700', color:TEXT }}>{p.id}</span>
+                          {p.name && p.name !== p.id && <span style={{ fontSize:'12px', color:FAINT }}>· {p.name}</span>}
+                          <span style={{ fontSize:'9px', fontWeight:'700', color:MUTED, background:CANVAS, padding:'2px 7px', borderRadius:'4px', letterSpacing:'0.06em', border:`1px solid ${BORDER}` }}>DRAFT</span>
                         </div>
-                        <div style={{ fontSize:'11px', color:'#6B7280' }}>
+                        <div style={{ fontSize:'11px', color:MUTED }}>
                           No tasks yet · {dates}
                         </div>
                       </div>
@@ -1443,7 +1441,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                         <button onClick={() => setAddTasksProj(p.id)}
                           style={{
                             padding:'7px 14px', borderRadius:'7px', border:'none',
-                            background:'#F97316', color:'white', fontSize:'11px',
+                            background:ORANGE, color:'white', fontSize:'11px',
                             fontWeight:'700', cursor:'pointer', flexShrink:0,
                           }}>
                           + Add tasks →
@@ -1475,50 +1473,50 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
             ht.s.getTime() <= nowMs ? 'In Progress':
                                       'On Track';
           const ttStatusColor = {
-            'Completed':'#34D399','Overdue':'#FB923C','Conflict':'#F87171',
-            'Fragile':'#FBBF24','In Progress':'#38BDF8','On Track':'#4ADE80'
+            'Completed':STATUS_TOKENS.OK_HI,'Overdue':ACCENT_HI,'Conflict':STATUS_TOKENS.DANGER_TEXT2,
+            'Fragile':STATUS_TOKENS.WARN_BADGE,'In Progress':STATUS_TOKENS.INFO,'On Track':STATUS_TOKENS.OK_HI2
           }[ttStatus];
           return (
-            <div style={{ position:'absolute', left:ttx, top:tty, pointerEvents:'none', background:'#0F172A', color:'white', padding:'12px 14px', borderRadius:'10px', fontSize:'12px', lineHeight:'1.65', boxShadow:'0 10px 30px rgba(0,0,0,0.3)', width:'228px', zIndex:50, borderTop:`3px solid ${pc}` }}>
+            <div style={{ position:'absolute', left:ttx, top:tty, pointerEvents:'none', background:TEXT, color:'white', padding:'12px 14px', borderRadius:'10px', fontSize:'12px', lineHeight:'1.65', boxShadow:'0 10px 30px rgba(0,0,0,0.3)', width:'228px', zIndex:50, borderTop:`3px solid ${pc}` }}>
               <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'5px' }}>
                 <div style={{ fontWeight:'700', fontSize:'12px', lineHeight:'1.35', flex:1, marginRight:'8px' }}>{ht.name}</div>
                 <span style={{ fontSize:'10px', fontWeight:'700', color:ttStatusColor, whiteSpace:'nowrap', background:ttStatusColor+'18', padding:'2px 7px', borderRadius:'10px', border:`1px solid ${ttStatusColor}40` }}>{ttStatus}</span>
               </div>
-              <div style={{ color:'#64748B', fontSize:'10px', marginBottom:'8px' }}>{ht.projId} · {ht.id} · {ht.person}</div>
+              <div style={{ color:FAINT, fontSize:'10px', marginBottom:'8px' }}>{ht.projId} · {ht.id} · {ht.person}</div>
               <div style={{ display:'grid', gridTemplateColumns:'60px 1fr', gap:'3px 8px', fontSize:'11px' }}>
-                <span style={{ color:'#475569' }}>Role</span>
+                <span style={{ color:GHOST_GREY }}>Role</span>
                 <span style={{ color:htPer?.color||'#888', fontWeight:'600', fontSize:'10px' }}>{htPer?.role || '—'}</span>
-                <span style={{ color:'#475569' }}>Start</span><span>{fd(ht.s)}</span>
-                <span style={{ color:'#475569' }}>End</span><span>{fd(ht.e)}</span>
-                <span style={{ color:'#475569' }}>Duration</span>
+                <span style={{ color:GHOST_GREY }}>Start</span><span>{fd(ht.s)}</span>
+                <span style={{ color:GHOST_GREY }}>End</span><span>{fd(ht.e)}</span>
+                <span style={{ color:GHOST_GREY }}>Duration</span>
                 <span>{ht.dur} working day{ht.dur !== 1 ? 's' : ''}{ht.delay ? ` (+${ht.delay}d delay)` : ''}</span>
               </div>
               {depNames.length > 0 && (
                 <div style={{ marginTop:'8px', padding:'5px 8px', background:'rgba(255,255,255,0.06)', borderRadius:'4px', border:'1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize:'9px', letterSpacing:'0.08em', textTransform:'uppercase', color:'#475569', marginBottom:'3px', fontWeight:'700' }}>Depends on</div>
+                  <div style={{ fontSize:'9px', letterSpacing:'0.08em', textTransform:'uppercase', color:GHOST_GREY, marginBottom:'3px', fontWeight:'700' }}>Depends on</div>
                   {depNames.map((n, i) => (
-                    <div key={i} style={{ fontSize:'10px', color:'#94A3B8', display:'flex', alignItems:'center', gap:'5px' }}>
+                    <div key={i} style={{ fontSize:'10px', color:FAINT, display:'flex', alignItems:'center', gap:'5px' }}>
                       <span style={{ color:pc }}>→</span> {n}
                     </div>
                   ))}
                 </div>
               )}
-              {ht.isCompleted && <div style={{ marginTop:'8px', padding:'4px 8px', background:'rgba(52,211,153,0.15)', borderRadius:'4px', color:'#34D399', fontSize:'10px', fontWeight:'700', border:'1px solid rgba(52,211,153,0.3)' }}>
+              {ht.isCompleted && <div style={{ marginTop:'8px', padding:'4px 8px', background:'rgba(52,211,153,0.15)', borderRadius:'4px', color:STATUS_TOKENS.OK_HI, fontSize:'10px', fontWeight:'700', border:'1px solid rgba(52,211,153,0.3)' }}>
                 ✓ COMPLETED · Click ✓ on bar to undo
               </div>}
-              {ht.isOverdue && !ht.isCompleted && <div style={{ marginTop:'8px', padding:'4px 8px', background:'rgba(251,146,60,0.15)', borderRadius:'4px', color:'#FB923C', fontSize:'10px', fontWeight:'700', border:'1px solid rgba(251,146,60,0.3)' }}>
+              {ht.isOverdue && !ht.isCompleted && <div style={{ marginTop:'8px', padding:'4px 8px', background:'rgba(251,146,60,0.15)', borderRadius:'4px', color:ACCENT_HI, fontSize:'10px', fontWeight:'700', border:'1px solid rgba(251,146,60,0.3)' }}>
                 ⚠ OVERDUE — end date has passed
               </div>}
-              {ht.isC && !ht.isOverdue && <div style={{ marginTop:'8px', padding:'4px 8px', background:'rgba(239,68,68,0.18)', borderRadius:'4px', color:'#FCA5A5', fontSize:'10px', fontWeight:'700', border:'1px solid rgba(239,68,68,0.3)' }}>
+              {ht.isC && !ht.isOverdue && <div style={{ marginTop:'8px', padding:'4px 8px', background:'rgba(239,68,68,0.18)', borderRadius:'4px', color:STATUS_TOKENS.DANGER_TEXT, fontSize:'10px', fontWeight:'700', border:'1px solid rgba(239,68,68,0.3)' }}>
                 ⚠ CONFLICT — clashes with {cNames[0] || '?'} · Click to edit
               </div>}
-              {ht.isF && !ht.isC && !ht.isOverdue && <div style={{ marginTop:'8px', padding:'4px 8px', background:'rgba(245,158,11,0.15)', borderRadius:'4px', color:'#FDE68A', fontSize:'10px', fontWeight:'700', border:'1px solid rgba(245,158,11,0.3)' }}>
+              {ht.isF && !ht.isC && !ht.isOverdue && <div style={{ marginTop:'8px', padding:'4px 8px', background:'rgba(245,158,11,0.15)', borderRadius:'4px', color:STATUS_TOKENS.WARN_TEXT, fontSize:'10px', fontWeight:'700', border:'1px solid rgba(245,158,11,0.3)' }}>
                 ⚡ FRAGILE — ≤1 working day gap to adjacent task
               </div>}
-              {ht.isDV && <div style={{ marginTop:'8px', padding:'4px 8px', background:'rgba(245,158,11,0.18)', borderRadius:'4px', color:'#FDE68A', fontSize:'10px', fontWeight:'700', border:'1px solid rgba(245,158,11,0.35)', borderStyle:'dashed' }}>
+              {ht.isDV && <div style={{ marginTop:'8px', padding:'4px 8px', background:'rgba(245,158,11,0.18)', borderRadius:'4px', color:STATUS_TOKENS.WARN_TEXT, fontSize:'10px', fontWeight:'700', border:'1px solid rgba(245,158,11,0.35)', borderStyle:'dashed' }}>
                 ⊗ DEP. VIOLATION — starts before prerequisite finishes
               </div>}
-              <div style={{ marginTop:'6px', fontSize:'10px', color:'#475569', fontStyle:'italic' }}>Click to open editor</div>
+              <div style={{ marginTop:'6px', fontSize:'10px', color:GHOST_GREY, fontStyle:'italic' }}>Click to open editor</div>
             </div>
           );
         })()}

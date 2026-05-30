@@ -4,6 +4,7 @@
 // applying them rebuilds the schedData object.
 
 import { addW, parseDate, fmtDDMMYYYY } from './dates.jsx';
+import { TASK_BLUE } from '../theme.jsx';
 import { loadDepOverrides, saveSchedEdits } from '../storage/persist.jsx';
 
 /**
@@ -160,7 +161,7 @@ export function mutateSchedData(baseData, currentEdits, mutation) {
             !edits.people.find(p => p.name === toPerson)) {
           // Best-effort lookup — they should exist somewhere; if not, synthesize.
           const known = allPeople.find(p => p.name === toPerson);
-          edits.people.push(known || { name: toPerson, role: '', init: toPerson.slice(0,2).toUpperCase(), color: '#5B7B9A', rate: '$42/hr' });
+          edits.people.push(known || { name: toPerson, role: '', init: toPerson.slice(0,2).toUpperCase(), color: TASK_BLUE, rate: '$42/hr' });
         }
       }
       break;
@@ -214,7 +215,7 @@ export function mutateSchedData(baseData, currentEdits, mutation) {
         name,
         role:   person.role  || '',
         rate:   person.rate  || '$42/hr',
-        color:  person.color || '#5B7B9A',
+        color:  person.color || TASK_BLUE,
         init,
         ...(typeof person.weeklyCapacity === 'number' && person.weeklyCapacity > 0
           ? { weeklyCapacity: person.weeklyCapacity }

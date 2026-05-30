@@ -6,13 +6,10 @@
 
 import { useMemo, useState } from 'react';
 import { useSched } from '../../context.jsx';
-import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
+import { CARD, BORDER, ORANGE, TEXT, MUTED, CANVAS, CHIP, TASK_BLUE, STATUS_GREEN, STATUS_AMBER, STATUS_RED, STATUS_TOKENS } from '../../theme.jsx';
 
 // ── Visual palette (status colours, matches the rest of the app) ─────────────
-const STATUS_GREEN = '#10B981';
-const STATUS_AMBER = '#F59E0B';
-const STATUS_RED   = '#EF4444';
-const TASK_BLUE    = '#5B7B9A';
+// status + task colours now sourced from theme tokens
 
 // ── Small primitives ─────────────────────────────────────────────────────────
 /** Card frame used by every dashboard tile. */
@@ -43,9 +40,9 @@ function DemoOverlay({ note, children }) {
       <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px' }}>
         <span style={{
           display:'inline-block', fontSize:'10px', fontWeight:'700',
-          color:'#FBBF24', background:'#FBBF24'+'18',
+          color:STATUS_TOKENS.WARN_BADGE, background:STATUS_TOKENS.WARN_BADGE+'18',
           padding:'3px 8px', borderRadius:'4px', letterSpacing:'0.08em',
-          border:'1px solid '+'#FBBF24'+'40',
+          border:'1px solid '+STATUS_TOKENS.WARN_BADGE+'40',
         }}>DEMO</span>
         <span style={{ fontSize:'11px', color:MUTED, fontStyle:'italic' }}>
           {note || 'Values not computed yet — preview only.'}
@@ -213,7 +210,7 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
   const goConflicts = () => onGoToTab && onGoToTab('conflicts');
 
   return (
-    <div style={{ padding:'20px 28px', fontFamily:'-apple-system,system-ui,sans-serif', background:'#0B0B12', minHeight:'calc(100vh - 60px)' }}>
+    <div style={{ padding:'20px 28px', fontFamily:'-apple-system,system-ui,sans-serif', background:CANVAS, minHeight:'calc(100vh - 60px)' }}>
       {/* ── No-data banner: prominent import CTA at the top of the dashboard ─ */}
       {isEmpty && (
         <div style={{
@@ -271,51 +268,51 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
 
         {/* Project Risk */}
         <div onClick={() => safeProjRisk.length > 0 && goConflicts()}
-          style={{ background:safeProjRisk.length>0?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeProjRisk.length>0?'#7F1D1D':BORDER}`, minWidth:'130px', cursor:safeProjRisk.length>0?'pointer':'default', flex:1 }}>
+          style={{ background:safeProjRisk.length>0?STATUS_TOKENS.DANGER_SUBTLE:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeProjRisk.length>0?STATUS_TOKENS.DANGER_BORDER:BORDER}`, minWidth:'130px', cursor:safeProjRisk.length>0?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:safeProjRisk.length>0?'#FCA5A5':MUTED }}>Project Risk</span>
-            {safeProjRisk.length>0 && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
+            <span style={{ fontSize:'12px', fontWeight:'600', color:safeProjRisk.length>0?STATUS_TOKENS.DANGER_TEXT:MUTED }}>Project Risk</span>
+            {safeProjRisk.length>0 && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4" strokeLinecap="round"/></svg>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:safeProjRisk.length>0?'#FCA5A5':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeProjRisk.length>0?safeProjRisk.length:'—'}</span>
-            {safeProjRisk.length>0 && safeProjRisk[0] && <span style={{ fontSize:'13px', color:'#FCA5A5', fontWeight:'600' }}>({safeProjRisk[0].id})</span>}
+            <span style={{ fontSize:'28px', fontWeight:'800', color:safeProjRisk.length>0?STATUS_TOKENS.DANGER_TEXT:MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeProjRisk.length>0?safeProjRisk.length:'—'}</span>
+            {safeProjRisk.length>0 && safeProjRisk[0] && <span style={{ fontSize:'13px', color:STATUS_TOKENS.DANGER_TEXT, fontWeight:'600' }}>({safeProjRisk[0].id})</span>}
           </div>
           {safeProjRisk.length>0
-            ? <div style={{ fontSize:'11px', color:'#F87171', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
+            ? <div style={{ fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT2, marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
             : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>No issues</div>
           }
         </div>
 
         {/* Cross Project Risk */}
         <div onClick={() => safeCross.length > 0 && goConflicts()}
-          style={{ background:safeCross.length>0?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeCross.length>0?'#7F1D1D':BORDER}`, minWidth:'130px', cursor:safeCross.length>0?'pointer':'default', flex:1 }}>
+          style={{ background:safeCross.length>0?STATUS_TOKENS.DANGER_SUBTLE:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeCross.length>0?STATUS_TOKENS.DANGER_BORDER:BORDER}`, minWidth:'130px', cursor:safeCross.length>0?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:safeCross.length>0?'#FCA5A5':MUTED }}>Cross Project Risk</span>
-            {safeCross.length>0 && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
+            <span style={{ fontSize:'12px', fontWeight:'600', color:safeCross.length>0?STATUS_TOKENS.DANGER_TEXT:MUTED }}>Cross Project Risk</span>
+            {safeCross.length>0 && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4" strokeLinecap="round"/></svg>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:safeCross.length>0?'#FCA5A5':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeCross.length>0?safeCross.length:'—'}</span>
-            {safeCross.length>0 && safeCross[0] && <span style={{ fontSize:'13px', color:'#FCA5A5', fontWeight:'600' }}>({safeCross[0].id})</span>}
+            <span style={{ fontSize:'28px', fontWeight:'800', color:safeCross.length>0?STATUS_TOKENS.DANGER_TEXT:MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeCross.length>0?safeCross.length:'—'}</span>
+            {safeCross.length>0 && safeCross[0] && <span style={{ fontSize:'13px', color:STATUS_TOKENS.DANGER_TEXT, fontWeight:'600' }}>({safeCross[0].id})</span>}
           </div>
           {safeCross.length>0
-            ? <div style={{ fontSize:'11px', color:'#F87171', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
+            ? <div style={{ fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT2, marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
             : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>No issues</div>
           }
         </div>
 
         {/* Fragile Tasks */}
         <div onClick={() => safeKpi.fragile > 0 && goConflicts()}
-          style={{ background:safeKpi.fragile>0?'#2D2200':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeKpi.fragile>0?'#92400E':BORDER}`, minWidth:'130px', cursor:safeKpi.fragile>0?'pointer':'default', flex:1 }}>
+          style={{ background:safeKpi.fragile>0?STATUS_TOKENS.WARN_SUBTLE2:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${safeKpi.fragile>0?STATUS_TOKENS.WARN_BORDER:BORDER}`, minWidth:'130px', cursor:safeKpi.fragile>0?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:safeKpi.fragile>0?'#FBBF24':MUTED }}>Fragile Tasks</span>
-            {safeKpi.fragile>0 && <span style={{ fontSize:'14px', color:'#FBBF24', fontWeight:'800', lineHeight:'1' }}>~</span>}
+            <span style={{ fontSize:'12px', fontWeight:'600', color:safeKpi.fragile>0?STATUS_TOKENS.WARN_BADGE:MUTED }}>Fragile Tasks</span>
+            {safeKpi.fragile>0 && <span style={{ fontSize:'14px', color:STATUS_TOKENS.WARN_BADGE, fontWeight:'800', lineHeight:'1' }}>~</span>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:safeKpi.fragile>0?'#FBBF24':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeKpi.fragile>0?safeKpi.fragile:'—'}</span>
-            {safeKpi.fragile>0 && <span style={{ fontSize:'13px', color:'#FBBF24', fontWeight:'600' }}>task{safeKpi.fragile===1?'':'s'}</span>}
+            <span style={{ fontSize:'28px', fontWeight:'800', color:safeKpi.fragile>0?STATUS_TOKENS.WARN_BADGE:MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{safeKpi.fragile>0?safeKpi.fragile:'—'}</span>
+            {safeKpi.fragile>0 && <span style={{ fontSize:'13px', color:STATUS_TOKENS.WARN_BADGE, fontWeight:'600' }}>task{safeKpi.fragile===1?'':'s'}</span>}
           </div>
           {safeKpi.fragile>0
-            ? <div style={{ fontSize:'11px', color:'#FBBF24', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
+            ? <div style={{ fontSize:'11px', color:STATUS_TOKENS.WARN_BADGE, marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
             : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>None</div>
           }
         </div>
@@ -366,7 +363,7 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
                       <div style={{ fontSize:'12px', color:TEXT, fontWeight:'500' }}>{p.name}</div>
                       {p.role && <div style={{ fontSize:'9px', color:MUTED }}>{p.role}{capNote}</div>}
                     </div>
-                    <div style={{ flex:1, height:'10px', background:'#1A1A24', borderRadius:'5px', overflow:'hidden', position:'relative' }}>
+                    <div style={{ flex:1, height:'10px', background:CHIP, borderRadius:'5px', overflow:'hidden', position:'relative' }}>
                       <div style={{ width:`${p.pct}%`, height:'100%', background:c, borderRadius:'5px', transition:'width 0.25s' }} />
                     </div>
                     <div style={{ width:'40px', textAlign:'right', fontSize:'11px', color:c, fontWeight:'700', flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{p.pct}%</div>
@@ -411,7 +408,7 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
                             <span style={{ color:c, marginLeft:'8px', fontWeight:'700' }}>{pct.toFixed(0)}%</span>
                           </div>
                         </div>
-                        <div style={{ position:'relative', height:'8px', background:'#1A1A24', borderRadius:'4px', overflow:'hidden' }}>
+                        <div style={{ position:'relative', height:'8px', background:CHIP, borderRadius:'4px', overflow:'hidden' }}>
                           {/* 100% marker line */}
                           <div style={{ position:'absolute', left:'77%', top:0, bottom:0, width:'1px', background:MUTED, opacity:0.5, zIndex:2 }} />
                           <div style={{ width:`${(widthPct/130)*100}%`, height:'100%', background:c, borderRadius:'4px', transition:'width 0.3s' }} />
@@ -436,7 +433,7 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
               return (
                 <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
                   {demoUpcoming.map(p => (
-                    <div key={p.id} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 12px', background:'#1A1A24', borderRadius:'8px', border:`1px solid ${BORDER}` }}>
+                    <div key={p.id} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 12px', background:CHIP, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
                       <div style={{
                         width:'34px', height:'34px', borderRadius:'8px',
                         background:TASK_BLUE+'22', border:`1px solid ${TASK_BLUE}40`,
@@ -455,7 +452,7 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
                       </div>
                       <button disabled
                         style={{ padding:'6px 12px', borderRadius:'6px', border:'none',
-                          background: p.ready ? ORANGE+'cc' : '#1E1E2A',
+                          background: p.ready ? ORANGE+'cc' : CARD,
                           color: p.ready ? 'white' : MUTED,
                           fontSize:'11px', fontWeight:'600', cursor:'not-allowed', flexShrink:0 }}>
                         Assign Tasks
@@ -494,7 +491,7 @@ export function DashboardTab({ tasks, kpi, projRisk, crossRisk, onSchedulePct, o
           {safeKpi.fragile > 0 && (
             <button onClick={goConflicts} style={{
               padding:'6px 12px', borderRadius:'7px', border:'none',
-              background: '#FBBF24'+'22', color: '#FBBF24', fontSize:'12px',
+              background: STATUS_TOKENS.WARN_BADGE+'22', color: STATUS_TOKENS.WARN_BADGE, fontSize:'12px',
               fontWeight:'600', cursor:'pointer',
             }}>
               {safeKpi.fragile} fragile task{safeKpi.fragile>1?'s':''} ›

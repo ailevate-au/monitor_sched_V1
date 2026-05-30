@@ -12,11 +12,7 @@
 // modal opens in "pick" mode. Otherwise it opens straight in "create" mode.
 
 import { useState, useMemo, useEffect } from 'react';
-import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
-
-const STATUS_GREEN = '#10B981';
-const STATUS_AMBER = '#F59E0B';
-const STATUS_RED   = '#EF4444';
+import { CARD, BORDER, ORANGE, TEXT, MUTED, SURFACE, INSET, CHIP, STATUS_TOKENS, STATUS_RED } from '../../theme.jsx';
 
 export function AssignTaskModal({
   person,           // { name, role, color, init }
@@ -160,7 +156,7 @@ export function AssignTaskModal({
 
         {/* Mode tabs — only show both tabs if there's a pick path available */}
         {roleMatched.length > 0 || safeUnassigned.length > 0 ? (
-          <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, background:'#13131A' }}>
+          <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, background:SURFACE }}>
             <button onClick={() => setMode('pick')}
               style={tabStyle(mode==='pick')}>
               Pick from unassigned <span style={tabCount(mode==='pick')}>· {showAllRoles ? safeUnassigned.length : roleMatched.length}</span>
@@ -194,7 +190,7 @@ export function AssignTaskModal({
 
               {/* Task list */}
               {visibleUnassigned.length === 0 ? (
-                <div style={{ padding:'30px 16px', textAlign:'center', color:MUTED, fontSize:'12px', background:'#13131A', borderRadius:'8px', border:`1px solid ${BORDER}` }}>
+                <div style={{ padding:'30px 16px', textAlign:'center', color:MUTED, fontSize:'12px', background:SURFACE, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
                   {safeUnassigned.length === 0
                     ? 'No unassigned tasks in your schedule.'
                     : `No unassigned tasks match the role "${person?.role || ''}". Toggle "Show all roles" or use "Create new task".`}
@@ -210,8 +206,8 @@ export function AssignTaskModal({
                         style={{
                           display:'flex', alignItems:'center', gap:'10px',
                           padding:'9px 12px', borderRadius:'7px', cursor:'pointer',
-                          background: selected ? ORANGE+'18' : conflict ? '#3B121933' : 'transparent',
-                          border:`1px solid ${selected ? ORANGE+'66' : conflict ? '#7F1D1D55' : BORDER}`,
+                          background: selected ? ORANGE+'18' : conflict ? STATUS_TOKENS.DANGER_SUBTLE+'33' : 'transparent',
+                          border:`1px solid ${selected ? ORANGE+'66' : conflict ? STATUS_TOKENS.DANGER_BORDER+'55' : BORDER}`,
                         }}>
                         <input type="checkbox" checked={selected} onChange={() => toggleSelect(t.id)}
                           style={{ accentColor: ORANGE, cursor:'pointer' }} />
@@ -237,7 +233,7 @@ export function AssignTaskModal({
               )}
 
               {conflictCount > 0 && (
-                <div style={{ marginTop:'14px', padding:'10px 12px', borderRadius:'7px', background:'#3B121933', border:`1px solid ${STATUS_RED}55`, fontSize:'11px', color:'#FCA5A5' }}>
+                <div style={{ marginTop:'14px', padding:'10px 12px', borderRadius:'7px', background:STATUS_TOKENS.DANGER_SUBTLE+'33', border:`1px solid ${STATUS_RED}55`, fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT }}>
                   ⚠ {conflictCount} selected task{conflictCount===1?'':'s'} will conflict with {person?.name || 'this person'}'s existing schedule. You can still proceed — conflicts will appear as red bars on the Gantt for you to resolve later.
                 </div>
               )}
@@ -250,7 +246,7 @@ export function AssignTaskModal({
               <div>
                 <div style={{ fontSize:'11px', color:MUTED, marginBottom:'5px' }}>Project</div>
                 {safeProjs.length === 0 ? (
-                  <div style={{ padding:'10px 12px', borderRadius:'7px', background:'#13131A', border:`1px solid ${BORDER}`, color:MUTED, fontSize:'12px' }}>
+                  <div style={{ padding:'10px 12px', borderRadius:'7px', background:SURFACE, border:`1px solid ${BORDER}`, color:MUTED, fontSize:'12px' }}>
                     No projects available. Create a project first.
                   </div>
                 ) : (
@@ -286,7 +282,7 @@ export function AssignTaskModal({
                 Role will be set to "{person?.role || '(no role)'}" — matches {person?.name || 'the selected person'}'s primary role.
               </div>
               {createError && (
-                <div style={{ padding:'9px 12px', borderRadius:'7px', background:'#3B1219', border:'1px solid #7F1D1D', color:'#FCA5A5', fontSize:'12px' }}>
+                <div style={{ padding:'9px 12px', borderRadius:'7px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, color:STATUS_TOKENS.DANGER_TEXT, fontSize:'12px' }}>
                   {createError}
                 </div>
               )}
@@ -309,7 +305,7 @@ export function AssignTaskModal({
               disabled={selectedIds.size === 0}
               style={{
                 padding:'8px 20px', borderRadius:'7px', border:'none',
-                background: selectedIds.size === 0 ? '#1A1A24' : ORANGE,
+                background: selectedIds.size === 0 ? CHIP : ORANGE,
                 color: selectedIds.size === 0 ? MUTED : 'white',
                 fontSize:'12px', fontWeight:'700',
                 cursor: selectedIds.size === 0 ? 'not-allowed' : 'pointer',
@@ -336,7 +332,7 @@ export function AssignTaskModal({
 // ── Local styling primitives ────────────────────────────────────────────────
 const INPUT_STYLE = {
   width:'100%', padding:'8px 10px', borderRadius:'7px',
-  border:`1px solid ${BORDER}`, background:'#0F0F18', color:TEXT,
+  border:`1px solid ${BORDER}`, background:INSET, color:TEXT,
   fontSize:'12px', outline:'none', boxSizing:'border-box',
 };
 

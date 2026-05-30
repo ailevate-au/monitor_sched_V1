@@ -13,10 +13,7 @@
 // On Cancel: import is discarded.
 
 import { useState, useEffect, useMemo } from 'react';
-import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
-
-const STATUS_GREEN = '#10B981';
-const STATUS_AMBER = '#F59E0B';
+import { CARD, BORDER, ORANGE, TEXT, MUTED, SURFACE, CHIP, STATUS_GREEN, STATUS_AMBER } from '../../theme.jsx';
 
 export function ImportConfirmModal({ pending, onConfirm, onCancel }) {
   // Initialize selection: every implicit person is checked by default
@@ -121,7 +118,7 @@ export function ImportConfirmModal({ pending, onConfirm, onCancel }) {
                 {draftWarn.map(pid => (
                   <span key={pid} style={{
                     fontSize:'11px', padding:'4px 9px', borderRadius:'5px',
-                    background:'#1A1A24', color:TEXT,
+                    background:CHIP, color:TEXT,
                     border:`1px solid ${BORDER}`,
                   }}>{pid}</span>
                 ))}
@@ -170,7 +167,7 @@ export function ImportConfirmModal({ pending, onConfirm, onCancel }) {
                         style={{ accentColor: STATUS_GREEN, cursor:'pointer' }} />
                       <span style={{ fontSize:'12px', fontWeight:'600', color:TEXT, flex:1 }}>{p.name}</span>
                       {p.role && (
-                        <span style={{ fontSize:'10px', color:MUTED, padding:'2px 6px', background:'#1A1A24', borderRadius:'4px' }}>
+                        <span style={{ fontSize:'10px', color:MUTED, padding:'2px 6px', background:CHIP, borderRadius:'4px' }}>
                           {p.role}
                         </span>
                       )}
@@ -224,7 +221,7 @@ export function ImportConfirmModal({ pending, onConfirm, onCancel }) {
 // ── Small UI primitives (local) ──────────────────────────────────────────────
 function Section({ icon, accent, title, body, children }) {
   return (
-    <div style={{ marginBottom:'18px', padding:'14px 16px', background:'#13131A', borderRadius:'8px', border:`1px solid ${BORDER}` }}>
+    <div style={{ marginBottom:'18px', padding:'14px 16px', background:SURFACE, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
       <div style={{ display:'flex', alignItems:'flex-start', gap:'10px' }}>
         <span style={{
           width:'22px', height:'22px', flexShrink:0,

@@ -12,10 +12,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { parseTasksOnly } from '../../engine/xlsx.jsx';
-import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
-
-const STATUS_GREEN = '#10B981';
-const STATUS_AMBER = '#F59E0B';
+import { CARD, BORDER, ORANGE, TEXT, MUTED, SURFACE, PANEL, CHIP, STATUS_TOKENS, STATUS_GREEN, STATUS_AMBER } from '../../theme.jsx';
 
 export function ImportTasksForPersonModal({ person, existingProjs, onImport, onClose }) {
   const fileRef = useRef(null);
@@ -123,7 +120,7 @@ export function ImportTasksForPersonModal({ person, existingProjs, onImport, onC
           {stage === 'idle' && (
             <div style={{
               padding:'30px 16px', textAlign:'center',
-              background:'#13131A', borderRadius:'10px',
+              background:SURFACE, borderRadius:'10px',
               border:`1.5px dashed ${BORDER}`,
             }}>
               <div style={{ fontSize:'13px', color:TEXT, marginBottom:'14px' }}>
@@ -155,16 +152,16 @@ export function ImportTasksForPersonModal({ person, existingProjs, onImport, onC
 
           {/* ERROR */}
           {stage === 'error' && (
-            <div style={{ padding:'14px 16px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D' }}>
-              <div style={{ fontSize:'12px', fontWeight:'700', color:'#FCA5A5', marginBottom:'4px' }}>
+            <div style={{ padding:'14px 16px', borderRadius:'8px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}` }}>
+              <div style={{ fontSize:'12px', fontWeight:'700', color:STATUS_TOKENS.DANGER_TEXT, marginBottom:'4px' }}>
                 Could not read the file
               </div>
-              <div style={{ fontSize:'11px', color:'#FCA5A5' }}>{error}</div>
+              <div style={{ fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT }}>{error}</div>
               <button onClick={() => { setStage('idle'); setError(''); }}
                 style={{
                   marginTop:'12px', padding:'6px 14px', borderRadius:'6px',
-                  border:`1px solid #7F1D1D`, background:'transparent',
-                  color:'#FCA5A5', fontSize:'11px', fontWeight:'600', cursor:'pointer',
+                  border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, background:'transparent',
+                  color:STATUS_TOKENS.DANGER_TEXT, fontSize:'11px', fontWeight:'600', cursor:'pointer',
                 }}>
                 Try again
               </button>
@@ -186,7 +183,7 @@ export function ImportTasksForPersonModal({ person, existingProjs, onImport, onC
 
               {/* For others — opt-in */}
               {Object.keys(breakdown.forOthers).length > 0 && (
-                <div style={{ padding:'12px 14px', background:'#13131A', borderRadius:'8px', border:`1px solid ${BORDER}` }}>
+                <div style={{ padding:'12px 14px', background:SURFACE, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
                   <label style={{ display:'flex', alignItems:'flex-start', gap:'10px', cursor:'pointer' }}>
                     <input type="checkbox" checked={includeOthers}
                       onChange={e => setIncludeOthers(e.target.checked)}
@@ -202,7 +199,7 @@ export function ImportTasksForPersonModal({ person, existingProjs, onImport, onC
                         {Object.entries(breakdown.forOthers).map(([name, ts]) => (
                           <span key={name} style={{
                             fontSize:'10px', padding:'3px 8px', borderRadius:'4px',
-                            background:'#1A1A24', color:MUTED,
+                            background:CHIP, color:MUTED,
                             border:`1px solid ${BORDER}`,
                           }}>
                             {name} · {ts.length}
@@ -248,7 +245,7 @@ export function ImportTasksForPersonModal({ person, existingProjs, onImport, onC
         </div>
 
         {/* Footer */}
-        <div style={{ padding:'14px 24px', borderTop:`1px solid ${BORDER}`, display:'flex', justifyContent:'flex-end', gap:'10px', background:'#13131A', borderRadius:'0 0 12px 12px' }}>
+        <div style={{ padding:'14px 24px', borderTop:`1px solid ${BORDER}`, display:'flex', justifyContent:'flex-end', gap:'10px', background:PANEL, borderRadius:'0 0 12px 12px' }}>
           <button onClick={onClose}
             style={{
               padding:'8px 16px', borderRadius:'7px',
@@ -276,7 +273,7 @@ export function ImportTasksForPersonModal({ person, existingProjs, onImport, onC
 // ── Local primitive ─────────────────────────────────────────────────────────
 function SummaryRow({ color, icon, title, body, children }) {
   return (
-    <div style={{ padding:'12px 14px', background:'#13131A', borderRadius:'8px', border:`1px solid ${BORDER}` }}>
+    <div style={{ padding:'12px 14px', background:SURFACE, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
       <div style={{ display:'flex', alignItems:'flex-start', gap:'10px' }}>
         <span style={{
           width:'22px', height:'22px', flexShrink:0,

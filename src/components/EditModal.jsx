@@ -8,7 +8,7 @@ import { useSched } from '../context.jsx';
 import { addW, parseDate, fmtDate as fd, fmtDDMMYYYY } from '../engine/dates.jsx';
 import { buildSched, normDep, hasCycle } from '../engine/schedule.jsx';
 import { computeStatus, STATUS_STYLES, ALL_STATUSES } from '../engine/status.jsx';
-import { BORDER, TEXT, MUTED } from '../theme.jsx';
+import { BORDER, BORDER_HI, TEXT, MUTED, FAINT, CARD, SURFACE, INSET, PANEL, ORANGE, STATUS_TOKENS } from '../theme.jsx';
 import { Tile } from './shared/Tile.jsx';
 import { TaskList } from './shared/TaskList.jsx';
 
@@ -165,25 +165,25 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
       <div style={{ background:'white', borderRadius:'16px', width:'500px', maxWidth:'95vw', boxShadow:'0 24px 64px rgba(0,0,0,0.3)', overflow:'hidden', maxHeight:'92vh', display:'flex', flexDirection:'column' }}>
 
         {/* Header */}
-        <div style={{ padding:'18px 22px 14px', borderBottom:`3px solid ${projColor}`, background:'#FAFAFA', flexShrink:0 }}>
+        <div style={{ padding:'18px 22px 14px', borderBottom:`3px solid ${projColor}`, background:SURFACE, flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
             <div>
-              <div style={{ fontSize:'14px', fontWeight:'700', color:'#0F172A', marginBottom:'3px' }}>{title}</div>
-              <div style={{ fontSize:'11px', color:'#64748B' }}>{subtitle}</div>
+              <div style={{ fontSize:'14px', fontWeight:'700', color:TEXT, marginBottom:'3px' }}>{title}</div>
+              <div style={{ fontSize:'11px', color:FAINT }}>{subtitle}</div>
             </div>
-            <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#94A3B8', fontSize:'22px', lineHeight:'1', padding:'0', marginTop:'-3px' }}>×</button>
+            <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:FAINT, fontSize:'22px', lineHeight:'1', padding:'0', marginTop:'-3px' }}>×</button>
           </div>
           {!isProject && liveTask && (
-            <div style={{ display:'flex', gap:'16px', marginTop:'10px', fontSize:'11px', color:'#64748B' }}>
-              <span>Start: <strong style={{color:'#0F172A'}}>{fd(liveTask.s)}</strong></span>
-              <span>End: <strong style={{color:'#0F172A'}}>{fd(liveTask.e)}</strong></span>
-              <span>Duration: <strong style={{color:'#0F172A'}}>{liveTask.dur}d</strong></span>
+            <div style={{ display:'flex', gap:'16px', marginTop:'10px', fontSize:'11px', color:FAINT }}>
+              <span>Start: <strong style={{color:TEXT}}>{fd(liveTask.s)}</strong></span>
+              <span>End: <strong style={{color:TEXT}}>{fd(liveTask.e)}</strong></span>
+              <span>Duration: <strong style={{color:TEXT}}>{liveTask.dur}d</strong></span>
             </div>
           )}
         </div>
 
         {/* Tab switcher */}
-        <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, background:'#17171F', flexShrink:0 }}>
+        <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, background:PANEL, flexShrink:0 }}>
           {[{id:'shift',l:'Shift Timeline'},{id:'details',l:'Details'}].map(t => (
             <button key={t.id} onClick={() => { setModalTab(t.id); setConfirmDelete(false); }}
               style={{ padding:'10px 16px', border:'none', background:'none', cursor:'pointer', fontSize:'12px', fontWeight:modalTab===t.id?'600':'400', color:modalTab===t.id?projColor:MUTED, borderBottom:modalTab===t.id?`2px solid ${projColor}`:'2px solid transparent', marginBottom:'-1px' }}>
@@ -199,14 +199,14 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
           const detailTask = !isProject ? liveTask : null;
           const detailRaw  = !isProject ? rawTask  : null;
           const depNames   = !isProject ? (tdepMap[target.id]||[]).map(id => { const d = rawTasks.find(x=>x.id===id); return d?`${id} — ${d.name}`:id; }) : [];
-          const ORANGE_RED = '#EF4444';
+          const ORANGE_RED = STATUS_TOKENS.DANGER;
 
           return (
             <div>
               {isProject ? (
                 // Project details
                 <div>
-                  <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'18px', padding:'12px 14px', background:'#17171F', borderRadius:'10px', border:`1px solid ${BORDER}` }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'18px', padding:'12px 14px', background:PANEL, borderRadius:'10px', border:`1px solid ${BORDER}` }}>
                     <div style={{ width:'12px', height:'12px', borderRadius:'50%', background:proj.color, flexShrink:0 }} />
                     <div>
                       <div style={{ fontSize:'14px', fontWeight:'700', color:TEXT }}>{proj.id}</div>
@@ -221,11 +221,11 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                     {projectTasks.map(t => {
                       const lt = tasks.find(x => x.id === t.id);
                       return (
-                        <div key={t.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 12px', borderRadius:'7px', background:'#17171F', border:`1px solid ${BORDER}` }}>
+                        <div key={t.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 12px', borderRadius:'7px', background:PANEL, border:`1px solid ${BORDER}` }}>
                           <span style={{ fontSize:'11px', fontWeight:'600', color:proj.color, width:'40px', flexShrink:0 }}>{t.id.split('-')[1]}</span>
                           <span style={{ fontSize:'12px', color:TEXT, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.name}</span>
                           <span style={{ fontSize:'11px', color:MUTED, whiteSpace:'nowrap' }}>{t.person}</span>
-                          {lt?.isC && <span style={{ width:'16px', height:'16px', borderRadius:'50%', background:'#EF4444', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'9px', color:'white', fontWeight:'800', flexShrink:0 }}>!</span>}
+                          {lt?.isC && <span style={{ width:'16px', height:'16px', borderRadius:'50%', background:STATUS_TOKENS.DANGER, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'9px', color:'white', fontWeight:'800', flexShrink:0 }}>!</span>}
                         </div>
                       );
                     })}
@@ -234,18 +234,18 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                   <div style={{ borderTop:`1px solid ${BORDER}`, paddingTop:'16px' }}>
                     {!confirmDelete ? (
                       <button onClick={() => setConfirmDelete(true)}
-                        style={{ width:'100%', padding:'9px', borderRadius:'8px', border:'1px solid #7F1D1D', background:'transparent', color:'#F87171', fontSize:'13px', cursor:'pointer', fontWeight:'600', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px' }}>
+                        style={{ width:'100%', padding:'9px', borderRadius:'8px', border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, background:'transparent', color:STATUS_TOKENS.DANGER_TEXT2, fontSize:'13px', cursor:'pointer', fontWeight:'600', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px' }}>
                         🗑 Delete Project
                       </button>
                     ) : (
-                      <div style={{ padding:'12px 14px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D' }}>
-                        <div style={{ fontSize:'12px', color:'#FCA5A5', marginBottom:'10px', lineHeight:'1.5' }}>
+                      <div style={{ padding:'12px 14px', borderRadius:'8px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}` }}>
+                        <div style={{ fontSize:'12px', color:STATUS_TOKENS.DANGER_TEXT, marginBottom:'10px', lineHeight:'1.5' }}>
                           <strong>Delete {proj.id}?</strong> This removes all {projectTasks.length} tasks and any people with no remaining assignments.
                         </div>
                         <div style={{ display:'flex', gap:'8px' }}>
                           <button onClick={() => setConfirmDelete(false)} style={{ flex:1, padding:'7px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:'transparent', color:MUTED, fontSize:'12px', cursor:'pointer' }}>Cancel</button>
                           <button onClick={() => { onDelete({ type:'deleteProject', projId:proj.id }); onClose(); }}
-                            style={{ flex:2, padding:'7px', borderRadius:'7px', border:'none', background:'#EF4444', color:'white', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>
+                            style={{ flex:2, padding:'7px', borderRadius:'7px', border:'none', background:STATUS_TOKENS.DANGER, color:'white', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>
                             Yes, delete project
                           </button>
                         </div>
@@ -311,7 +311,7 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                     const projColor2 = projColor;
 
                     return (
-                      <div style={{ marginBottom:'18px', padding:'12px 14px', borderRadius:'10px', background:'#17171F', border:`1px solid ${BORDER}` }}>
+                      <div style={{ marginBottom:'18px', padding:'12px 14px', borderRadius:'10px', background:PANEL, border:`1px solid ${BORDER}` }}>
                         <div style={{ fontSize:'11px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'10px' }}>
                           Dependencies
                           <span style={{ marginLeft:'6px', color:MUTED, fontWeight:'400', textTransform:'none', letterSpacing:0 }}>— {currentDeps.length} link{currentDeps.length!==1?'s':''}</span>
@@ -325,7 +325,7 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                           const depTask = rawTasks.find(t => t.id === d.id);
                           const depProj = projs.find(p => p.id === depTask?.proj);
                           return (
-                            <div key={d.id} style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px', padding:'7px 10px', borderRadius:'7px', background:'#0F0F18', border:`1px solid ${BORDER}` }}>
+                            <div key={d.id} style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px', padding:'7px 10px', borderRadius:'7px', background:INSET, border:`1px solid ${BORDER}` }}>
                               {/* Type toggle pill */}
                               <div style={{ display:'flex', borderRadius:'6px', overflow:'hidden', border:`1px solid ${BORDER}`, flexShrink:0 }}>
                                 {['FS','SS'].map(t => (
@@ -350,12 +350,12 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                               </div>
                               {/* Cross-project badge */}
                               {depTask?.proj !== liveTask.projId && (
-                                <span style={{ fontSize:'9px', color:'#38BDF8', background:'#38BDF818', padding:'2px 6px', borderRadius:'6px', border:'1px solid #38BDF840', flexShrink:0 }}>cross-proj</span>
+                                <span style={{ fontSize:'9px', color:STATUS_TOKENS.INFO, background:`${STATUS_TOKENS.INFO}18`, padding:'2px 6px', borderRadius:'6px', border:`1px solid ${STATUS_TOKENS.INFO}40`, flexShrink:0 }}>cross-proj</span>
                               )}
                               {/* Remove */}
                               <button onClick={() => removeDep(d.id)}
                                 style={{ width:'20px', height:'20px', borderRadius:'5px', border:`1px solid ${BORDER}`, background:'transparent', cursor:'pointer', color:MUTED, fontSize:'11px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}
-                                onMouseEnter={e=>e.currentTarget.style.color='#EF4444'}
+                                onMouseEnter={e=>e.currentTarget.style.color=STATUS_TOKENS.DANGER}
                                 onMouseLeave={e=>e.currentTarget.style.color=MUTED}>✕</button>
                             </div>
                           );
@@ -379,12 +379,12 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                             {/* Search input */}
                             <input value={depSearch} onChange={e => { setDepSearch(e.target.value); setDepError(''); }}
                               placeholder="Search task ID or name..."
-                              style={{ flex:1, padding:'5px 9px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:'#0F0F18', color:TEXT, fontSize:'11px', outline:'none' }} />
+                              style={{ flex:1, padding:'5px 9px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:INSET, color:TEXT, fontSize:'11px', outline:'none' }} />
                           </div>
 
                           {/* Candidate list */}
                           {depSearch.trim() && (
-                            <div style={{ maxHeight:'150px', overflowY:'auto', borderRadius:'7px', border:`1px solid ${BORDER}`, background:'#0F0F18' }}>
+                            <div style={{ maxHeight:'150px', overflowY:'auto', borderRadius:'7px', border:`1px solid ${BORDER}`, background:INSET }}>
                               {candidateTasks.length === 0 && (
                                 <div style={{ padding:'10px', fontSize:'11px', color:MUTED, textAlign:'center' }}>No matching tasks</div>
                               )}
@@ -396,22 +396,22 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                                   <div key={t.id}
                                     onClick={() => !wouldCycle && addDep(t.id)}
                                     style={{ display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', cursor: wouldCycle ? 'not-allowed' : 'pointer', borderBottom:`1px solid ${BORDER}20`, opacity: wouldCycle ? 0.4 : 1 }}
-                                    onMouseEnter={e => { if (!wouldCycle) e.currentTarget.style.background='#1C1C27'; }}
+                                    onMouseEnter={e => { if (!wouldCycle) e.currentTarget.style.background=CARD; }}
                                     onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                                     <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:tp?.color||MUTED, flexShrink:0 }} />
                                     <div style={{ flex:1, minWidth:0 }}>
                                       <div style={{ fontSize:'11px', fontWeight:'600', color:tp?.color||TEXT }}>{t.id}</div>
                                       <div style={{ fontSize:'10px', color:MUTED, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.name} · {t.person}</div>
                                     </div>
-                                    {isCross && <span style={{ fontSize:'9px', color:'#38BDF8', flexShrink:0 }}>cross-proj</span>}
-                                    {wouldCycle && <span style={{ fontSize:'9px', color:'#EF4444', flexShrink:0 }}>cycle!</span>}
+                                    {isCross && <span style={{ fontSize:'9px', color:STATUS_TOKENS.INFO, flexShrink:0 }}>cross-proj</span>}
+                                    {wouldCycle && <span style={{ fontSize:'9px', color:STATUS_TOKENS.DANGER, flexShrink:0 }}>cycle!</span>}
                                   </div>
                                 );
                               })}
                             </div>
                           )}
 
-                          {depError && <div style={{ marginTop:'6px', fontSize:'11px', color:'#F87171' }}>{depError}</div>}
+                          {depError && <div style={{ marginTop:'6px', fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT2 }}>{depError}</div>}
                         </div>
                       </div>
                     );
@@ -424,7 +424,7 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                     const displayStatus = currentOverride || defaultStatus;
                     const ss = STATUS_STYLES[displayStatus] || STATUS_STYLES['On Track'];
                     return (
-                      <div style={{ marginBottom:'18px', padding:'12px 14px', borderRadius:'10px', background:'#17171F', border:`1px solid ${BORDER}` }}>
+                      <div style={{ marginBottom:'18px', padding:'12px 14px', borderRadius:'10px', background:PANEL, border:`1px solid ${BORDER}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
                           <div style={{ fontSize:'11px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.06em' }}>Status</div>
                           <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
@@ -432,7 +432,7 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                               {displayStatus}
                             </span>
                             {currentOverride && (
-                              <span style={{ fontSize:'10px', color:'#F97316', fontWeight:'600', background:'#F9731618', padding:'2px 7px', borderRadius:'8px', border:'1px solid #F9731640' }}>overridden</span>
+                              <span style={{ fontSize:'10px', color:ORANGE, fontWeight:'600', background:`${ORANGE}18`, padding:'2px 7px', borderRadius:'8px', border:`1px solid ${ORANGE}40` }}>overridden</span>
                             )}
                           </div>
                         </div>
@@ -440,7 +440,7 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                           {/* Default option */}
                           <button
                             onClick={() => onSetStatus && onSetStatus(target.id, null)}
-                            style={{ padding:'4px 10px', borderRadius:'8px', fontSize:'11px', fontWeight:'600', cursor:'pointer', border:`1.5px solid ${!currentOverride ? '#F97316' : BORDER}`, background: !currentOverride ? '#F9731618' : 'transparent', color: !currentOverride ? '#F97316' : MUTED }}>
+                            style={{ padding:'4px 10px', borderRadius:'8px', fontSize:'11px', fontWeight:'600', cursor:'pointer', border:`1.5px solid ${!currentOverride ? ORANGE : BORDER}`, background: !currentOverride ? ORANGE+'18' : 'transparent', color: !currentOverride ? ORANGE : MUTED }}>
                             Default
                           </button>
                           {ALL_STATUSES.map(s => {
@@ -463,7 +463,7 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                             Auto-detected: <span style={{ color: STATUS_STYLES[defaultStatus]?.tx || MUTED, fontWeight:'600' }}>{defaultStatus}</span>
                             {' · '}
                             <button onClick={() => onSetStatus && onSetStatus(target.id, null)}
-                              style={{ background:'none', border:'none', cursor:'pointer', color:'#F97316', fontSize:'10px', fontWeight:'600', padding:0 }}>
+                              style={{ background:'none', border:'none', cursor:'pointer', color:ORANGE, fontSize:'10px', fontWeight:'600', padding:0 }}>
                               Reset to default
                             </button>
                           </div>
@@ -473,12 +473,12 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                   })()}
 
                   {liveTask?.isC && (
-                    <div style={{ padding:'8px 12px', borderRadius:'7px', background:'#3B1219', border:'1px solid #7F1D1D', color:'#FCA5A5', fontSize:'11px', marginBottom:'14px' }}>
+                    <div style={{ padding:'8px 12px', borderRadius:'7px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, color:STATUS_TOKENS.DANGER_TEXT, fontSize:'11px', marginBottom:'14px' }}>
                       ⚠ Resource conflict — clashes with {liveTask.cw.map(id=>{ const c=tasks.find(x=>x.id===id); return c?`${c.id} (${c.person})`:id; }).join(', ')}
                     </div>
                   )}
                   {liveTask?.isDV && (
-                    <div style={{ padding:'8px 12px', borderRadius:'7px', background:'#2D1A00', border:'1px dashed #92400E', color:'#FBBF24', fontSize:'11px', marginBottom:'14px' }}>
+                    <div style={{ padding:'8px 12px', borderRadius:'7px', background:STATUS_TOKENS.WARN_SUBTLE2, border:`1px dashed ${STATUS_TOKENS.WARN_BORDER}`, color:STATUS_TOKENS.WARN_BADGE, fontSize:'11px', marginBottom:'14px' }}>
                       ⊗ Dependency violation — starts before prerequisite finishes
                     </div>
                   )}
@@ -486,18 +486,18 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                   <div style={{ borderTop:`1px solid ${BORDER}`, paddingTop:'16px' }}>
                     {!confirmDelete ? (
                       <button onClick={() => setConfirmDelete(true)}
-                        style={{ width:'100%', padding:'9px', borderRadius:'8px', border:'1px solid #7F1D1D', background:'transparent', color:'#F87171', fontSize:'13px', cursor:'pointer', fontWeight:'600', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px' }}>
+                        style={{ width:'100%', padding:'9px', borderRadius:'8px', border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, background:'transparent', color:STATUS_TOKENS.DANGER_TEXT2, fontSize:'13px', cursor:'pointer', fontWeight:'600', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px' }}>
                         🗑 Delete Task
                       </button>
                     ) : (
-                      <div style={{ padding:'12px 14px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D' }}>
-                        <div style={{ fontSize:'12px', color:'#FCA5A5', marginBottom:'10px', lineHeight:'1.5' }}>
+                      <div style={{ padding:'12px 14px', borderRadius:'8px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}` }}>
+                        <div style={{ fontSize:'12px', color:STATUS_TOKENS.DANGER_TEXT, marginBottom:'10px', lineHeight:'1.5' }}>
                           <strong>Delete "{rawTask?.name}"?</strong> Any tasks that depend on it may be affected.
                         </div>
                         <div style={{ display:'flex', gap:'8px' }}>
                           <button onClick={() => setConfirmDelete(false)} style={{ flex:1, padding:'7px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:'transparent', color:MUTED, fontSize:'12px', cursor:'pointer' }}>Cancel</button>
                           <button onClick={() => { onDelete({ type:'deleteTask', taskId:target.id }); onClose(); }}
-                            style={{ flex:2, padding:'7px', borderRadius:'7px', border:'none', background:'#EF4444', color:'white', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>
+                            style={{ flex:2, padding:'7px', borderRadius:'7px', border:'none', background:STATUS_TOKENS.DANGER, color:'white', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>
                             Yes, delete task
                           </button>
                         </div>
@@ -513,9 +513,9 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
         {modalTab === 'shift' && (<div>
           {isProject && (
             <div style={{ marginBottom:'14px' }}>
-              <div style={{ fontSize:'11px', fontWeight:'700', color:'#475569', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'6px' }}>Which tasks to shift</div>
+              <div style={{ fontSize:'11px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'6px' }}>Which tasks to shift</div>
               <select value={selectedTaskId} onChange={e => { setSelectedTaskId(e.target.value); reset(); }}
-                style={{ width:'100%', padding:'8px 10px', borderRadius:'8px', border:'1px solid #E2E8F0', fontSize:'12px', color:'#0F172A', background:'white', cursor:'pointer', outline:'none' }}>
+                style={{ width:'100%', padding:'8px 10px', borderRadius:'8px', border:`1px solid ${BORDER}`, fontSize:'12px', color:TEXT, background:'white', cursor:'pointer', outline:'none' }}>
                 <option value="__all__">Entire project (all tasks)</option>
                 {projectTasks.map(t => (
                   <option key={t.id} value={t.id}>{t.id} — {t.name} ({t.person})</option>
@@ -526,13 +526,13 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
 
           {/* Cascade mode selector */}
           <div style={{ marginBottom:'16px' }}>
-            <div style={{ fontSize:'11px', fontWeight:'700', color:'#475569', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'8px' }}>Cascade Mode</div>
+            <div style={{ fontSize:'11px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'8px' }}>Cascade Mode</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'6px' }}>
               {MODES.map(m => (
                 <div key={m.key} onClick={() => { setCascadeMode(m.key); reset(); }}
-                  style={{ padding:'8px 10px', borderRadius:'8px', border:`1.5px solid ${cascadeMode === m.key ? projColor : '#E2E8F0'}`, background: cascadeMode === m.key ? projColor+'0F' : 'white', cursor:'pointer', textAlign:'center' }}>
-                  <div style={{ fontSize:'12px', fontWeight:'700', color: cascadeMode === m.key ? projColor : '#374151' }}>{m.label}</div>
-                  <div style={{ fontSize:'9px', color:'#94A3B8', marginTop:'3px', lineHeight:'1.3' }}>{m.desc}</div>
+                  style={{ padding:'8px 10px', borderRadius:'8px', border:`1.5px solid ${cascadeMode === m.key ? projColor : BORDER}`, background: cascadeMode === m.key ? projColor+'0F' : 'white', cursor:'pointer', textAlign:'center' }}>
+                  <div style={{ fontSize:'12px', fontWeight:'700', color: cascadeMode === m.key ? projColor : BORDER_HI }}>{m.label}</div>
+                  <div style={{ fontSize:'9px', color:FAINT, marginTop:'3px', lineHeight:'1.3' }}>{m.desc}</div>
                 </div>
               ))}
             </div>
@@ -541,18 +541,18 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
           {/* Shift slider — bidirectional */}
           <div style={{ marginBottom:'14px' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-              <div style={{ fontSize:'11px', fontWeight:'700', color:'#475569', textTransform:'uppercase', letterSpacing:'0.06em' }}>Shift by</div>
-              <div style={{ fontSize:'11px', color:'#64748B' }}>← backward · forward →</div>
+              <div style={{ fontSize:'11px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.06em' }}>Shift by</div>
+              <div style={{ fontSize:'11px', color:FAINT }}>← backward · forward →</div>
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
               <button onClick={() => { setShiftDays(d => Math.max(-60, d-1)); reset(); }}
-                style={{ width:'32px', height:'32px', borderRadius:'8px', border:'1px solid #E2E8F0', background:'#F8FAFC', cursor:'pointer', fontSize:'18px', color:'#475569', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>−</button>
+                style={{ width:'32px', height:'32px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:SURFACE, cursor:'pointer', fontSize:'18px', color:MUTED, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>−</button>
               <input type="range" min="-60" max="60" value={shiftDays}
                 onChange={e => { setShiftDays(Number(e.target.value)); reset(); }}
                 style={{ flex:1, accentColor:projColor }} />
               <button onClick={() => { setShiftDays(d => Math.min(60, d+1)); reset(); }}
-                style={{ width:'32px', height:'32px', borderRadius:'8px', border:'1px solid #E2E8F0', background:'#F8FAFC', cursor:'pointer', fontSize:'18px', color:'#475569', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>+</button>
-              <div style={{ width:'68px', textAlign:'center', padding:'6px 8px', borderRadius:'8px', background:projColor+'14', border:`1.5px solid ${projColor}50`, fontSize:'15px', fontWeight:'800', color: shiftDays < 0 ? '#10B981' : shiftDays > 0 ? projColor : '#94A3B8', fontVariantNumeric:'tabular-nums', flexShrink:0 }}>
+                style={{ width:'32px', height:'32px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:SURFACE, cursor:'pointer', fontSize:'18px', color:MUTED, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>+</button>
+              <div style={{ width:'68px', textAlign:'center', padding:'6px 8px', borderRadius:'8px', background:projColor+'14', border:`1.5px solid ${projColor}50`, fontSize:'15px', fontWeight:'800', color: shiftDays < 0 ? STATUS_TOKENS.OK : shiftDays > 0 ? projColor : FAINT, fontVariantNumeric:'tabular-nums', flexShrink:0 }}>
                 {shiftDays > 0 ? `+${shiftDays}d` : shiftDays < 0 ? `${shiftDays}d` : '0d'}
               </div>
             </div>
@@ -560,40 +560,40 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
 
           {/* New dates preview */}
           {pTask && shiftDays !== 0 && (
-            <div style={{ marginBottom:'14px', fontSize:'11px', color:'#64748B', display:'flex', gap:'14px', padding:'7px 10px', background:'#F8FAFC', borderRadius:'8px', border:'1px solid #F1F5F9' }}>
-              {origTask && <span>Was: <strong style={{color:'#94A3B8', textDecoration:'line-through'}}>{fd(origTask.s)} → {fd(origTask.e)}</strong></span>}
-              <span>Now: <strong style={{color:'#0F172A'}}>{fd(pTask.s)} → {fd(pTask.e)}</strong></span>
+            <div style={{ marginBottom:'14px', fontSize:'11px', color:FAINT, display:'flex', gap:'14px', padding:'7px 10px', background:SURFACE, borderRadius:'8px', border:`1px solid ${INSET}` }}>
+              {origTask && <span>Was: <strong style={{color:FAINT, textDecoration:'line-through'}}>{fd(origTask.s)} → {fd(origTask.e)}</strong></span>}
+              <span>Now: <strong style={{color:TEXT}}>{fd(pTask.s)} → {fd(pTask.e)}</strong></span>
             </div>
           )}
 
           {/* Warn if backward shift would make tasks overdue */}
           {shiftDays < 0 && pTask && pTask.e.getTime() < Date.now() && (
-            <div style={{ marginBottom:'14px', padding:'8px 10px', borderRadius:'8px', background:'#FFF7ED', border:'1px solid #FED7AA', fontSize:'11px', color:'#92400E', lineHeight:'1.5' }}>
+            <div style={{ marginBottom:'14px', padding:'8px 10px', borderRadius:'8px', background:STATUS_TOKENS.WARN_SUBTLE, border:`1px solid ${STATUS_TOKENS.WARN_TEXT2}`, fontSize:'11px', color:STATUS_TOKENS.WARN_BORDER, lineHeight:'1.5' }}>
               ⚠ New end date is in the past — affected tasks will be flagged as <strong>overdue</strong> unless marked complete.
             </div>
           )}
 
           {/* ── Impact panel ── */}
-          <div style={{ background:'#F8FAFC', borderRadius:'10px', padding:'12px 14px', marginBottom:'14px', border:'1px solid #E2E8F0' }}>
-            <div style={{ fontSize:'10px', fontWeight:'700', color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:'10px' }}>
-              Impact · <span style={{ color: cascadeMode === 'full' ? '#6366F1' : cascadeMode === 'min' ? '#10B981' : '#F59E0B' }}>{MODES.find(m => m.key === cascadeMode)?.label} Cascade</span>
+          <div style={{ background:SURFACE, borderRadius:'10px', padding:'12px 14px', marginBottom:'14px', border:`1px solid ${BORDER}` }}>
+            <div style={{ fontSize:'10px', fontWeight:'700', color:FAINT, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:'10px' }}>
+              Impact · <span style={{ color: cascadeMode === 'full' ? STATUS_TOKENS.INFO_INDIGO : cascadeMode === 'min' ? STATUS_TOKENS.OK : STATUS_TOKENS.WARN }}>{MODES.find(m => m.key === cascadeMode)?.label} Cascade</span>
             </div>
 
             {/* ── FULL MODE tiles ── */}
             {cascadeMode === 'full' && (
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'8px', marginBottom: cascaded.length > 0 || otherAffected.length > 0 ? '10px' : '0' }}>
-                <Tile v={cascaded.length} label="cascade" color="#F59E0B" bg="#FEF3C7" border="#FDE68A" />
-                <Tile v={absorbed.length}  label="absorbed" color="#10B981" bg="#DCFCE7" border="#86EFAC" />
-                <Tile v={newConflicts.length} label="conflicts" color={newConflicts.length > 0 ? '#EF4444' : '#94A3B8'} bg={newConflicts.length > 0 ? '#FEF2F2' : '#F8FAFC'} border={newConflicts.length > 0 ? '#FECACA' : '#F1F5F9'} />
+                <Tile v={cascaded.length} label="cascade" color={STATUS_TOKENS.WARN} bg={STATUS_TOKENS.WARN_SUBTLE} border={STATUS_TOKENS.WARN_TEXT} />
+                <Tile v={absorbed.length}  label="absorbed" color={STATUS_TOKENS.OK} bg={STATUS_TOKENS.OK_SUBTLE} border={STATUS_TOKENS.OK_TEXT} />
+                <Tile v={newConflicts.length} label="conflicts" color={newConflicts.length > 0 ? STATUS_TOKENS.DANGER : FAINT} bg={newConflicts.length > 0 ? STATUS_TOKENS.DANGER_SUBTLE : SURFACE} border={newConflicts.length > 0 ? STATUS_TOKENS.DANGER_SUBTLE : INSET} />
               </div>
             )}
 
             {/* ── MIN MODE tiles ── */}
             {cascadeMode === 'min' && (
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'8px', marginBottom:'10px' }}>
-                <Tile v={cascaded.length}      label="cascade"       color="#F59E0B" bg="#FEF3C7" border="#FDE68A" />
-                <Tile v={floatConsumed.length} label="float eaten"   color="#10B981" bg="#DCFCE7" border="#86EFAC" />
-                <Tile v={newFragile.length}    label="now fragile"   color={newFragile.length > 0 ? '#F59E0B' : '#94A3B8'} bg={newFragile.length > 0 ? '#FEF9C3' : '#F8FAFC'} border={newFragile.length > 0 ? '#FDE68A' : '#F1F5F9'} />
+                <Tile v={cascaded.length}      label="cascade"       color={STATUS_TOKENS.WARN} bg={STATUS_TOKENS.WARN_SUBTLE} border={STATUS_TOKENS.WARN_TEXT} />
+                <Tile v={floatConsumed.length} label="float eaten"   color={STATUS_TOKENS.OK} bg={STATUS_TOKENS.OK_SUBTLE} border={STATUS_TOKENS.OK_TEXT} />
+                <Tile v={newFragile.length}    label="now fragile"   color={newFragile.length > 0 ? STATUS_TOKENS.WARN : FAINT} bg={newFragile.length > 0 ? STATUS_TOKENS.WARN_SUBTLE : SURFACE} border={newFragile.length > 0 ? STATUS_TOKENS.WARN_TEXT : INSET} />
               </div>
             )}
 
@@ -601,11 +601,11 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
             {cascadeMode === 'none' && (
               <>
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px', marginBottom:'10px' }}>
-                  <Tile v={depViolations.length} label="dep. violations" color={depViolations.length > 0 ? '#F59E0B' : '#94A3B8'} bg={depViolations.length > 0 ? '#FFF7ED' : '#F8FAFC'} border={depViolations.length > 0 ? '#FED7AA' : '#F1F5F9'} />
-                  <Tile v={newConflicts.length}  label="conflicts"       color={newConflicts.length > 0 ? '#EF4444' : '#94A3B8'} bg={newConflicts.length > 0 ? '#FEF2F2' : '#F8FAFC'} border={newConflicts.length > 0 ? '#FECACA' : '#F1F5F9'} />
+                  <Tile v={depViolations.length} label="dep. violations" color={depViolations.length > 0 ? STATUS_TOKENS.WARN : FAINT} bg={depViolations.length > 0 ? STATUS_TOKENS.WARN_SUBTLE : SURFACE} border={depViolations.length > 0 ? STATUS_TOKENS.WARN_TEXT2 : INSET} />
+                  <Tile v={newConflicts.length}  label="conflicts"       color={newConflicts.length > 0 ? STATUS_TOKENS.DANGER : FAINT} bg={newConflicts.length > 0 ? STATUS_TOKENS.DANGER_SUBTLE : SURFACE} border={newConflicts.length > 0 ? STATUS_TOKENS.DANGER_SUBTLE : INSET} />
                 </div>
                 {recoveryDays > 0 && (
-                  <div style={{ padding:'8px 10px', borderRadius:'8px', background:'#F0F9FF', border:'1px solid #BAE6FD', fontSize:'11px', color:'#0C4A6E', lineHeight:'1.5', marginBottom:'8px' }}>
+                  <div style={{ padding:'8px 10px', borderRadius:'8px', background:STATUS_TOKENS.INFO_SUBTLE, border:`1px solid ${STATUS_TOKENS.INFO_SUBTLE}`, fontSize:'11px', color:STATUS_TOKENS.INFO_BORDER, lineHeight:'1.5', marginBottom:'8px' }}>
                     <strong>Recovery cost:</strong> ~{recoveryDays} working day{recoveryDays !== 1 ? 's' : ''} would need to be found downstream to maintain the original end date. Use this number in client conversations.
                   </div>
                 )}
@@ -619,10 +619,10 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                 tasks={tasks}
                 icon="⚡"
                 label="Float consumed — buffer shrinking"
-                labelColor="#10B981"
-                bg="#F0FDF4"
+                labelColor={STATUS_TOKENS.OK}
+                bg={STATUS_TOKENS.OK_SUBTLE}
                 getValue={t => `${t.floatConsumed}d eaten`}
-                valueColor="#14532D"
+                valueColor={STATUS_TOKENS.OK_BORDER}
               />
             )}
 
@@ -633,10 +633,10 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                 tasks={tasks}
                 icon="⬇"
                 label="Tasks that cascade"
-                labelColor="#F59E0B"
-                bg="#FFFBEB"
+                labelColor={STATUS_TOKENS.WARN}
+                bg={STATUS_TOKENS.WARN_SUBTLE}
                 getValue={(t) => { const o = tasks.find(x => x.id === t.id); if (!o) return ''; const diff = Math.round((t.s - o.s) / 864e5); return diff >= 0 ? `+${diff}d` : `${diff}d`; }}
-                valueColor="#92400E"
+                valueColor={STATUS_TOKENS.WARN_BORDER}
                 overflow={cascaded.length - 5}
               />
             )}
@@ -648,22 +648,22 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
                 tasks={tasks}
                 icon="⊗"
                 label="Dependency violations — starts before prerequisite finishes"
-                labelColor="#F59E0B"
-                bg="#FFF7ED"
+                labelColor={STATUS_TOKENS.WARN}
+                bg={STATUS_TOKENS.WARN_SUBTLE}
                 getValue={(t) => {
                   const depName = t.dvDeps.map(id => rawTasks.find(r => r.id === id)?.name || id).join(', ');
                   return `after: ${depName}`;
                 }}
-                valueColor="#92400E"
+                valueColor={STATUS_TOKENS.WARN_BORDER}
                 overflow={depViolations.length - 5}
               />
             )}
 
             {/* Other projects warning */}
             {otherAffected.length > 0 && (
-              <div style={{ display:'flex', alignItems:'flex-start', gap:'8px', padding:'8px 10px', borderRadius:'8px', background:'#FFF7ED', border:'1px solid #FED7AA', marginTop:'8px' }}>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:'8px', padding:'8px 10px', borderRadius:'8px', background:STATUS_TOKENS.WARN_SUBTLE, border:`1px solid ${STATUS_TOKENS.WARN_TEXT2}`, marginTop:'8px' }}>
                 <span style={{ fontSize:'13px', flexShrink:0 }}>⚠️</span>
-                <div style={{ fontSize:'11px', color:'#92400E', lineHeight:'1.5' }}>
+                <div style={{ fontSize:'11px', color:STATUS_TOKENS.WARN_BORDER, lineHeight:'1.5' }}>
                   <strong>Other projects affected:</strong>{' '}
                   {otherAffected.map(pid => {
                     const p = projs.find(x => x.id === pid);
@@ -677,7 +677,7 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
           </div>
 
           {needsConfirm && willConflict && (
-            <div style={{ padding:'10px 12px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D', marginBottom:'4px', fontSize:'12px', color:'#FCA5A5', lineHeight:'1.5' }}>
+            <div style={{ padding:'10px 12px', borderRadius:'8px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, marginBottom:'4px', fontSize:'12px', color:STATUS_TOKENS.DANGER_TEXT, lineHeight:'1.5' }}>
               <strong>⚠ Confirm:</strong>{' '}
               {cascadeMode === 'none' && depViolations.length > 0
                 ? `This creates ${depViolations.length} dependency violation${depViolations.length !== 1 ? 's' : ''} — tasks will start before their prerequisites finish.`
@@ -688,19 +688,19 @@ export function EditModal({ target, tasks, simDelays, onApply, onShift, onClose,
         </div>)} {/* end shift tab content */}
 
         {modalTab === 'details' && (
-          <div style={{ padding:'14px 22px', borderTop:`1px solid #2A2A3A`, flexShrink:0 }}>
-            <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:'8px', border:'1px solid #2A2A3A', background:'transparent', cursor:'pointer', fontSize:'13px', color:'#6B7280', fontWeight:'500' }}>Close</button>
+          <div style={{ padding:'14px 22px', borderTop:`1px solid ${BORDER}`, flexShrink:0 }}>
+            <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', cursor:'pointer', fontSize:'13px', color:MUTED, fontWeight:'500' }}>Close</button>
           </div>
         )}
         </div> {/* end scrollable body */}
 
         {/* Footer — only shown on shift tab */}
         {modalTab === 'shift' && (
-        <div style={{ padding:'14px 22px 18px', display:'flex', gap:'10px', justifyContent:'flex-end', borderTop:`1px solid #2A2A3A`, flexShrink:0 }}>
-          <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:'8px', border:'1px solid #2A2A3A', background:'transparent', cursor:'pointer', fontSize:'13px', color:'#6B7280', fontWeight:'500' }}>Cancel</button>
+        <div style={{ padding:'14px 22px 18px', display:'flex', gap:'10px', justifyContent:'flex-end', borderTop:`1px solid ${BORDER}`, flexShrink:0 }}>
+          <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', cursor:'pointer', fontSize:'13px', color:MUTED, fontWeight:'500' }}>Cancel</button>
           <button onClick={handleApply} disabled={shiftDays === 0}
             style={{ padding:'8px 22px', borderRadius:'8px', border:'none', cursor: shiftDays === 0 ? 'default' : 'pointer', fontSize:'13px', fontWeight:'700',
-              background: shiftDays === 0 ? '#374151' : willConflict && !needsConfirm ? '#EF4444' : projColor, color:'white', opacity: shiftDays === 0 ? 0.5 : 1 }}>
+              background: shiftDays === 0 ? BORDER_HI : willConflict && !needsConfirm ? STATUS_TOKENS.DANGER : projColor, color:'white', opacity: shiftDays === 0 ? 0.5 : 1 }}>
             {shiftDays === 0 ? 'No change' : willConflict && !needsConfirm ? '⚠ Apply Anyway' : needsConfirm ? '⚠ Confirm & Apply' : shiftDays < 0 ? `← Apply Shift (${shiftDays}d)` : `→ Apply Shift (+${shiftDays}d)`}
           </button>
         </div>

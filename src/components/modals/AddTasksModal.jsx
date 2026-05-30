@@ -4,10 +4,10 @@
 
 import { useState } from 'react';
 import { loadWorkflows, loadDepOverrides, saveDepOverrides } from '../../storage/persist.jsx';
-import { PERSON_COLORS, CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
+import { PERSON_COLORS, CARD, BORDER, ORANGE, TEXT, MUTED, INSET, PANEL, STATUS_TOKENS } from '../../theme.jsx';
 
 export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onClose }) {
-  const INPUT  = { width:'100%', padding:'8px 10px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'#0F0F18', color:TEXT, fontSize:'12px', outline:'none', boxSizing:'border-box', fontFamily:'inherit' };
+  const INPUT  = { width:'100%', padding:'8px 10px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:INSET, color:TEXT, fontSize:'12px', outline:'none', boxSizing:'border-box', fontFamily:'inherit' };
 
   const nextLetter = () => {
     const used = existingTasks.map(t => t.id.split('-')[1] || '').filter(Boolean);
@@ -101,7 +101,7 @@ export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onCl
     <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(10,10,15,0.7)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target===e.currentTarget) onClose(); }}>
       <div style={{ background:CARD, borderRadius:'16px', width:'700px', maxWidth:'95vw', maxHeight:'85vh', display:'flex', flexDirection:'column', boxShadow:'0 24px 64px rgba(0,0,0,0.5)', border:`1px solid ${BORDER}`, overflow:'hidden' }}>
-        <div style={{ padding:'18px 22px 14px', borderBottom:`2px solid ${proj.color}`, background:'#17171F', flexShrink:0 }}>
+        <div style={{ padding:'18px 22px 14px', borderBottom:`2px solid ${proj.color}`, background:PANEL, flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <div>
               <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
@@ -117,10 +117,10 @@ export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onCl
         <div style={{ overflowY:'auto', flex:1, padding:'18px 22px' }}>
           {/* Workflow loader */}
           {wfList.length > 0 && (
-            <div style={{ marginBottom:'16px', padding:'10px 14px', borderRadius:'9px', background:'#17171F', border:`1px solid ${BORDER}`, display:'flex', alignItems:'center', gap:'10px' }}>
+            <div style={{ marginBottom:'16px', padding:'10px 14px', borderRadius:'9px', background:PANEL, border:`1px solid ${BORDER}`, display:'flex', alignItems:'center', gap:'10px' }}>
               <span style={{ fontSize:'11px', color:MUTED, fontWeight:'600', flexShrink:0 }}>Load workflow:</span>
               <select onChange={e => { if (e.target.value) loadWorkflow(e.target.value); e.target.value=''; }}
-                style={{ flex:1, padding:'5px 9px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:'#0F0F18', color:TEXT, fontSize:'12px', outline:'none', cursor:'pointer' }}>
+                style={{ flex:1, padding:'5px 9px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:INSET, color:TEXT, fontSize:'12px', outline:'none', cursor:'pointer' }}>
                 <option value=''>— select a workflow —</option>
                 {wfList.map(wf => <option key={wf.id} value={wf.id}>{wf.name} ({wf.tasks.length} tasks)</option>)}
               </select>
@@ -172,10 +172,10 @@ export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onCl
             onMouseLeave={e=>e.currentTarget.style.borderColor=BORDER}>
             + Add task row
           </button>
-          {error && <div style={{ marginTop:'12px', padding:'9px 12px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D', color:'#FCA5A5', fontSize:'12px' }}>{error}</div>}
+          {error && <div style={{ marginTop:'12px', padding:'9px 12px', borderRadius:'8px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, color:STATUS_TOKENS.DANGER_TEXT, fontSize:'12px' }}>{error}</div>}
         </div>
 
-        <div style={{ padding:'14px 22px', borderTop:`1px solid ${BORDER}`, display:'flex', gap:'10px', justifyContent:'flex-end', flexShrink:0, background:'#17171F' }}>
+        <div style={{ padding:'14px 22px', borderTop:`1px solid ${BORDER}`, display:'flex', gap:'10px', justifyContent:'flex-end', flexShrink:0, background:PANEL }}>
           <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', color:MUTED, fontSize:'13px', cursor:'pointer' }}>Cancel</button>
           <button onClick={handleAdd} style={{ padding:'8px 22px', borderRadius:'8px', border:'none', background:proj.color, color:'white', fontSize:'13px', fontWeight:'700', cursor:'pointer' }}>
             + Add Tasks

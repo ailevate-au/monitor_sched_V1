@@ -7,7 +7,7 @@
 // so the action is history-logged like every other change.
 
 import { useState, useEffect } from 'react';
-import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
+import { CARD, BORDER, ORANGE, TEXT, MUTED, INSET, PANEL, STATUS_TOKENS } from '../../theme.jsx';
 
 export function AddPersonModal({ existingPeople, onAdd, onClose }) {
   const [name,    setName]    = useState('');
@@ -103,14 +103,14 @@ export function AddPersonModal({ existingPeople, onAdd, onClose }) {
           </Field>
 
           {error && (
-            <div style={{ padding:'9px 12px', borderRadius:'7px', background:'#3B1219', border:'1px solid #7F1D1D', color:'#FCA5A5', fontSize:'12px' }}>
+            <div style={{ padding:'9px 12px', borderRadius:'7px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, color:STATUS_TOKENS.DANGER_TEXT, fontSize:'12px' }}>
               {error}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div style={{ padding:'14px 24px', borderTop:`1px solid ${BORDER}`, display:'flex', justifyContent:'flex-end', gap:'10px', background:'#13131A', borderRadius:'0 0 12px 12px' }}>
+        <div style={{ padding:'14px 24px', borderTop:`1px solid ${BORDER}`, display:'flex', justifyContent:'flex-end', gap:'10px', background:PANEL, borderRadius:'0 0 12px 12px' }}>
           <button onClick={onClose}
             style={{
               padding:'8px 16px', borderRadius:'7px',
@@ -145,6 +145,6 @@ function Field({ label, children }) {
 
 const INPUT_STYLE = {
   width:'100%', padding:'8px 10px', borderRadius:'7px',
-  border:`1px solid ${BORDER}`, background:'#0F0F18', color:TEXT,
+  border:`1px solid ${BORDER}`, background:INSET, color:TEXT,
   fontSize:'12px', outline:'none', boxSizing:'border-box',
 };

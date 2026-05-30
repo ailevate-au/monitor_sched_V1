@@ -20,7 +20,7 @@ import { parseXlsx } from './engine/xlsx.jsx';
 import { buildSched } from './engine/schedule.jsx';
 import { applyEditsToData, mutateSchedData, buildHistoryEntry, buildUploadHistoryEntry, buildRevertHistoryEntry } from './engine/edits.jsx';
 import { addW, parseDate, fmtDDMMYYYY } from './engine/dates.jsx';
-import { NAV, SURFACE, CARD, BORDER, ORANGE, TEXT, MUTED } from './theme.jsx';
+import { NAV, SURFACE, CARD, BORDER, ORANGE, TEXT, MUTED, TASK_BLUE, STATUS_TOKENS } from './theme.jsx';
 
 import { EditModal } from './components/EditModal.jsx';
 import { ConflictResolutionPopover } from './components/ConflictResolutionPopover.jsx';
@@ -291,7 +291,7 @@ function EmptyState({ fileInputRef, showNewProj, setShowNewProj, handleFileChang
           ))}
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', background:'#1E1E2A', border:`1px solid ${BORDER}`, borderRadius:'8px', padding:'6px 12px', minWidth:'200px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', background:CARD, border:`1px solid ${BORDER}`, borderRadius:'8px', padding:'6px 12px', minWidth:'200px' }}>
             <svg width="13" height="13" fill="none" viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="5" stroke={MUTED} strokeWidth="1.5"/><path d="M10.5 10.5 14 14" stroke={MUTED} strokeWidth="1.5" strokeLinecap="round"/></svg>
             <span style={{ fontSize:'12px', color:MUTED }}>Search tasks, people...</span>
           </div>
@@ -315,7 +315,7 @@ function EmptyState({ fileInputRef, showNewProj, setShowNewProj, handleFileChang
       {tab !== 'dashboard' && <TabStub name={TAB_ITEMS.find(t => t.id === tab)?.l || 'Tab'} />}
 
       {importError && (
-        <div style={{ margin:'0 28px 28px', padding:'12px 16px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D', color:'#FCA5A5', fontSize:'12px' }}>
+        <div style={{ margin:'0 28px 28px', padding:'12px 16px', borderRadius:'8px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, color:STATUS_TOKENS.DANGER_TEXT, fontSize:'12px' }}>
           <strong>Import failed:</strong> {importError}
         </div>
       )}
@@ -820,7 +820,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         const init = n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
         newPeopleSeen.set(n, {
           name: n, role: t.role || '', init,
-          color: '#5B7B9A', rate: '$42/hr',
+          color: TASK_BLUE, rate: '$42/hr',
         });
       }
     }
@@ -958,7 +958,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
           ))}
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', background:'#1E1E2A', border:`1px solid ${BORDER}`, borderRadius:'8px', padding:'6px 12px', minWidth:'200px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', background:CARD, border:`1px solid ${BORDER}`, borderRadius:'8px', padding:'6px 12px', minWidth:'200px' }}>
             <svg width="13" height="13" fill="none" viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="5" stroke={MUTED} strokeWidth="1.5"/><path d="M10.5 10.5 14 14" stroke={MUTED} strokeWidth="1.5" strokeLinecap="round"/></svg>
             <span style={{ fontSize:'12px', color:MUTED }}>Search tasks, people...</span>
           </div>
@@ -989,17 +989,17 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         </div>
 
         <div onClick={() => { if (kpi.hasProjRisk) setTab('conflicts'); }}
-          style={{ background:kpi.hasProjRisk?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasProjRisk?'#7F1D1D':BORDER}`, minWidth:'130px', cursor:kpi.hasProjRisk?'pointer':'default', position:'relative', flex:1 }}>
+          style={{ background:kpi.hasProjRisk?STATUS_TOKENS.DANGER_SUBTLE:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasProjRisk?STATUS_TOKENS.DANGER_BORDER:BORDER}`, minWidth:'130px', cursor:kpi.hasProjRisk?'pointer':'default', position:'relative', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.hasProjRisk?'#FCA5A5':MUTED }}>Project Risk</span>
-            {kpi.hasProjRisk && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
+            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.hasProjRisk?STATUS_TOKENS.DANGER_TEXT:MUTED }}>Project Risk</span>
+            {kpi.hasProjRisk && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4" strokeLinecap="round"/></svg>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.hasProjRisk?'#FCA5A5':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.hasProjRisk?projRisk.length:'—'}</span>
-            {kpi.hasProjRisk && projRisk[0] && <span style={{ fontSize:'13px', color:'#FCA5A5', fontWeight:'600' }}>({projRisk[0].id})</span>}
+            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.hasProjRisk?STATUS_TOKENS.DANGER_TEXT:MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.hasProjRisk?projRisk.length:'—'}</span>
+            {kpi.hasProjRisk && projRisk[0] && <span style={{ fontSize:'13px', color:STATUS_TOKENS.DANGER_TEXT, fontWeight:'600' }}>({projRisk[0].id})</span>}
           </div>
           {kpi.hasProjRisk
-            ? <div style={{ fontSize:'11px', color:'#F87171', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
+            ? <div style={{ fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT2, marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
             : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>No issues</div>
           }
           {showResolver && kpi.conflicts>0 && (
@@ -1008,17 +1008,17 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         </div>
 
         <div onClick={() => { if (kpi.hasCrossRisk) setTab('conflicts'); }}
-          style={{ background:kpi.hasCrossRisk?'#3B1219':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasCrossRisk?'#7F1D1D':BORDER}`, minWidth:'130px', cursor:kpi.hasCrossRisk?'pointer':'default', flex:1 }}>
+          style={{ background:kpi.hasCrossRisk?STATUS_TOKENS.DANGER_SUBTLE:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasCrossRisk?STATUS_TOKENS.DANGER_BORDER:BORDER}`, minWidth:'130px', cursor:kpi.hasCrossRisk?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.hasCrossRisk?'#FCA5A5':MUTED }}>Cross Project Risk</span>
-            {kpi.hasCrossRisk && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke="#FCA5A5" strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke="#FCA5A5" strokeWidth="1.4" strokeLinecap="round"/></svg>}
+            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.hasCrossRisk?STATUS_TOKENS.DANGER_TEXT:MUTED }}>Cross Project Risk</span>
+            {kpi.hasCrossRisk && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4" strokeLinecap="round"/></svg>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.hasCrossRisk?'#FCA5A5':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.hasCrossRisk?crossRisk.length:'—'}</span>
-            {kpi.hasCrossRisk && crossRisk[0] && <span style={{ fontSize:'13px', color:'#FCA5A5', fontWeight:'600' }}>({crossRisk[0].id})</span>}
+            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.hasCrossRisk?STATUS_TOKENS.DANGER_TEXT:MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.hasCrossRisk?crossRisk.length:'—'}</span>
+            {kpi.hasCrossRisk && crossRisk[0] && <span style={{ fontSize:'13px', color:STATUS_TOKENS.DANGER_TEXT, fontWeight:'600' }}>({crossRisk[0].id})</span>}
           </div>
           {kpi.hasCrossRisk
-            ? <div style={{ fontSize:'11px', color:'#F87171', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
+            ? <div style={{ fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT2, marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
             : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>No issues</div>
           }
         </div>
@@ -1027,17 +1027,17 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
             tasks rather than projects: fragile is a per-task property of the
             schedule's tightness, not a project-level health metric. */}
         <div onClick={() => { if (kpi.fragile > 0) setTab('conflicts'); }}
-          style={{ background:kpi.fragile>0?'#2D2200':CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.fragile>0?'#92400E':BORDER}`, minWidth:'130px', cursor:kpi.fragile>0?'pointer':'default', flex:1 }}>
+          style={{ background:kpi.fragile>0?STATUS_TOKENS.WARN_SUBTLE2:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.fragile>0?STATUS_TOKENS.WARN_BORDER:BORDER}`, minWidth:'130px', cursor:kpi.fragile>0?'pointer':'default', flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.fragile>0?'#FBBF24':MUTED }}>Fragile Tasks</span>
-            {kpi.fragile>0 && <span style={{ fontSize:'14px', color:'#FBBF24', fontWeight:'800', lineHeight:'1' }}>~</span>}
+            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.fragile>0?STATUS_TOKENS.WARN_BADGE:MUTED }}>Fragile Tasks</span>
+            {kpi.fragile>0 && <span style={{ fontSize:'14px', color:STATUS_TOKENS.WARN_BADGE, fontWeight:'800', lineHeight:'1' }}>~</span>}
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.fragile>0?'#FBBF24':MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.fragile>0?kpi.fragile:'—'}</span>
-            {kpi.fragile>0 && <span style={{ fontSize:'13px', color:'#FBBF24', fontWeight:'600' }}>task{kpi.fragile===1?'':'s'}</span>}
+            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.fragile>0?STATUS_TOKENS.WARN_BADGE:MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.fragile>0?kpi.fragile:'—'}</span>
+            {kpi.fragile>0 && <span style={{ fontSize:'13px', color:STATUS_TOKENS.WARN_BADGE, fontWeight:'600' }}>task{kpi.fragile===1?'':'s'}</span>}
           </div>
           {kpi.fragile>0
-            ? <div style={{ fontSize:'11px', color:'#FBBF24', marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
+            ? <div style={{ fontSize:'11px', color:STATUS_TOKENS.WARN_BADGE, marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
             : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>None</div>
           }
         </div>
@@ -1052,7 +1052,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
           Import
         </button>
         <button onClick={onClear}
-          style={{ display:'flex', alignItems:'center', gap:'6px', padding:'7px 16px', borderRadius:'8px', border:`1px solid #7F1D1D`, background:'transparent', color:'#F87171', fontSize:'12px', cursor:'pointer', fontWeight:'500' }}>
+          style={{ display:'flex', alignItems:'center', gap:'6px', padding:'7px 16px', borderRadius:'8px', border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, background:'transparent', color:STATUS_TOKENS.DANGER_TEXT2, fontSize:'12px', cursor:'pointer', fontWeight:'500' }}>
           Clear Data
         </button>
         <button onClick={onNewProject}

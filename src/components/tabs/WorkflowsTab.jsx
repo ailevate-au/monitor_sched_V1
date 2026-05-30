@@ -4,13 +4,13 @@
 
 import { useState } from 'react';
 import { loadWorkflows, saveWorkflows } from '../../storage/persist.jsx';
-import { CARD, BORDER, ORANGE, SURFACE, TEXT, MUTED } from '../../theme.jsx';
+import { CARD, BORDER, ORANGE, SURFACE, TEXT, MUTED, CANVAS, INSET, STATUS_TOKENS } from '../../theme.jsx';
 
 // WorkflowsTab uses 'BG' for the page background in a couple of places; use SURFACE.
 const BG = SURFACE;
 
 export function WorkflowsTab() {
-  const INPUT = { width:'100%', padding:'6px 9px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:'#0F0F18', color:TEXT, fontSize:'12px', outline:'none', boxSizing:'border-box', fontFamily:'inherit' };
+  const INPUT = { width:'100%', padding:'6px 9px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:INSET, color:TEXT, fontSize:'12px', outline:'none', boxSizing:'border-box', fontFamily:'inherit' };
 
   const [workflows, setWorkflows] = useState(() => loadWorkflows());
   const [expanded,  setExpanded]  = useState(null);    // workflow id being viewed
@@ -105,7 +105,7 @@ export function WorkflowsTab() {
       {!showForm && wfList.length > 0 && (
         <div>
           {/* Table header */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px', gap:'0', borderBottom:`1px solid ${BORDER}`, background:'#0A0A0F' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px', gap:'0', borderBottom:`1px solid ${BORDER}`, background:CANVAS }}>
             {['Workflow Name', 'Tasks', ''].map((h, i) => (
               <div key={i} style={{ padding:'10px 16px', fontSize:'11px', color:MUTED, fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.06em' }}>{h}</div>
             ))}
@@ -113,9 +113,9 @@ export function WorkflowsTab() {
           {wfList.map((wf, wi) => (
             <div key={wf.id}>
               {/* Row */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px', background: wi%2===0 ? BG : '#0F0F18', borderBottom:`1px solid ${BORDER}` }}
-                onMouseEnter={e=>e.currentTarget.style.background='#1E2535'}
-                onMouseLeave={e=>e.currentTarget.style.background=wi%2===0?BG:'#0F0F18'}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px', background: wi%2===0 ? BG : INSET, borderBottom:`1px solid ${BORDER}` }}
+                onMouseEnter={e=>e.currentTarget.style.background=CARD}
+                onMouseLeave={e=>e.currentTarget.style.background=wi%2===0?BG:INSET}>
                 <div style={{ padding:'12px 16px', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' }}
                   onClick={() => setExpanded(expanded === wf.id ? null : wf.id)}>
                   <span style={{ fontSize:'10px', color:MUTED, transition:'transform 0.15s', display:'inline-block', transform: expanded===wf.id ? 'rotate(90deg)' : 'none' }}>▶</span>
@@ -128,12 +128,12 @@ export function WorkflowsTab() {
                     onMouseEnter={e=>e.currentTarget.style.color=ORANGE} onMouseLeave={e=>e.currentTarget.style.color=MUTED}>✎</button>
                   <button onClick={() => deleteWf(wf.id)}
                     style={{ width:'26px', height:'26px', borderRadius:'6px', border:`1px solid ${BORDER}`, background:'transparent', cursor:'pointer', color:MUTED, fontSize:'13px', display:'flex', alignItems:'center', justifyContent:'center' }}
-                    onMouseEnter={e=>e.currentTarget.style.color='#EF4444'} onMouseLeave={e=>e.currentTarget.style.color=MUTED}>🗑</button>
+                    onMouseEnter={e=>e.currentTarget.style.color=STATUS_TOKENS.DANGER} onMouseLeave={e=>e.currentTarget.style.color=MUTED}>🗑</button>
                 </div>
               </div>
               {/* Expanded task list */}
               {expanded === wf.id && (
-                <div style={{ background:'#0A0A0F', borderBottom:`1px solid ${BORDER}`, padding:'10px 24px 14px' }}>
+                <div style={{ background:CANVAS, borderBottom:`1px solid ${BORDER}`, padding:'10px 24px 14px' }}>
                   <div style={{ display:'grid', gridTemplateColumns:'32px 1fr 120px 120px', gap:'0', marginBottom:'6px' }}>
                     {['Seq','Task Name','Role','Deps'].map((h,i) => (
                       <div key={i} style={{ padding:'5px 8px', fontSize:'10px', color:MUTED, fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.06em' }}>{h}</div>
@@ -187,7 +187,7 @@ export function WorkflowsTab() {
               const prevSeqs = formTasks.slice(0, i).map(x => x.seq);
               return (
                 <div key={i} style={{ display:'grid', gridTemplateColumns:'32px 1fr 120px 140px 24px', gap:'6px', marginBottom:'6px', alignItems:'center' }}>
-                  <div style={{ fontSize:'12px', fontWeight:'700', color:ORANGE, textAlign:'center', background:'#F9731615', borderRadius:'5px', padding:'6px 0', border:`1px solid ${ORANGE}40` }}>{t.seq}</div>
+                  <div style={{ fontSize:'12px', fontWeight:'700', color:ORANGE, textAlign:'center', background:ORANGE+'15', borderRadius:'5px', padding:'6px 0', border:`1px solid ${ORANGE}40` }}>{t.seq}</div>
                   <input value={t.name} onChange={e => updateFT(i,'name',e.target.value)} placeholder="Task name" style={INPUT} />
                   <input value={t.role} onChange={e => updateFT(i,'role',e.target.value)} placeholder="Role" style={INPUT} />
                   {/* Dep selector */}
@@ -204,7 +204,7 @@ export function WorkflowsTab() {
                     {/* Dep letter toggles */}
                     {prevSeqs.map(seq => (
                       <button key={seq} onClick={() => toggleDep(i, seq)}
-                        style={{ padding:'3px 8px', borderRadius:'5px', border:`1px solid ${t.deps.includes(seq) ? ORANGE : BORDER}`, background: t.deps.includes(seq) ? '#F9731620' : 'transparent', cursor:'pointer', fontSize:'10px', fontWeight:'700', color: t.deps.includes(seq) ? ORANGE : MUTED }}>
+                        style={{ padding:'3px 8px', borderRadius:'5px', border:`1px solid ${t.deps.includes(seq) ? ORANGE : BORDER}`, background: t.deps.includes(seq) ? ORANGE+'20' : 'transparent', cursor:'pointer', fontSize:'10px', fontWeight:'700', color: t.deps.includes(seq) ? ORANGE : MUTED }}>
                         {seq}
                       </button>
                     ))}
@@ -222,7 +222,7 @@ export function WorkflowsTab() {
             </button>
           </div>
 
-          {formError && <div style={{ marginBottom:'12px', padding:'8px 12px', borderRadius:'7px', background:'#3B1219', border:'1px solid #7F1D1D', color:'#FCA5A5', fontSize:'12px' }}>{formError}</div>}
+          {formError && <div style={{ marginBottom:'12px', padding:'8px 12px', borderRadius:'7px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, color:STATUS_TOKENS.DANGER_TEXT, fontSize:'12px' }}>{formError}</div>}
 
           <div style={{ display:'flex', gap:'10px', justifyContent:'flex-end' }}>
             <button onClick={() => setShowForm(false)} style={{ padding:'8px 16px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', color:MUTED, fontSize:'13px', cursor:'pointer' }}>Cancel</button>

@@ -6,7 +6,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useSched } from '../context.jsx';
 import { fmtDate as fd } from '../engine/dates.jsx';
-import { DPX, RH, BH, HH, LW, ALL_MONS, CARD, BORDER, ORANGE, TEXT, MUTED } from '../theme.jsx';
+import { DPX, RH, BH, HH, LW, ALL_MONS, CARD, BORDER, BORDER_HI, ORANGE, TEXT, MUTED, FAINT, CANVAS, SURFACE, INSET, PANEL, TASK_BLUE, STATUS_TOKENS } from '../theme.jsx';
 
 export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
   const { rawTasks, projs, people, tdepMap, base, todayDay, periods } = useSched();
@@ -80,20 +80,20 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
   const ht = hov ? tasks.find(t => t.id === hov) : null;
 
   return (
-    <div style={{ background:'#13131A' }}>
+    <div style={{ background:SURFACE }}>
       {/* Mini toolbar */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderBottom:`1px solid ${BORDER}`, background:CARD }}>
         <div style={{ display:'flex', alignItems:'center', gap:'16px' }}>
           <span style={{ fontSize:'12px', fontWeight:'600', color:TEXT }}>{conflicts.length} conflict{conflicts.length!==1?'s':''}</span>
-          {depViolations.length > 0 && <span style={{ fontSize:'12px', fontWeight:'600', color:'#FBBF24' }}>{depViolations.length} dep. violation{depViolations.length!==1?'s':''}</span>}
+          {depViolations.length > 0 && <span style={{ fontSize:'12px', fontWeight:'600', color:STATUS_TOKENS.WARN_BADGE }}>{depViolations.length} dep. violation{depViolations.length!==1?'s':''}</span>}
           <span style={{ fontSize:'11px', color:MUTED }}>{involvedPeople.length} people affected</span>
         </div>
         {/* Legend */}
         <div style={{ display:'flex', alignItems:'center', gap:'14px', marginRight:'8px' }}>
           {[
-            { color:'#EF4444', label:'Conflict' },
-            { color:'#F59E0B', label:'Dep. Violation', dashed:true },
-            { color:'#6366F1', label:'Clean task', dim:true },
+            { color:STATUS_TOKENS.DANGER, label:'Conflict' },
+            { color:STATUS_TOKENS.WARN, label:'Dep. Violation', dashed:true },
+            { color:STATUS_TOKENS.INFO_INDIGO, label:'Clean task', dim:true },
           ].map(l => (
             <div key={l.label} style={{ display:'flex', alignItems:'center', gap:'5px' }}>
               <div style={{ width:'20px', height:'8px', borderRadius:'3px', background:l.dim?l.color+'50':l.color, border:l.dashed?`1px dashed ${l.color}`:'none' }} />
@@ -116,7 +116,7 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
         <div style={{ width:LW, flexShrink:0, zIndex:5, boxShadow:'4px 0 10px rgba(0,0,0,0.4)' }}>
           <svg width={LW} height={totalH} style={{ display:'block', fontFamily:'-apple-system,system-ui,sans-serif', overflow:'visible' }}>
             {/* Header bg */}
-            <rect x={0} y={0} width={LW} height={HH} fill="#0A0A0F" />
+            <rect x={0} y={0} width={LW} height={HH} fill={CANVAS} />
             <line x1={0} y1={HH} x2={LW} y2={HH} stroke={BORDER} strokeWidth="1" />
             {/* Person rows */}
             {rows.map(({ per, allTasks: pt }, i) => {
@@ -127,17 +127,17 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
               const hasDV = pt.some(t => t.isDV && !t.isC && !t.isF);
               return (
                 <g key={per.name}>
-                  <rect x={0} y={y} width={LW} height={RH} fill={i%2===0?'#13131A':'#0F0F18'} />
+                  <rect x={0} y={y} width={LW} height={RH} fill={i%2===0?SURFACE:INSET} />
                   <circle cx={22} cy={midY} r={13} fill={per.color+'25'} />
                   <circle cx={22} cy={midY} r={13} fill="none" stroke={per.color} strokeWidth="1.5" />
                   <text x={22} y={midY+1} textAnchor="middle" dominantBaseline="middle" fill={per.color} fontSize="8" fontWeight="700">{per.init}</text>
                   <text x={42} y={midY-6} fill={TEXT} fontSize="12" fontWeight="600">{per.name}</text>
                   <text x={42} y={midY+8} fill={MUTED} fontSize="9.5">{per.role.split(' ')[0]}</text>
-                  {hasC  && <circle cx={LW-10} cy={y+12} r={6} fill="#EF4444" />}
+                  {hasC  && <circle cx={LW-10} cy={y+12} r={6} fill={STATUS_TOKENS.DANGER} />}
                   {hasC  && <text x={LW-10} y={y+12} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8" fontWeight="700">!</text>}
-                  {hasF && !hasC && <circle cx={LW-10} cy={y+12} r={6} fill="#FBBF24" />}
-                  {hasF && !hasC && <text x={LW-10} y={y+12} textAnchor="middle" dominantBaseline="middle" fill="#0F172A" fontSize="10" fontWeight="800" dy="0.5">~</text>}
-                  {hasDV && !hasC && !hasF && <circle cx={LW-10} cy={y+12} r={6} fill="#F59E0B" />}
+                  {hasF && !hasC && <circle cx={LW-10} cy={y+12} r={6} fill={STATUS_TOKENS.WARN_BADGE} />}
+                  {hasF && !hasC && <text x={LW-10} y={y+12} textAnchor="middle" dominantBaseline="middle" fill={TEXT} fontSize="10" fontWeight="800" dy="0.5">~</text>}
+                  {hasDV && !hasC && !hasF && <circle cx={LW-10} cy={y+12} r={6} fill={STATUS_TOKENS.WARN} />}
                   {hasDV && !hasC && !hasF && <text x={LW-10} y={y+12} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8" fontWeight="700">⊗</text>}
                   <line x1={0} y1={y+RH} x2={LW} y2={y+RH} stroke={BORDER} strokeWidth="0.8" />
                 </g>
@@ -158,8 +158,8 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
               const x2 = nextMon ? Math.min(tx(nextMon.d), totalW) : totalW;
               return (
                 <g key={m.n+i}>
-                  <rect x={x1} y={0} width={x2-x1} height={HH*0.52} fill={i%2?'#17171F':'#1C1C27'} />
-                  <text x={(x1+x2)/2} y={HH*0.52/2+4} textAnchor="middle" fill="#9CA3AF" fontSize="11" fontWeight="500">{m.n} 2026</text>
+                  <rect x={x1} y={0} width={x2-x1} height={HH*0.52} fill={i%2?PANEL:CARD} />
+                  <text x={(x1+x2)/2} y={HH*0.52/2+4} textAnchor="middle" fill={FAINT} fontSize="11" fontWeight="500">{m.n} 2026</text>
                   <line x1={x1} y1={0} x2={x1} y2={totalH} stroke={BORDER} strokeWidth="0.5" />
                 </g>
               );
@@ -176,8 +176,8 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
                 const wx2 = tx(m.d + (w+1) * wSpan);
                 return (
                   <g key={`${i}-w${w}`}>
-                    <rect x={wx1} y={HH*0.52} width={wx2-wx1} height={HH*0.48} fill={w%2?'#13131A':'#17171F'} />
-                    <text x={(wx1+wx2)/2} y={HH*0.52+HH*0.48/2+4} textAnchor="middle" fill="#374151" fontSize="9.5" fontWeight="500">W{w+1}</text>
+                    <rect x={wx1} y={HH*0.52} width={wx2-wx1} height={HH*0.48} fill={w%2?SURFACE:PANEL} />
+                    <text x={(wx1+wx2)/2} y={HH*0.52+HH*0.48/2+4} textAnchor="middle" fill={BORDER_HI} fontSize="9.5" fontWeight="500">W{w+1}</text>
                     <line x1={wx1} y1={HH*0.52} x2={wx1} y2={totalH} stroke={BORDER} strokeWidth="0.3" opacity="0.6" />
                   </g>
                 );
@@ -207,7 +207,7 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
               const midY = y + RH / 2;
               return (
                 <g key={per.name}>
-                  <rect x={0} y={y} width={totalW} height={RH} fill={i%2===0?'#13131A':'#0F0F18'} />
+                  <rect x={0} y={y} width={totalW} height={RH} fill={i%2===0?SURFACE:INSET} />
                   <line x1={0} y1={y+RH} x2={totalW} y2={y+RH} stroke={BORDER} strokeWidth="0.8" />
                   {pt.filter(t => t.cd > 0 && t.sd + t.cd > minDay && t.sd < maxDay).map(t => {
                     const x = tx(t.sd);
@@ -220,8 +220,8 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
 
                     // Colour by status: red for conflict, yellow for fragile,
                     // amber for dep-violation, neutral steel-blue otherwise.
-                    const barColor = isC ? '#EF4444' : isF ? '#FBBF24' : isDV ? '#F59E0B' : '#5B7B9A';
-                    const barFill  = isC ? '#EF444430' : isF ? '#FBBF2425' : isDV ? '#F59E0B25' : '#5B7B9A18';
+                    const barColor = isC ? STATUS_TOKENS.DANGER : isF ? STATUS_TOKENS.WARN_BADGE : isDV ? STATUS_TOKENS.WARN : TASK_BLUE;
+                    const barFill  = isC ? STATUS_TOKENS.DANGER+'30' : isF ? STATUS_TOKENS.WARN_BADGE+'25' : isDV ? STATUS_TOKENS.WARN+'25' : TASK_BLUE+'18';
                     // Focus: bright if hot (conflict/fragile) or hovered, otherwise muted.
                     // No-hover state: hot = 1, everything else = 0.22.
                     // Hovering a non-hot bar brightens that one specifically.
@@ -252,19 +252,19 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
                         {/* Badge */}
                         {isC && (
                           <g style={{ pointerEvents:'none' }}>
-                            <circle cx={x+w-7} cy={by0+7} r={5.5} fill="#EF4444" />
+                            <circle cx={x+w-7} cy={by0+7} r={5.5} fill={STATUS_TOKENS.DANGER} />
                             <text x={x+w-7} y={by0+7} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="7" fontWeight="800">!</text>
                           </g>
                         )}
                         {isF && !isC && (
                           <g style={{ pointerEvents:'none' }}>
-                            <circle cx={x+w-7} cy={by0+7} r={5.5} fill="#FBBF24" />
-                            <text x={x+w-7} y={by0+7} textAnchor="middle" dominantBaseline="middle" fill="#0F172A" fontSize="9" fontWeight="800" dy="0.5">~</text>
+                            <circle cx={x+w-7} cy={by0+7} r={5.5} fill={STATUS_TOKENS.WARN_BADGE} />
+                            <text x={x+w-7} y={by0+7} textAnchor="middle" dominantBaseline="middle" fill={TEXT} fontSize="9" fontWeight="800" dy="0.5">~</text>
                           </g>
                         )}
                         {isDV && (
                           <g style={{ pointerEvents:'none' }}>
-                            <circle cx={x+w-7} cy={by0+7} r={5.5} fill="#F59E0B" />
+                            <circle cx={x+w-7} cy={by0+7} r={5.5} fill={STATUS_TOKENS.WARN} />
                             <text x={x+w-7} y={by0+7} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="7" fontWeight="800">⊗</text>
                           </g>
                         )}
@@ -285,7 +285,7 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
           const cNames = ht.cw.map(id => { const c=tasks.find(x=>x.id===id); return c?`${c.id} (${c.person})`:id; });
           const dvNames = (ht.dvDeps||[]).map(id => { const d=tasks.find(x=>x.id===id); return d?`${id} – ${d.name}`:id; });
           return (
-            <div style={{ position:'absolute', left:ttx, top:tty, pointerEvents:'none', background:'#0A0A0F', color:TEXT, padding:'11px 14px', borderRadius:'10px', fontSize:'12px', lineHeight:'1.6', boxShadow:'0 10px 30px rgba(0,0,0,0.5)', width:'210px', zIndex:50, borderTop:`3px solid ${pc}` }}>
+            <div style={{ position:'absolute', left:ttx, top:tty, pointerEvents:'none', background:CANVAS, color:TEXT, padding:'11px 14px', borderRadius:'10px', fontSize:'12px', lineHeight:'1.6', boxShadow:'0 10px 30px rgba(0,0,0,0.5)', width:'210px', zIndex:50, borderTop:`3px solid ${pc}` }}>
               <div style={{ fontWeight:'700', marginBottom:'3px' }}>{ht.name}</div>
               <div style={{ color:MUTED, fontSize:'10px', marginBottom:'7px' }}>{ht.projId} · {ht.id} · {ht.person}</div>
               <div style={{ display:'grid', gridTemplateColumns:'52px 1fr', gap:'2px 8px', fontSize:'11px' }}>
@@ -294,12 +294,12 @@ export function ConflictMiniGantt({ tasks, conflicts, depViolations }) {
                 <span style={{ color:MUTED }}>Duration</span><span>{ht.dur} wdays</span>
               </div>
               {ht.isC && cNames.length > 0 && (
-                <div style={{ marginTop:'8px', padding:'5px 8px', background:'rgba(239,68,68,0.15)', borderRadius:'5px', fontSize:'10px', color:'#FCA5A5', fontWeight:'700', border:'1px solid rgba(239,68,68,0.3)' }}>
+                <div style={{ marginTop:'8px', padding:'5px 8px', background:'rgba(239,68,68,0.15)', borderRadius:'5px', fontSize:'10px', color:STATUS_TOKENS.DANGER_TEXT, fontWeight:'700', border:'1px solid rgba(239,68,68,0.3)' }}>
                   ⚠ Clashes with: {cNames.join(', ')}
                 </div>
               )}
               {ht.isDV && dvNames.length > 0 && (
-                <div style={{ marginTop:'8px', padding:'5px 8px', background:'rgba(245,158,11,0.15)', borderRadius:'5px', fontSize:'10px', color:'#FDE68A', fontWeight:'700', border:'1px solid rgba(245,158,11,0.3)', borderStyle:'dashed' }}>
+                <div style={{ marginTop:'8px', padding:'5px 8px', background:'rgba(245,158,11,0.15)', borderRadius:'5px', fontSize:'10px', color:STATUS_TOKENS.WARN_TEXT, fontWeight:'700', border:'1px solid rgba(245,158,11,0.3)', borderStyle:'dashed' }}>
                   ⊗ Needs: {dvNames.join(', ')}
                 </div>
               )}

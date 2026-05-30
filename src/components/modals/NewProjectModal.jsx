@@ -4,10 +4,10 @@
 
 import { useState } from 'react';
 import { loadWorkflows, loadDepOverrides, saveDepOverrides } from '../../storage/persist.jsx';
-import { PROJ_COLORS, PERSON_COLORS, CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
+import { PROJ_COLORS, PERSON_COLORS, CARD, BORDER, ORANGE, TEXT, MUTED, INSET, PANEL, CANVAS, FAINT, STATUS_TOKENS } from '../../theme.jsx';
 
 export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose }) {
-  const INPUT  = { width:'100%', padding:'8px 10px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'#0F0F18', color:TEXT, fontSize:'12px', outline:'none', boxSizing:'border-box', fontFamily:'inherit' };
+  const INPUT  = { width:'100%', padding:'8px 10px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:INSET, color:TEXT, fontSize:'12px', outline:'none', boxSizing:'border-box', fontFamily:'inherit' };
 
   const nextId = (() => {
     const nums = existingProjs.map(p => parseInt(p.id.replace(/\D/g,''))).filter(n => !isNaN(n));
@@ -115,7 +115,7 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
     <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(10,10,15,0.7)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background:CARD, borderRadius:'16px', width:'700px', maxWidth:'95vw', maxHeight:'88vh', display:'flex', flexDirection:'column', boxShadow:'0 24px 64px rgba(0,0,0,0.5)', border:`1px solid ${BORDER}`, overflow:'hidden' }}>
-        <div style={{ padding:'18px 22px 14px', borderBottom:`2px solid ${ORANGE}`, background:'#17171F', flexShrink:0 }}>
+        <div style={{ padding:'18px 22px 14px', borderBottom:`2px solid ${ORANGE}`, background:PANEL, flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <div>
               <div style={{ fontSize:'15px', fontWeight:'700', color:TEXT }}>New Project</div>
@@ -144,19 +144,19 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
           <label style={{
             display:'flex', alignItems:'center', gap:'10px',
             padding:'10px 12px', marginBottom:'16px',
-            background: isDraft ? '#6B728018' : '#0F0F18',
-            border: `1px solid ${isDraft ? '#6B728055' : BORDER}`,
+            background: isDraft ? MUTED+'18' : INSET,
+            border: `1px solid ${isDraft ? MUTED+'55' : BORDER}`,
             borderRadius:'8px', cursor:'pointer',
           }}>
             <input type="checkbox" checked={isDraft} onChange={e => setIsDraft(e.target.checked)}
-              style={{ accentColor: '#9CA3AF', cursor:'pointer' }} />
+              style={{ accentColor: FAINT, cursor:'pointer' }} />
             <div style={{ flex:1 }}>
               <div style={{ fontSize:'12px', fontWeight:'600', color:TEXT }}>Create as draft</div>
               <div style={{ fontSize:'11px', color:MUTED, marginTop:'2px' }}>
                 Reserve the project ID and metadata now; add tasks later. Drafts don't appear on the Gantt as active work and don't count toward KPIs.
               </div>
             </div>
-            {isDraft && <span style={{ fontSize:'9px', fontWeight:'700', color:'#9CA3AF', background:'#0B0B12', padding:'2px 7px', borderRadius:'4px', letterSpacing:'0.06em', border:`1px solid ${BORDER}` }}>DRAFT</span>}
+            {isDraft && <span style={{ fontSize:'9px', fontWeight:'700', color:FAINT, background:CANVAS, padding:'2px 7px', borderRadius:'4px', letterSpacing:'0.06em', border:`1px solid ${BORDER}` }}>DRAFT</span>}
           </label>
 
           {!isDraft && <div>
@@ -166,7 +166,7 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
                 <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                   <span style={{ fontSize:'11px', color:MUTED }}>From workflow:</span>
                   <select onChange={e => { if (e.target.value) loadWorkflow(e.target.value); e.target.value=''; }}
-                    style={{ padding:'4px 8px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:'#0F0F18', color:TEXT, fontSize:'11px', outline:'none', cursor:'pointer' }}>
+                    style={{ padding:'4px 8px', borderRadius:'7px', border:`1px solid ${BORDER}`, background:INSET, color:TEXT, fontSize:'11px', outline:'none', cursor:'pointer' }}>
                     <option value=''>\u2014 select \u2014</option>
                     {wfList.map(wf => <option key={wf.id} value={wf.id}>{wf.name}</option>)}
                   </select>
@@ -184,7 +184,7 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
               const prevSeqs = tasks.slice(0, i).map(x => x.seq);
               return (
                 <div key={i} style={{ display:'grid', gridTemplateColumns:'32px 1fr 100px 90px 90px 160px 24px', gap:'6px', marginBottom:'6px', alignItems:'center' }}>
-                  <div style={{ fontSize:'12px', fontWeight:'700', color:ORANGE, textAlign:'center', background:'#F9731615', borderRadius:'5px', padding:'6px 0', border:`1px solid ${ORANGE}40` }}>{projId}-{t.seq}</div>
+                  <div style={{ fontSize:'12px', fontWeight:'700', color:ORANGE, textAlign:'center', background:ORANGE+'15', borderRadius:'5px', padding:'6px 0', border:`1px solid ${ORANGE}40` }}>{projId}-{t.seq}</div>
                   <input value={t.name}   onChange={e => updateTask(i,'name',  e.target.value)} placeholder="Task name"   style={INPUT} />
                   <input value={t.person} onChange={e => updateTask(i,'person',e.target.value)} placeholder="Name" list="known-people-npm" style={INPUT} />
                   <input value={t.start}  onChange={e => updateTask(i,'start', e.target.value)} placeholder="DD/MM/YYYY" style={INPUT} />
@@ -200,7 +200,7 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
                     </div>
                     {prevSeqs.map(seq => (
                       <button key={seq} onClick={() => toggleDep(i, seq)}
-                        style={{ padding:'3px 8px', borderRadius:'5px', border:`1px solid ${t.deps.includes(seq) ? ORANGE : BORDER}`, background: t.deps.includes(seq) ? '#F9731620' : 'transparent', cursor:'pointer', fontSize:'10px', fontWeight:'700', color: t.deps.includes(seq) ? ORANGE : MUTED }}>
+                        style={{ padding:'3px 8px', borderRadius:'5px', border:`1px solid ${t.deps.includes(seq) ? ORANGE : BORDER}`, background: t.deps.includes(seq) ? ORANGE+'20' : 'transparent', cursor:'pointer', fontSize:'10px', fontWeight:'700', color: t.deps.includes(seq) ? ORANGE : MUTED }}>
                         {seq}
                       </button>
                     ))}
@@ -224,10 +224,10 @@ export function NewProjectModal({ existingProjs, existingPeople, onAdd, onClose 
             </button>
           </div>}
 
-          {error && <div style={{ marginTop:'12px', padding:'9px 12px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D', color:'#FCA5A5', fontSize:'12px' }}>{error}</div>}
+          {error && <div style={{ marginTop:'12px', padding:'9px 12px', borderRadius:'8px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, color:STATUS_TOKENS.DANGER_TEXT, fontSize:'12px' }}>{error}</div>}
         </div>
 
-        <div style={{ padding:'14px 22px', borderTop:`1px solid ${BORDER}`, display:'flex', gap:'10px', justifyContent:'flex-end', flexShrink:0, background:'#17171F' }}>
+        <div style={{ padding:'14px 22px', borderTop:`1px solid ${BORDER}`, display:'flex', gap:'10px', justifyContent:'flex-end', flexShrink:0, background:PANEL }}>
           <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', color:MUTED, fontSize:'13px', cursor:'pointer' }}>Cancel</button>
           <button onClick={handleAdd} style={{ padding:'8px 22px', borderRadius:'8px', border:'none', background:ORANGE, color:'white', fontSize:'13px', fontWeight:'700', cursor:'pointer' }}>
             {isDraft ? 'Create Draft' : 'Create Project'}

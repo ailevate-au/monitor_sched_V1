@@ -6,7 +6,7 @@ import { useSched } from '../../context.jsx';
 import { fmtDate as fd } from '../../engine/dates.jsx';
 import { computeStatus, STATUS_STYLES } from '../../engine/status.jsx';
 import { loadSchedEdits, saveSchedEdits } from '../../storage/persist.jsx';
-import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
+import { CARD, BORDER, BORDER_HI, ORANGE, TEXT, MUTED, FAINT, CANVAS, SURFACE, INSET, CHIP, TASK_BLUE, TASK_BLUE_HI, STATUS_TOKENS } from '../../theme.jsx';
 import { ConfirmModal } from '../ConfirmModal.jsx';
 
 export function ProjectViewTab({
@@ -194,8 +194,8 @@ export function ProjectViewTab({
           'Confirm'
         }
         confirmColor={
-          pendingConfirm?.type === 'complete'   ? '#10B981' :
-          pendingConfirm?.type === 'delete'     ? '#EF4444' :
+          pendingConfirm?.type === 'complete'   ? STATUS_TOKENS.OK :
+          pendingConfirm?.type === 'delete'     ? STATUS_TOKENS.DANGER :
           ORANGE
         }
         onConfirm={() => {
@@ -233,9 +233,9 @@ export function ProjectViewTab({
 
       {/* ── Ready-to-conclude banner ──────────────────────────────────────── */}
       {subTab === 'table' && readyToConclude.size > 0 && (
-        <div style={{ padding:'10px 16px', background:'#0D2B1E', borderBottom:`1px solid #065F46` }}>
+        <div style={{ padding:'10px 16px', background:STATUS_TOKENS.OK_SUBTLE, borderBottom:`1px solid ${STATUS_TOKENS.OK_BORDER}` }}>
           <div style={{ display:'flex', alignItems:'center', gap:'14px', flexWrap:'wrap' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:'#10B981' }}>
+            <span style={{ fontSize:'12px', fontWeight:'600', color:STATUS_TOKENS.OK }}>
               ✓ {readyToConclude.size} project{readyToConclude.size===1?'':'s'} ready to conclude:
             </span>
             {[...readyToConclude].map(pid => {
@@ -244,8 +244,8 @@ export function ProjectViewTab({
                 <button key={pid}
                   onClick={() => setPendingConfirm({ type:'complete', projId:pid, projName:p?.name })}
                   style={{
-                    padding:'5px 12px', borderRadius:'6px', border:'1px solid #10B98155',
-                    background:'#10B98122', color:'#10B981', fontSize:'11px', fontWeight:'700',
+                    padding:'5px 12px', borderRadius:'6px', border:`1px solid ${STATUS_TOKENS.OK}55`,
+                    background:STATUS_TOKENS.OK+'22', color:STATUS_TOKENS.OK, fontSize:'11px', fontWeight:'700',
                     cursor:'pointer',
                   }}>
                   ✓ Conclude {pid}{p?.name ? ' · ' + p.name : ''}
@@ -258,7 +258,7 @@ export function ProjectViewTab({
 
       {/* ── History view ──────────────────────────────────────────────────── */}
       {subTab === 'history' && (
-        <div style={{ padding:'12px 16px', background:'#13131A', minHeight:'400px' }}>
+        <div style={{ padding:'12px 16px', background:SURFACE, minHeight:'400px' }}>
           {safeHistory.length === 0 ? (
             <div style={{ padding:'40px 16px', textAlign:'center', color:MUTED, fontSize:'13px' }}>
               No history yet. Changes you commit will appear here.
@@ -270,12 +270,12 @@ export function ProjectViewTab({
                 const dt = new Date(entry.timestamp);
                 const when = dt.toLocaleString();
                 const kindColor =
-                  entry.kind === 'upload'        ? '#10B981' :
-                  entry.kind === 'shiftTimeline' ? '#F97316' :
-                  entry.kind === 'reassignTasks' ? '#7DA3C8' :
-                  entry.kind === 'deleteTask' || entry.kind === 'deleteProject' ? '#EF4444' :
-                  entry.kind === 'addTasks'      ? '#10B981' :
-                  entry.kind === 'revert'        ? '#FBBF24' :
+                  entry.kind === 'upload'        ? STATUS_TOKENS.OK :
+                  entry.kind === 'shiftTimeline' ? ORANGE :
+                  entry.kind === 'reassignTasks' ? TASK_BLUE_HI :
+                  entry.kind === 'deleteTask' || entry.kind === 'deleteProject' ? STATUS_TOKENS.DANGER :
+                  entry.kind === 'addTasks'      ? STATUS_TOKENS.OK :
+                  entry.kind === 'revert'        ? STATUS_TOKENS.WARN_BADGE :
                   MUTED;
                 const kindLabel = {
                   upload:'Upload', shiftTimeline:'Shift', reassignTasks:'Reassign',
@@ -304,7 +304,7 @@ export function ProjectViewTab({
                     </div>
                     {/* Expanded details */}
                     {isExpanded && entry.details && entry.details.length > 0 && (
-                      <div style={{ background:'#0F0F18', padding:'8px 14px 12px', borderTop:`1px solid ${BORDER}` }}>
+                      <div style={{ background:INSET, padding:'8px 14px 12px', borderTop:`1px solid ${BORDER}` }}>
                         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'11px' }}>
                           <thead>
                             <tr style={{ color:MUTED, textAlign:'left' }}>
@@ -321,7 +321,7 @@ export function ProjectViewTab({
                                 <td style={{ padding:'4px 6px' }}>{d.name || d.taskId}</td>
                                 <td style={{ padding:'4px 6px', color:MUTED }}>{d.proj || '—'}</td>
                                 <td style={{ padding:'4px 6px' }}>{d.from || d.person || '—'}</td>
-                                {(entry.kind === 'reassignTasks') && <td style={{ padding:'4px 6px', color:'#7DA3C8' }}>{d.to}</td>}
+                                {(entry.kind === 'reassignTasks') && <td style={{ padding:'4px 6px', color:TASK_BLUE_HI }}>{d.to}</td>}
                                 {(entry.kind === 'upload' || entry.kind === 'addTasks') && <td style={{ padding:'4px 6px', color:MUTED, fontVariantNumeric:'tabular-nums' }}>{d.start} → {d.end}</td>}
                               </tr>
                             ))}
@@ -339,7 +339,7 @@ export function ProjectViewTab({
 
       {/* ── Drafts view ───────────────────────────────────────────────────── */}
       {subTab === 'drafts' && (
-        <div style={{ padding:'16px 24px', background:'#13131A', minHeight:'400px' }}>
+        <div style={{ padding:'16px 24px', background:SURFACE, minHeight:'400px' }}>
           {draftProjList.length === 0 ? (
             <div style={{ padding:'40px 16px', textAlign:'center', color:MUTED, fontSize:'13px', background:CARD, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
               No draft projects yet. Create a project with "Create as draft" enabled in the New Project dialog to plan ahead before assigning tasks.
@@ -358,7 +358,7 @@ export function ProjectViewTab({
                     <div style={{ display:'flex', alignItems:'center', gap:'14px' }}>
                       <div style={{
                         width:'42px', height:'42px', borderRadius:'10px',
-                        background:'#6B728022', border:`1px solid #6B728055`,
+                        background:MUTED+'22', border:`1px solid ${MUTED}55`,
                         display:'flex', alignItems:'center', justifyContent:'center',
                         fontSize:'14px', color:MUTED, fontWeight:'800', flexShrink:0,
                       }}>◌</div>
@@ -366,7 +366,7 @@ export function ProjectViewTab({
                         <div style={{ fontSize:'14px', fontWeight:'700', color:TEXT, marginBottom:'2px', display:'flex', alignItems:'center', gap:'8px' }}>
                           {p.id}
                           {p.name && p.name !== p.id && <span style={{ color:MUTED, fontWeight:'500' }}>· {p.name}</span>}
-                          <span style={{ fontSize:'9px', fontWeight:'700', color:MUTED, background:'#1A1A24', padding:'2px 7px', borderRadius:'4px', letterSpacing:'0.06em' }}>DRAFT</span>
+                          <span style={{ fontSize:'9px', fontWeight:'700', color:MUTED, background:CHIP, padding:'2px 7px', borderRadius:'4px', letterSpacing:'0.06em' }}>DRAFT</span>
                         </div>
                         <div style={{ fontSize:'11px', color:MUTED }}>
                           {startStr && endStr ? `${startStr} → ${endStr}` :
@@ -397,7 +397,7 @@ export function ProjectViewTab({
                           display:'flex', alignItems:'center', justifyContent:'center',
                           flexShrink:0,
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.borderColor = '#EF4444'+'55'; }}
+                        onMouseEnter={e => { e.currentTarget.style.color = STATUS_TOKENS.DANGER; e.currentTarget.style.borderColor = STATUS_TOKENS.DANGER+'55'; }}
                         onMouseLeave={e => { e.currentTarget.style.color = MUTED; e.currentTarget.style.borderColor = BORDER; }}>
                         🗑
                       </button>
@@ -412,7 +412,7 @@ export function ProjectViewTab({
 
       {/* ── Completed view ────────────────────────────────────────────────── */}
       {subTab === 'completed' && (
-        <div style={{ padding:'16px 24px', background:'#13131A', minHeight:'400px' }}>
+        <div style={{ padding:'16px 24px', background:SURFACE, minHeight:'400px' }}>
           {completedProjList.length === 0 ? (
             <div style={{ padding:'40px 16px', textAlign:'center', color:MUTED, fontSize:'13px', background:CARD, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
               No completed projects yet. When you finish a project's tasks, you'll be able to conclude it from the Table tab.
@@ -430,9 +430,9 @@ export function ProjectViewTab({
                     <div style={{ display:'flex', alignItems:'center', gap:'14px' }}>
                       <div style={{
                         width:'42px', height:'42px', borderRadius:'10px',
-                        background:'#10B98122', border:`1px solid #10B98155`,
+                        background:STATUS_TOKENS.OK+'22', border:`1px solid ${STATUS_TOKENS.OK}55`,
                         display:'flex', alignItems:'center', justifyContent:'center',
-                        fontSize:'18px', color:'#10B981', fontWeight:'800', flexShrink:0,
+                        fontSize:'18px', color:STATUS_TOKENS.OK, fontWeight:'800', flexShrink:0,
                       }}>✓</div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:'14px', fontWeight:'700', color:TEXT, marginBottom:'2px' }}>
@@ -472,7 +472,7 @@ export function ProjectViewTab({
         <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', borderRight:`1px solid ${BORDER}`, cursor:'pointer' }}
           onClick={() => setShowCompleted(v => !v)}>
           <span style={{ fontSize:'13px', fontWeight:'500', color:TEXT }}>Completed</span>
-          <div style={{ width:'36px', height:'20px', borderRadius:'10px', background: showCompleted ? '#10B981' : '#374151', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+          <div style={{ width:'36px', height:'20px', borderRadius:'10px', background: showCompleted ? STATUS_TOKENS.OK : BORDER_HI, position:'relative', transition:'background 0.2s', flexShrink:0 }}>
             <div style={{ position:'absolute', top:'3px', left: showCompleted ? '18px' : '3px', width:'14px', height:'14px', borderRadius:'50%', background:'white', transition:'left 0.2s' }} />
           </div>
         </div>
@@ -495,7 +495,7 @@ export function ProjectViewTab({
       <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'calc(100vh - 310px)' }}>
         <table style={{ borderCollapse:'collapse', width:'100%', fontSize:'13px' }}>
           <thead style={{ position:'sticky', top:0, zIndex:10 }}>
-            <tr style={{ background:'#0A0A0F', borderBottom:`2px solid ${BORDER}` }}>
+            <tr style={{ background:CANVAS, borderBottom:`2px solid ${BORDER}` }}>
               {COLS.map(col => {
                 const active = isFiltered(col.key);
                 const isOpen = openFilter === col.key;
@@ -532,7 +532,7 @@ export function ProjectViewTab({
 
                     {/* Dropdown */}
                     {col.filterable && isOpen && (
-                      <div style={{ position:'absolute', top:'100%', left:0, zIndex:100, background:'#1C1C27',
+                      <div style={{ position:'absolute', top:'100%', left:0, zIndex:100, background:CARD,
                         border:`1px solid ${BORDER}`, borderRadius:'8px', boxShadow:'0 8px 24px rgba(0,0,0,0.6)',
                         minWidth:'200px', maxWidth:'280px', overflow:'hidden' }}
                         onClick={e => e.stopPropagation()}>
@@ -542,13 +542,13 @@ export function ProjectViewTab({
                           <input value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
                             placeholder="Search..."
                             style={{ width:'100%', padding:'5px 8px', borderRadius:'6px', border:`1px solid ${BORDER}`,
-                              background:'#0A0A0F', color:TEXT, fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
+                              background:CANVAS, color:TEXT, fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
                         </div>
 
                         {/* Select all / Clear */}
                         <div style={{ display:'flex', gap:'0', borderBottom:`1px solid ${BORDER}` }}>
                           <button onClick={() => selectAll(col.key)}
-                            style={{ flex:1, padding:'6px 10px', border:'none', background:'transparent', color:'#38BDF8',
+                            style={{ flex:1, padding:'6px 10px', border:'none', background:'transparent', color:STATUS_TOKENS.INFO,
                               fontSize:'11px', cursor:'pointer', fontWeight:'600', borderRight:`1px solid ${BORDER}` }}>
                             Select All
                           </button>
@@ -571,7 +571,7 @@ export function ProjectViewTab({
                               <div key={val} onClick={() => toggleFilterVal(col.key, val)}
                                 style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 12px',
                                   cursor:'pointer', borderBottom:`1px solid ${BORDER}20` }}
-                                onMouseEnter={e => e.currentTarget.style.background='#2A2A3A'}
+                                onMouseEnter={e => e.currentTarget.style.background=BORDER}
                                 onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                                 {/* Checkbox */}
                                 <div style={{ width:'14px', height:'14px', borderRadius:'3px', flexShrink:0,
@@ -614,17 +614,17 @@ export function ProjectViewTab({
             {sorted.map((r, ri) => {
               const proj  = projs.find(p => p.id === r.projId);
               const ss    = SS[r.status] || SS['On Track'];
-              const baseBg = ri%2===0 ? '#13131A' : '#0F0F18';
+              const baseBg = ri%2===0 ? SURFACE : INSET;
               // Project/task IDs reflect the row's status colour, so a quick
               // scan down the column tells you what needs attention.
               const rowColor =
-                r.status === 'Conflict'  ? '#EF4444' :
-                r.status === 'Overdue'   ? '#F59E0B' :
-                r.status === 'Completed' ? '#10B981' :
-                '#5B7B9A';
+                r.status === 'Conflict'  ? STATUS_TOKENS.DANGER :
+                r.status === 'Overdue'   ? STATUS_TOKENS.WARN :
+                r.status === 'Completed' ? STATUS_TOKENS.OK :
+                TASK_BLUE;
               return (
                 <tr key={r.id} style={{ background:baseBg, borderBottom:`1px solid ${BORDER}` }}
-                  onMouseEnter={e=>e.currentTarget.style.background='#1E2535'}
+                  onMouseEnter={e=>e.currentTarget.style.background=CARD}
                   onMouseLeave={e=>e.currentTarget.style.background=baseBg}>
                   <td style={{ padding:'10px 16px', borderRight:`1px solid ${BORDER}` }}>
                     <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
@@ -651,17 +651,17 @@ export function ProjectViewTab({
                       ref={el => { if (el) { const row = el.closest('tr'); row.onmouseenter = () => el.style.opacity='1'; row.onmouseleave = () => el.style.opacity='0'; } }}>
                       <button title={r.isCompleted ? 'Mark incomplete' : 'Mark complete'}
                         onClick={() => onToggleComplete && onToggleComplete(r.id)}
-                        style={{ width:'26px', height:'26px', borderRadius:'6px', border:`1px solid ${r.isCompleted ? '#065F46' : BORDER}`, background: r.isCompleted ? '#0D2B1E' : 'transparent', cursor:'pointer', color: r.isCompleted ? '#34D399' : '#9CA3AF', fontSize:'13px', display:'flex', alignItems:'center', justifyContent:'center' }}
-                        onMouseEnter={e=>e.currentTarget.style.color='#34D399'}
-                        onMouseLeave={e=>e.currentTarget.style.color= r.isCompleted ? '#34D399' : '#9CA3AF'}>✓</button>
+                        style={{ width:'26px', height:'26px', borderRadius:'6px', border:`1px solid ${r.isCompleted ? STATUS_TOKENS.OK_BORDER : BORDER}`, background: r.isCompleted ? STATUS_TOKENS.OK_SUBTLE : 'transparent', cursor:'pointer', color: r.isCompleted ? STATUS_TOKENS.OK_HI : FAINT, fontSize:'13px', display:'flex', alignItems:'center', justifyContent:'center' }}
+                        onMouseEnter={e=>e.currentTarget.style.color=STATUS_TOKENS.OK_HI}
+                        onMouseLeave={e=>e.currentTarget.style.color= r.isCompleted ? STATUS_TOKENS.OK_HI : FAINT}>✓</button>
                       <button title="Edit timeline" onClick={() => onEdit && onEdit({ type:'task', id:r.id })}
-                        style={{ width:'26px', height:'26px', borderRadius:'6px', border:`1px solid ${BORDER}`, background:'transparent', cursor:'pointer', color:'#9CA3AF', fontSize:'13px', display:'flex', alignItems:'center', justifyContent:'center' }}
+                        style={{ width:'26px', height:'26px', borderRadius:'6px', border:`1px solid ${BORDER}`, background:'transparent', cursor:'pointer', color:FAINT, fontSize:'13px', display:'flex', alignItems:'center', justifyContent:'center' }}
                         onMouseEnter={e=>e.currentTarget.style.color=ORANGE}
-                        onMouseLeave={e=>e.currentTarget.style.color='#9CA3AF'}>✎</button>
+                        onMouseLeave={e=>e.currentTarget.style.color=FAINT}>✎</button>
                       <button title="Delete task" onClick={() => onDelete && onDelete({ type:'deleteTask', taskId:r.id })}
-                        style={{ width:'26px', height:'26px', borderRadius:'6px', border:`1px solid ${BORDER}`, background:'transparent', cursor:'pointer', color:'#9CA3AF', fontSize:'13px', display:'flex', alignItems:'center', justifyContent:'center' }}
-                        onMouseEnter={e=>e.currentTarget.style.color='#EF4444'}
-                        onMouseLeave={e=>e.currentTarget.style.color='#9CA3AF'}>🗑</button>
+                        style={{ width:'26px', height:'26px', borderRadius:'6px', border:`1px solid ${BORDER}`, background:'transparent', cursor:'pointer', color:FAINT, fontSize:'13px', display:'flex', alignItems:'center', justifyContent:'center' }}
+                        onMouseEnter={e=>e.currentTarget.style.color=STATUS_TOKENS.DANGER}
+                        onMouseLeave={e=>e.currentTarget.style.color=FAINT}>🗑</button>
                     </div>
                   </td>
                 </tr>

@@ -1,6 +1,8 @@
 // ── Task status ──────────────────────────────────────────────────────────────
 // Single source of truth for how a task's status is determined and styled.
 
+import { STATUS_TOKENS, TASK_BLUE, TASK_BLUE_HI, TASK_BLUE_LO, TASK_BLUE_LO2, TASK_BLUE_BG, TASK_BLUE_BG2 } from '../theme.jsx';
+
 export const ALL_STATUSES = ['On Track', 'In Progress', 'Completed', 'Overdue', 'Conflict', 'Fragile'];
 
 /**
@@ -23,13 +25,13 @@ export function computeStatus(t, statusOverrides, todayMs) {
 
 /** Badge styles keyed by status. Each value: { bg, tx, bd } (background, text, border). */
 export const STATUS_STYLES = {
-  'Completed':   { bg:'#0D2B1E', tx:'#34D399', bd:'#065F46' },
-  'Overdue':     { bg:'#3B1219', tx:'#FB923C', bd:'#C2410C' },
-  'Conflict':    { bg:'#3B1219', tx:'#F87171', bd:'#7F1D1D' },
-  'Fragile':     { bg:'#2D2200', tx:'#FBBF24', bd:'#92400E' },
+  'Completed':   { bg:STATUS_TOKENS.OK_SUBTLE,     tx:STATUS_TOKENS.OK_HI,       bd:STATUS_TOKENS.OK_BORDER },
+  'Overdue':     { bg:STATUS_TOKENS.DANGER_SUBTLE, tx:STATUS_TOKENS.WARN_BADGE,  bd:STATUS_TOKENS.WARN_BORDER },
+  'Conflict':    { bg:STATUS_TOKENS.DANGER_SUBTLE, tx:STATUS_TOKENS.DANGER_TEXT2,bd:STATUS_TOKENS.DANGER_BORDER },
+  'Fragile':     { bg:STATUS_TOKENS.WARN_SUBTLE2,  tx:STATUS_TOKENS.WARN_BADGE,  bd:STATUS_TOKENS.WARN_BORDER },
   // On Track / In Progress share the steel-blue family — only exceptional states
   // get warning colours. In Progress uses a brighter text/border to mirror the
   // brighter outline on the Gantt bar.
-  'In Progress': { bg:'#1A2632', tx:'#7DA3C8', bd:'#3D5A78' },
-  'On Track':    { bg:'#161E27', tx:'#5B7B9A', bd:'#2E4256' },
+  'In Progress': { bg:TASK_BLUE_BG,  tx:TASK_BLUE_HI, bd:TASK_BLUE_LO },
+  'On Track':    { bg:TASK_BLUE_BG2, tx:TASK_BLUE,    bd:TASK_BLUE_LO2 },
 };

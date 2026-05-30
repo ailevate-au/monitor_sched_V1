@@ -9,10 +9,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { parsePeopleOnly } from '../../engine/xlsx.jsx';
-import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
-
-const STATUS_GREEN = '#10B981';
-const STATUS_AMBER = '#F59E0B';
+import { CARD, BORDER, ORANGE, TEXT, MUTED, SURFACE, INSET, PANEL, CHIP, STATUS_TOKENS, STATUS_GREEN, STATUS_AMBER } from '../../theme.jsx';
 
 export function ImportPeopleModal({ existingPeople, onImport, onClose }) {
   const fileRef = useRef(null);
@@ -93,7 +90,7 @@ export function ImportPeopleModal({ existingPeople, onImport, onClose }) {
           {stage === 'idle' && (
             <div style={{
               padding:'30px 16px', textAlign:'center',
-              background:'#13131A', borderRadius:'10px',
+              background:SURFACE, borderRadius:'10px',
               border:`1.5px dashed ${BORDER}`,
             }}>
               <div style={{ fontSize:'13px', color:TEXT, marginBottom:'14px' }}>
@@ -125,16 +122,16 @@ export function ImportPeopleModal({ existingPeople, onImport, onClose }) {
 
           {/* ERROR */}
           {stage === 'error' && (
-            <div style={{ padding:'14px 16px', borderRadius:'8px', background:'#3B1219', border:'1px solid #7F1D1D' }}>
-              <div style={{ fontSize:'12px', fontWeight:'700', color:'#FCA5A5', marginBottom:'4px' }}>
+            <div style={{ padding:'14px 16px', borderRadius:'8px', background:STATUS_TOKENS.DANGER_SUBTLE, border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}` }}>
+              <div style={{ fontSize:'12px', fontWeight:'700', color:STATUS_TOKENS.DANGER_TEXT, marginBottom:'4px' }}>
                 Could not read the file
               </div>
-              <div style={{ fontSize:'11px', color:'#FCA5A5' }}>{error}</div>
+              <div style={{ fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT }}>{error}</div>
               <button onClick={() => { setStage('idle'); setError(''); }}
                 style={{
                   marginTop:'12px', padding:'6px 14px', borderRadius:'6px',
-                  border:`1px solid #7F1D1D`, background:'transparent',
-                  color:'#FCA5A5', fontSize:'11px', fontWeight:'600', cursor:'pointer',
+                  border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, background:'transparent',
+                  color:STATUS_TOKENS.DANGER_TEXT, fontSize:'11px', fontWeight:'600', cursor:'pointer',
                 }}>
                 Try again
               </button>
@@ -152,11 +149,11 @@ export function ImportPeopleModal({ existingPeople, onImport, onClose }) {
                     {splitByExisting.add.map(p => (
                       <div key={p.name} style={{
                         display:'flex', alignItems:'center', gap:'10px',
-                        padding:'6px 10px', borderRadius:'6px', background:'#0F0F18',
+                        padding:'6px 10px', borderRadius:'6px', background:INSET,
                       }}>
                         <span style={{ fontSize:'12px', fontWeight:'600', color:TEXT, flex:1 }}>{p.name}</span>
                         {p.role && (
-                          <span style={{ fontSize:'10px', color:MUTED, padding:'2px 6px', background:'#1A1A24', borderRadius:'4px' }}>{p.role}</span>
+                          <span style={{ fontSize:'10px', color:MUTED, padding:'2px 6px', background:CHIP, borderRadius:'4px' }}>{p.role}</span>
                         )}
                         {p.weeklyCapacity && p.weeklyCapacity !== 5 && (
                           <span style={{ fontSize:'10px', color:MUTED }}>{p.weeklyCapacity}d/wk</span>
@@ -192,7 +189,7 @@ export function ImportPeopleModal({ existingPeople, onImport, onClose }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding:'14px 24px', borderTop:`1px solid ${BORDER}`, display:'flex', justifyContent:'flex-end', gap:'10px', background:'#13131A', borderRadius:'0 0 12px 12px' }}>
+        <div style={{ padding:'14px 24px', borderTop:`1px solid ${BORDER}`, display:'flex', justifyContent:'flex-end', gap:'10px', background:PANEL, borderRadius:'0 0 12px 12px' }}>
           <button onClick={onClose}
             style={{
               padding:'8px 16px', borderRadius:'7px',
@@ -220,7 +217,7 @@ export function ImportPeopleModal({ existingPeople, onImport, onClose }) {
 // ── Local primitive ─────────────────────────────────────────────────────────
 function SummaryRow({ color, icon, title, body, children }) {
   return (
-    <div style={{ padding:'12px 14px', background:'#13131A', borderRadius:'8px', border:`1px solid ${BORDER}` }}>
+    <div style={{ padding:'12px 14px', background:SURFACE, borderRadius:'8px', border:`1px solid ${BORDER}` }}>
       <div style={{ display:'flex', alignItems:'flex-start', gap:'10px' }}>
         <span style={{
           width:'22px', height:'22px', flexShrink:0,

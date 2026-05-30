@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react';
 import { useSched } from '../../context.jsx';
 import { fmtDate as fd } from '../../engine/dates.jsx';
-import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
+import { CARD, BORDER, ORANGE, TEXT, MUTED, FAINT, CANVAS, SURFACE, PANEL, STATUS_TOKENS } from '../../theme.jsx';
 import { ConflictMiniGantt } from '../ConflictMiniGantt.jsx';
 
 export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCancelReassign, onEdit }) {
@@ -109,15 +109,15 @@ export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCance
     if (onCancelReassign) onCancelReassign(taskId);
   };
 
-  const RED = '#EF4444';
+  const RED = STATUS_TOKENS.DANGER;
 
   return (
-    <div style={{ background:'#13131A', minHeight:'500px' }}>
+    <div style={{ background:SURFACE, minHeight:'500px' }}>
 
       {/* Sub-tab bar */}
       <div style={{ display:'flex', alignItems:'center', padding:'0 20px', borderBottom:`1px solid ${BORDER}`, background:CARD }}>
         <div style={{ display:'flex', alignItems:'center', gap:'0', flex:1 }}>
-          {[{id:'conflicts',l:'Conflicts',n:conflicts.length,c:'#EF4444'},{id:'fragile',l:'Fragile',n:fragile.length,c:'#FBBF24'},{id:'gantt',l:'Gantt View'}].map(t => (
+          {[{id:'conflicts',l:'Conflicts',n:conflicts.length,c:STATUS_TOKENS.DANGER},{id:'fragile',l:'Fragile',n:fragile.length,c:STATUS_TOKENS.WARN_BADGE},{id:'gantt',l:'Gantt View'}].map(t => (
             <button key={t.id} onClick={() => setSubTab(t.id)}
               style={{ padding:'13px 16px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight: subTab===t.id ? '600' : '400', color: subTab===t.id ? ORANGE : MUTED, borderBottom: subTab===t.id ? `2px solid ${ORANGE}` : '2px solid transparent', marginBottom:'-1px', display:'flex', alignItems:'center', gap:'7px' }}>
               {t.l}
@@ -194,7 +194,7 @@ export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCance
 
                   {/* Expanded detail */}
                   {isOpen && (
-                    <div style={{ background:'#17171F', border:`1px solid ${BORDER}`, borderTop:'none', borderRadius:'0 0 8px 8px', padding:'12px 16px' }}>
+                    <div style={{ background:PANEL, border:`1px solid ${BORDER}`, borderTop:'none', borderRadius:'0 0 8px 8px', padding:'12px 16px' }}>
                       {pendingTs.map(t => {
                         const pc = projs.find(p => p.id === t.projId)?.color || '#888';
                         const cNames = t.cw.map(id => { const c = tasks.find(x => x.id === id); return c ? `${c.projId} – ${c.name}` : id; });
@@ -203,21 +203,21 @@ export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCance
                         const bestCandidate = candidates.find(c => !c.score.disqualified);
                         return (
                           <div key={t.id} style={{ marginBottom:'8px' }}>
-                            <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 12px', borderRadius: isTaskOpen ? '6px 6px 0 0' : '6px', background:'#1C1C27', border:`1px solid #3B1219`, borderBottom: isTaskOpen ? 'none' : undefined }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 12px', borderRadius: isTaskOpen ? '6px 6px 0 0' : '6px', background:CARD, border:`1px solid ${STATUS_TOKENS.DANGER_SUBTLE}`, borderBottom: isTaskOpen ? 'none' : undefined }}>
                               <div style={{ width:'3px', height:'36px', borderRadius:'2px', background:pc, flexShrink:0 }} />
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:'12px', fontWeight:'600', color:TEXT }}>{t.name}</div>
                                 <div style={{ fontSize:'11px', color:MUTED, marginTop:'2px' }}>{t.projId} · {t.id} · {fd(t.s)} → {fd(t.e)}</div>
-                                {cNames.length > 0 && <div style={{ fontSize:'10px', color:'#F87171', marginTop:'3px' }}>Clashes: {cNames.join(', ')}</div>}
+                                {cNames.length > 0 && <div style={{ fontSize:'10px', color:STATUS_TOKENS.DANGER_TEXT2, marginTop:'3px' }}>Clashes: {cNames.join(', ')}</div>}
                               </div>
                               <button onClick={e => { e.stopPropagation(); setActiveTask(isTaskOpen ? null : t.id); }}
-                                style={{ padding:'4px 12px', borderRadius:'6px', border:`1px solid #7F1D1D`, background: isTaskOpen ? '#3B1219' : 'transparent', cursor:'pointer', fontSize:'11px', color:'#F87171', fontWeight:'600', flexShrink:0 }}>
+                                style={{ padding:'4px 12px', borderRadius:'6px', border:`1px solid ${STATUS_TOKENS.DANGER_BORDER}`, background: isTaskOpen ? STATUS_TOKENS.DANGER_SUBTLE : 'transparent', cursor:'pointer', fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT2, fontWeight:'600', flexShrink:0 }}>
                                 {isTaskOpen ? 'Cancel' : 'Reassign ▾'}
                               </button>
                             </div>
                             {isTaskOpen && (
-                              <div style={{ background:'#13131A', border:`1px solid #3B1219`, borderTop:'none', borderRadius:'0 0 6px 6px', padding:'10px 12px' }}>
-                                <div style={{ fontSize:'10px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'8px' }}>Reassign to same-role colleague <span style={{ fontWeight:'500', textTransform:'none', letterSpacing:'normal', color:'#6B7280' }}>· ranked by schedule margin</span></div>
+                              <div style={{ background:SURFACE, border:`1px solid ${STATUS_TOKENS.DANGER_SUBTLE}`, borderTop:'none', borderRadius:'0 0 6px 6px', padding:'10px 12px' }}>
+                                <div style={{ fontSize:'10px', fontWeight:'700', color:MUTED, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'8px' }}>Reassign to same-role colleague <span style={{ fontWeight:'500', textTransform:'none', letterSpacing:'normal', color:MUTED }}>· ranked by schedule margin</span></div>
                                 {candidates.map((c, ci) => {
                                   const dq = c.score.disqualified;
                                   const isRec = !dq && bestCandidate && c.name === bestCandidate.name;
@@ -229,18 +229,18 @@ export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCance
                                   return (
                                     <div key={c.name}
                                       onClick={dq ? undefined : () => handleReassign(t.id, c.name, t.person)}
-                                      style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', borderRadius:'6px', cursor: dq ? 'not-allowed' : 'pointer', marginBottom:'4px', background:'#1C1C27', border: isRec ? `1px solid #10B981` : `1px solid ${BORDER}`, opacity: dq ? 0.5 : 1 }}
-                                      onMouseEnter={e => { if (!dq) e.currentTarget.style.background='#2A2A3A'; }}
-                                      onMouseLeave={e => e.currentTarget.style.background='#1C1C27'}>
+                                      style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', borderRadius:'6px', cursor: dq ? 'not-allowed' : 'pointer', marginBottom:'4px', background:CARD, border: isRec ? `1px solid ${STATUS_TOKENS.OK}` : `1px solid ${BORDER}`, opacity: dq ? 0.5 : 1 }}
+                                      onMouseEnter={e => { if (!dq) e.currentTarget.style.background=BORDER; }}
+                                      onMouseLeave={e => e.currentTarget.style.background=CARD}>
                                       <div style={{ width:'26px', height:'26px', borderRadius:'50%', background:c.color+'30', border:`1.5px solid ${c.color}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'9px', fontWeight:'700', color:c.color, flexShrink:0 }}>{c.init}</div>
                                       <div style={{ flex:1, minWidth:0 }}>
                                         <div style={{ fontSize:'12px', fontWeight:'600', color:TEXT, display:'flex', alignItems:'center', gap:'6px' }}>
                                           {c.name}
-                                          {isRec && <span style={{ fontSize:'9px', fontWeight:'700', color:'#10B981', background:'#0D2B1E', padding:'2px 6px', borderRadius:'10px', border:'1px solid #065F46', letterSpacing:'0.04em' }}>RECOMMENDED</span>}
+                                          {isRec && <span style={{ fontSize:'9px', fontWeight:'700', color:STATUS_TOKENS.OK, background:STATUS_TOKENS.OK_SUBTLE, padding:'2px 6px', borderRadius:'10px', border:`1px solid ${STATUS_TOKENS.OK_BORDER}`, letterSpacing:'0.04em' }}>RECOMMENDED</span>}
                                         </div>
                                         <div style={{ fontSize:'10px', color:MUTED }}>{marginLabel}</div>
                                       </div>
-                                      <span style={{ fontSize:'11px', color: dq ? '#EF4444' : (c.score.margin >= 3 ? '#10B981' : '#F59E0B'), fontWeight:'600', flexShrink:0 }}>
+                                      <span style={{ fontSize:'11px', color: dq ? STATUS_TOKENS.DANGER : (c.score.margin >= 3 ? STATUS_TOKENS.OK : STATUS_TOKENS.WARN), fontWeight:'600', flexShrink:0 }}>
                                         {dq ? 'Conflict' : (c.score.margin === Infinity ? 'Open' : `${c.score.margin}d`)}
                                       </span>
                                     </div>
@@ -254,18 +254,18 @@ export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCance
 
                       {resolvedTs.length > 0 && (
                         <div style={{ marginTop:'8px' }}>
-                          <div style={{ fontSize:'10px', color:'#10B981', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:'6px' }}>✓ Reassigned</div>
+                          <div style={{ fontSize:'10px', color:STATUS_TOKENS.OK, fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:'6px' }}>✓ Reassigned</div>
                           {resolvedTs.map(t => {
                             const ra = reassigned[t.id];
                             const toPer = people.find(p => p.name === ra.to);
                             return (
-                              <div key={t.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 12px', borderRadius:'6px', background:'#0D2B1E', border:'1px solid #065F46', marginBottom:'4px' }}>
+                              <div key={t.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 12px', borderRadius:'6px', background:STATUS_TOKENS.OK_SUBTLE, border:`1px solid ${STATUS_TOKENS.OK_BORDER}`, marginBottom:'4px' }}>
                                 <div style={{ flex:1 }}>
                                   <div style={{ fontSize:'12px', fontWeight:'600', color:TEXT }}>{t.name}</div>
                                   <div style={{ fontSize:'11px', color:MUTED, display:'flex', alignItems:'center', gap:'6px', marginTop:'2px' }}>
                                     <span style={{ textDecoration:'line-through' }}>{ra.from}</span>
                                     <span>→</span>
-                                    <span style={{ color:'#10B981', fontWeight:'600' }}>{ra.to}</span>
+                                    <span style={{ color:STATUS_TOKENS.OK, fontWeight:'600' }}>{ra.to}</span>
                                   </div>
                                 </div>
                                 <button onClick={() => undoReassign(t.id)} style={{ padding:'3px 9px', borderRadius:'6px', border:`1px solid ${BORDER}`, background:'transparent', cursor:'pointer', fontSize:'11px', color:MUTED }}>Undo</button>
@@ -283,24 +283,24 @@ export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCance
             {/* Dep violations section */}
             {depViolations.length > 0 && (
               <div style={{ marginTop:'8px' }}>
-                <div style={{ fontSize:'11px', fontWeight:'700', color:'#F59E0B', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'8px', display:'flex', alignItems:'center', gap:'6px' }}>
-                  <span style={{ width:'18px', height:'18px', borderRadius:'50%', background:'#F59E0B', color:'#0A0A0F', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'800' }}>⊗</span>
+                <div style={{ fontSize:'11px', fontWeight:'700', color:STATUS_TOKENS.WARN, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'8px', display:'flex', alignItems:'center', gap:'6px' }}>
+                  <span style={{ width:'18px', height:'18px', borderRadius:'50%', background:STATUS_TOKENS.WARN, color:CANVAS, display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'800' }}>⊗</span>
                   Dependency Violations ({depViolations.length})
                 </div>
                 {depViolations.map(t => {
                   const pc = projs.find(p => p.id === t.projId)?.color || '#888';
                   return (
-                    <div key={t.id} style={{ display:'flex', alignItems:'flex-start', gap:'10px', padding:'10px 14px', borderRadius:'8px', background:CARD, border:`1px dashed #F59E0B`, marginBottom:'5px' }}>
+                    <div key={t.id} style={{ display:'flex', alignItems:'flex-start', gap:'10px', padding:'10px 14px', borderRadius:'8px', background:CARD, border:`1px dashed ${STATUS_TOKENS.WARN}`, marginBottom:'5px' }}>
                       <div style={{ width:'3px', height:'36px', borderRadius:'2px', background:pc, flexShrink:0, marginTop:'2px' }} />
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:'12px', fontWeight:'600', color:TEXT }}>{t.name}</div>
                         <div style={{ fontSize:'11px', color:MUTED, marginTop:'2px' }}>{t.projId} · starts {fd(t.s)}</div>
                         {t.dvDeps.map((id, i) => {
                           const dep = tasks.find(x => x.id === id);
-                          return <div key={i} style={{ fontSize:'10px', color:'#F59E0B', marginTop:'3px' }}>⊗ Needs: {id} — {dep?.name} (ends {dep ? fd(dep.e) : '?'})</div>;
+                          return <div key={i} style={{ fontSize:'10px', color:STATUS_TOKENS.WARN, marginTop:'3px' }}>⊗ Needs: {id} — {dep?.name} (ends {dep ? fd(dep.e) : '?'})</div>;
                         })}
                       </div>
-                      <span style={{ fontSize:'10px', fontWeight:'700', color:'#92400E', background:'#FEF3C7', padding:'2px 8px', borderRadius:'10px', flexShrink:0, border:'1px solid #FDE68A' }}>Sequencing</span>
+                      <span style={{ fontSize:'10px', fontWeight:'700', color:STATUS_TOKENS.WARN_BORDER, background:STATUS_TOKENS.WARN_SUBTLE, padding:'2px 8px', borderRadius:'10px', flexShrink:0, border:`1px solid ${STATUS_TOKENS.WARN_TEXT}` }}>Sequencing</span>
                     </div>
                   );
                 })}
@@ -313,7 +313,7 @@ export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCance
       {subTab === 'fragile' && (
         <div style={{ padding:'16px 24px' }}>
           <div style={{ marginBottom:'12px' }}>
-            <div style={{ fontSize:'12px', fontWeight:'700', color:'#FBBF24', display:'flex', alignItems:'center', gap:'8px' }}>
+            <div style={{ fontSize:'12px', fontWeight:'700', color:STATUS_TOKENS.WARN_BADGE, display:'flex', alignItems:'center', gap:'8px' }}>
               <span style={{ fontSize:'14px', lineHeight:'1' }}>~</span>
               Fragile Tasks ({fragile.length})
             </div>
@@ -344,10 +344,10 @@ export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCance
                   <div key={t.id}
                     style={{ display:'flex', alignItems:'center', gap:'14px', padding:'12px 14px', borderBottom: i < fragile.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
                     {/* yellow ~ badge */}
-                    <div style={{ width:'26px', height:'26px', borderRadius:'50%', background:'#FBBF24'+'22', border:'1.5px solid #FBBF24', display:'flex', alignItems:'center', justifyContent:'center', color:'#FBBF24', fontSize:'13px', fontWeight:'800', flexShrink:0, lineHeight:'1' }}>~</div>
+                    <div style={{ width:'26px', height:'26px', borderRadius:'50%', background:STATUS_TOKENS.WARN_BADGE+'22', border:`1.5px solid ${STATUS_TOKENS.WARN_BADGE}`, display:'flex', alignItems:'center', justifyContent:'center', color:STATUS_TOKENS.WARN_BADGE, fontSize:'13px', fontWeight:'800', flexShrink:0, lineHeight:'1' }}>~</div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:'13px', fontWeight:'600', color:TEXT, display:'flex', alignItems:'center', gap:'8px' }}>
-                        <span style={{ color:'#FBBF24' }}>{t.projId}</span>
+                        <span style={{ color:STATUS_TOKENS.WARN_BADGE }}>{t.projId}</span>
                         <span style={{ color:MUTED, fontWeight:'400' }}>·</span>
                         <span>{t.name}</span>
                       </div>
@@ -356,7 +356,7 @@ export function ConflictsTab({ tasks, pendingReassigns, onStageReassign, onCance
                         {neighbour && (
                           <>
                             <span style={{ margin:'0 6px' }}>·</span>
-                            {gapDays === 0 ? 'Back-to-back' : `${gapDays}d slack`} {tightSide} <span style={{ color:'#9CA3AF' }}>{neighbour.name}</span>
+                            {gapDays === 0 ? 'Back-to-back' : `${gapDays}d slack`} {tightSide} <span style={{ color:FAINT }}>{neighbour.name}</span>
                           </>
                         )}
                       </div>

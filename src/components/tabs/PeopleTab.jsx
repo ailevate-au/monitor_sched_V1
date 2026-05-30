@@ -5,7 +5,7 @@ import { useState, useMemo } from 'react';
 import { useSched } from '../../context.jsx';
 import { fmtDate as fd } from '../../engine/dates.jsx';
 import { computeStatus, STATUS_STYLES } from '../../engine/status.jsx';
-import { CARD, BORDER, ORANGE, TEXT, MUTED } from '../../theme.jsx';
+import { CARD, BORDER, ORANGE, TEXT, MUTED, FAINT, CANVAS, SURFACE, INSET, STATUS_TOKENS } from '../../theme.jsx';
 import { AssignTaskModal } from '../modals/AssignTaskModal.jsx';
 import { AddPersonModal } from '../modals/AddPersonModal.jsx';
 import { ImportPeopleModal } from '../modals/ImportPeopleModal.jsx';
@@ -25,7 +25,6 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
   const [roleFilter, setRoleFilter] = useState(new Set());
   const [filterOpen, setFilterOpen] = useState(false);
 
-  const RED    = '#EF4444';
 
   const pt  = useMemo(() => sel ? tasks.filter(t => t.person === sel).sort((a, b) => a.s - b.s) : [], [tasks, sel]);
   const per = people.find(p => p.name === sel);
@@ -60,7 +59,7 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
   const personConflicts = pt.filter(t => t.isC);
 
   return (
-    <div style={{ display:'flex', minHeight:'520px', background:'#13131A' }}>
+    <div style={{ display:'flex', minHeight:'520px', background:SURFACE }}>
       {addPersonOpen && (
         <AddPersonModal
           existingPeople={people}
@@ -108,7 +107,7 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
           onClose={() => setAssignOpen(false)} />
       )}
       {/* ── Left sidebar ── */}
-      <div style={{ width:'192px', flexShrink:0, borderRight:`1px solid ${BORDER}`, background:'#0A0A0F', display:'flex', flexDirection:'column' }}>
+      <div style={{ width:'192px', flexShrink:0, borderRight:`1px solid ${BORDER}`, background:CANVAS, display:'flex', flexDirection:'column' }}>
         <div style={{ padding:'12px' }}>
           <button
             onClick={() => setAddPersonOpen(true)}
@@ -203,11 +202,11 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
             const isSelected = sel === p.name;
             return (
               <div key={p.name} onClick={() => { onSel(p.name); setSubTab('projects'); }}
-                style={{ padding:'12px', cursor:'pointer', borderBottom:`1px solid ${BORDER}`, background:isSelected?'#1E2535':'transparent', borderLeft:isSelected?`3px solid ${ORANGE}`:'3px solid transparent' }}>
-                <div style={{ fontSize:'14px', fontWeight:'600', color:isSelected?TEXT:'#C0C0D0' }}>{p.name}</div>
+                style={{ padding:'12px', cursor:'pointer', borderBottom:`1px solid ${BORDER}`, background:isSelected?CARD:'transparent', borderLeft:isSelected?`3px solid ${ORANGE}`:'3px solid transparent' }}>
+                <div style={{ fontSize:'14px', fontWeight:'600', color:isSelected?TEXT:FAINT }}>{p.name}</div>
                 <div style={{ fontSize:'11px', color:MUTED, marginTop:'2px' }}>{p.role}</div>
                 <div style={{ fontSize:'12px', color:isSelected?ORANGE:MUTED, marginTop:'4px', fontWeight:'600' }}>{p.rate}</div>
-                {pConflicts > 0 && <div style={{ fontSize:'11px', color:RED, fontWeight:'700', marginTop:'3px' }}>{pConflicts} conflicts</div>}
+                {pConflicts > 0 && <div style={{ fontSize:'11px', color:STATUS_TOKENS.DANGER, fontWeight:'700', marginTop:'3px' }}>{pConflicts} conflicts</div>}
               </div>
             );
           })}
@@ -235,10 +234,10 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
                   <div style={{ fontSize:'11px', color:MUTED, marginTop:'2px' }}>Tasks</div>
                 </div>
                 <div style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:'22px', fontWeight:'800', color:personConflicts.length>0?RED:TEXT, fontVariantNumeric:'tabular-nums' }}>
+                  <div style={{ fontSize:'22px', fontWeight:'800', color:personConflicts.length>0?STATUS_TOKENS.DANGER:TEXT, fontVariantNumeric:'tabular-nums' }}>
                     {personConflicts.length}{personConflicts.length>0&&<span style={{ fontSize:'14px' }}> ›</span>}
                   </div>
-                  <div style={{ fontSize:'11px', color:personConflicts.length>0?RED:MUTED, marginTop:'2px' }}>Conflicts</div>
+                  <div style={{ fontSize:'11px', color:personConflicts.length>0?STATUS_TOKENS.DANGER:MUTED, marginTop:'2px' }}>Conflicts</div>
                 </div>
               </div>
               <div style={{ display:'flex', gap:'8px' }}>
@@ -280,14 +279,14 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
               <div style={{ overflowX:'auto', flex:1 }}>
                 <table style={{ borderCollapse:'collapse', width:'100%', fontSize:'12px' }}>
                   <thead>
-                    <tr style={{ background:'#0A0A0F', borderBottom:`1px solid ${BORDER}` }}>
+                    <tr style={{ background:CANVAS, borderBottom:`1px solid ${BORDER}` }}>
                       {['Project','Task ID','Task Name','Start','End','Dependencies','Status'].map(col => (
                         <th key={col} style={{ padding:'10px 14px', textAlign:'left', fontSize:'12px', fontWeight:'500', color:MUTED, borderRight:`1px solid ${BORDER}`, whiteSpace:'nowrap' }}>{col}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    <tr style={{ borderBottom:`1px solid ${BORDER}`, background:'#0F0F18' }}>
+                    <tr style={{ borderBottom:`1px solid ${BORDER}`, background:INSET }}>
                       {['All','','All','','','',''].map((v,i)=>(
                         <td key={i} style={{ padding:'7px 14px', color:MUTED, fontSize:'12px', borderRight:`1px solid ${BORDER}` }}>{v}</td>
                       ))}
@@ -299,10 +298,10 @@ export function PeopleTab({ tasks, sel, onSel, statusOverrides, todayMs, onAssig
                       const nowMs2 = todayMs || (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
                       const status = computeStatus(t, statusOverrides, nowMs2);
                       const ss = STATUS_STYLES[status] || STATUS_STYLES['On Track'];
-                      const baseBg = ri%2===0 ? '#13131A' : '#0F0F18';
+                      const baseBg = ri%2===0 ? SURFACE : INSET;
                       return (
                         <tr key={t.id} style={{ background:baseBg, borderBottom:`1px solid ${BORDER}` }}
-                          onMouseEnter={e=>e.currentTarget.style.background='#1E2535'}
+                          onMouseEnter={e=>e.currentTarget.style.background=CARD}
                           onMouseLeave={e=>e.currentTarget.style.background=baseBg}>
                           <td style={{ padding:'9px 14px', borderRight:`1px solid ${BORDER}` }}><span style={{ fontWeight:'700', color:proj?.color }}>{t.projId}</span></td>
                           <td style={{ padding:'9px 14px', borderRight:`1px solid ${BORDER}` }}><span style={{ fontWeight:'600', color:proj?.color }}>{t.id}</span></td>
