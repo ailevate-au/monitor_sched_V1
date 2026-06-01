@@ -7,7 +7,7 @@ import { useSched } from '../../context.jsx';
 import { fmtDate as fd } from '../../engine/dates.jsx';
 import { normDep } from '../../engine/schedule.jsx';
 import { computeStatus } from '../../engine/status.jsx';
-import { DPX, HH, LW, PRH, RRH, SRH, SBH, ALL_MONS, BORDER, BORDER_HI, CARD, SURFACE, PANEL, CANVAS, CHIP, TEXT, MUTED, FAINT, ORANGE, ACCENT_HI, TASK_BLUE, TASK_BLUE_HI, STATUS_TOKENS } from '../../theme.jsx';
+import { DPX, HH, LW, PRH, RRH, SRH, SBH, ALL_MONS, BORDER, BORDER_HI, CARD, SURFACE, PANEL, CANVAS, CHIP, INSET, TEXT, MUTED, FAINT, ORANGE, ACCENT_HI, TASK_BLUE, TASK_BLUE_HI, STATUS_TOKENS } from '../../theme.jsx';
 import { ConfirmModal } from '../ConfirmModal.jsx';
 
 export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, pendingReassigns, onCommitAll, onCancelShift, onCancelReassign, simDelays, setSimDelays, onEdit, setAddTasksProj, onToggleComplete, statusOverrides, todayMs, effectiveCompletedIds, onCompleteProject, draftProjIds, allProjs }) {
@@ -822,37 +822,52 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
               );
             })}
 
-            {/* Week sub-header row — below month row */}
+            {/* Day sub-header row — below month row. One cell per day showing
+                the day-of-month number (SiteWize style). Weekends get a faint
+                tint. Derives day-of-month by walking the MONS month boundaries. */}
             {(() => {
-              const rows = [];
-              const weekRowY = HH * 0.55;
-              const weekRowH = HH * 0.45;
-              for (let i = 0; i < MONS.length - 1; i++) {
-                const monStart = MONS[i].d;
-                const monEnd   = MONS[i+1].d;
-                const monSpan  = monEnd - monStart;
-                const wSpan    = monSpan / 4;
-                for (let w = 0; w < 4; w++) {
-                  const wx  = txR(monStart + w * wSpan);
-                  const wx2 = txR(monStart + (w+1) * wSpan);
-                  rows.push(
-                    <g key={`${i}-w${w}`}>
-                      <rect x={wx} y={weekRowY} width={wx2-wx} height={weekRowH} fill={w%2 ? SURFACE : PANEL} />
-                      <text x={(wx+wx2)/2} y={weekRowY + weekRowH/2 + 4} textAnchor="middle" fill={MUTED} fontSize="10" fontWeight="500">W{w+1}</text>
-                      <line x1={wx} y1={weekRowY} x2={wx} y2={totalH} stroke={BORDER} strokeWidth="0.4" opacity="0.7" />
-                    </g>
-                  );
-                }
+              const cells = [];
+              const dayRowY = HH * 0.55;
+              const dayRowH = HH * 0.45;
+              // Build a quick lookup: for a given day-offset, which month does it
+              // fall in and what's the day-of-month? MONS[i].d is the offset of
+              // the 1st of that month. Day-of-month = (offset - monthStart) + 1.
+              let monIdx = 0;
+              for (let d = 0; d < TD; d++) {
+                // advance to the month containing day d
+                while (monIdx < MONS.length - 2 && MONS[monIdx + 1].d <= d) monIdx++;
+                const dom = d - MONS[monIdx].d + 1;       // day-of-month (1-based)
+                const cx = txR(d);
+                const cw = dpx;
+                // weekend tint: day 0 is the base date; approximate weekend by
+                // (d + base weekday) % 7. We don't have the exact base weekday
+                // here, so use a 7-day cycle where days 5,6 of each week shade.
+                const isWeekend = (d % 7 === 5 || d % 7 === 6);
+                cells.push(
+                  <g key={`day-${d}`}>
+                    <rect x={cx} y={dayRowY} width={cw} height={dayRowH}
+                      fill={isWeekend ? INSET : (d % 2 ? SURFACE : CARD)} />
+                    {/* Only draw the number if cells are wide enough to read */}
+                    {dpx >= 11 && (
+                      <text x={cx + cw/2} y={dayRowY + dayRowH/2 + 4} textAnchor="middle"
+                        fill={isWeekend ? FAINT : MUTED} fontSize="9.5" fontWeight="500">{dom}</text>
+                    )}
+                    <line x1={cx} y1={dayRowY} x2={cx} y2={totalH}
+                      stroke={BORDER} strokeWidth="0.4" opacity={d % 7 === 0 ? 0.7 : 0.35} />
+                  </g>
+                );
               }
-              return rows;
+              return cells;
             })()}
 
             {/* Header bottom border */}
             <line x1={0} y1={HH} x2={TD*dpx} y2={HH} stroke={BORDER} strokeWidth="1" />
 
-            {/* Weekly gridlines through chart body */}
-            {Array.from({length:Math.floor(TD/7)},(_,i)=>(i+1)*7).map(d=>(
-              <line key={d} x1={txR(d)} y1={HH} x2={txR(d)} y2={totalH} stroke={BORDER} strokeWidth="0.4" opacity="0.5" />
+            {/* Daily gridlines through chart body — week boundaries (every 7th)
+                slightly stronger so the eye can still group weeks. */}
+            {Array.from({length:TD},(_, d)=>d).filter(d=>d>0).map(d=>(
+              <line key={d} x1={txR(d)} y1={HH} x2={txR(d)} y2={totalH}
+                stroke={BORDER} strokeWidth="0.4" opacity={d % 7 === 0 ? 0.5 : 0.18} />
             ))}
 
             {/* Period highlight band */}

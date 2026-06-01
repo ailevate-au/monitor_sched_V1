@@ -195,11 +195,11 @@ export const ALL_MONS = [
 ];
 
 // ── Gantt rendering constants ───────────────────────────────────────────────
-export const DPX = 9, RH = 76, BH = 42, HH = 56, LW = 190;
-export const PRH = 52;   // project header row
-export const RRH = 44;   // role sub-header row
-export const SRH = 68;   // person leaf row
-export const SBH = 38;   // person bar height
+export const DPX = 16, RH = 76, BH = 42, HH = 56, LW = 190;
+export const PRH = 48;   // project header row
+export const RRH = 40;   // role sub-header row
+export const SRH = 48;   // person leaf row (shorter — was 68)
+export const SBH = 28;   // person bar height (shorter — was 38)
 
 // ── Roles ────────────────────────────────────────────────────────────────────
 export const ROLES = [

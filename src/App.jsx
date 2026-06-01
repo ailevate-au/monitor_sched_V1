@@ -20,7 +20,7 @@ import { parseXlsx } from './engine/xlsx.jsx';
 import { buildSched } from './engine/schedule.jsx';
 import { applyEditsToData, mutateSchedData, buildHistoryEntry, buildUploadHistoryEntry, buildRevertHistoryEntry } from './engine/edits.jsx';
 import { addW, parseDate, fmtDDMMYYYY } from './engine/dates.jsx';
-import { NAV, SURFACE, CARD, BORDER, ORANGE, TEXT, MUTED, TASK_BLUE, STATUS_TOKENS } from './theme.jsx';
+import { NAV, SURFACE, CARD, BORDER, ORANGE, TEXT, MUTED, FAINT, TASK_BLUE, STATUS_TOKENS } from './theme.jsx';
 
 import { EditModal } from './components/EditModal.jsx';
 import { ConflictResolutionPopover } from './components/ConflictResolutionPopover.jsx';
@@ -908,17 +908,35 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
     hasCrossRisk:  crossRisk.length > 0,
   };
 
-  const TAB_ITEMS = [
-    { id:'dashboard', l:'Dashboard'   },
-    { id:'gantt',     l:'Gantt Chart'  },
-    { id:'project',   l:'Project View' },
-    { id:'workflows', l:'Workflows'    },
-    { id:'conflicts', l:'Conflicts'    },
-    { id:'people',    l:'Resource'     },
+  // Sidebar navigation — grouped vertically, SiteWize-style. Each group has a
+  // small uppercase header and its screens beneath. The flat id↔tab mapping is
+  // unchanged; only the presentation is grouped. Each item carries an icon
+  // (simple inline SVG path) so the nav reads like SiteWize's.
+  const ICONS = {
+    dashboard: <><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></>,
+    project:   <><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M2 6h12"/></>,
+    gantt:     <><path d="M2 4h7M2 8h10M2 12h5"/></>,
+    workflows: <><circle cx="4" cy="4" r="2"/><circle cx="12" cy="12" r="2"/><path d="M4 6v4a2 2 0 0 0 2 2h4"/></>,
+    people:    <><circle cx="8" cy="5" r="2.5"/><path d="M3 14c0-2.5 2.2-4 5-4s5 1.5 5 4"/></>,
+    conflicts: <><path d="M8 2l6 11H2L8 2Z"/><path d="M8 7v3M8 12v.5"/></>,
+  };
+  const NAV_GROUPS = [
+    { group:'Overview',   items:[
+      { id:'dashboard', l:'Dashboard'    },
+      { id:'project',   l:'Project View' },
+    ]},
+    { group:'Scheduling', items:[
+      { id:'gantt',     l:'Gantt Timeline' },
+      { id:'workflows', l:'Workflows'      },
+    ]},
+    { group:'Resources',  items:[
+      { id:'people',    l:'Resources'    },
+      { id:'conflicts', l:'Conflicts Hub' },
+    ]},
   ];
 
   return (
-    <div style={{ fontFamily:FONT_STACK, background:SURFACE, minHeight:'100vh', color:TEXT }}>
+    <div style={{ fontFamily:FONT_STACK, background:SURFACE, minHeight:'100vh', width:'100%', color:TEXT }}>
 
       {editTarget && (
         <EditModal
@@ -946,27 +964,59 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         />
       )}
 
-      {/* Nav */}
-      <div style={{ background:NAV, padding:'0 28px', height:'52px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${BORDER}` }}>
-        <div style={{ display:'flex', alignItems:'center' }}>
-          <span style={{ color:ORANGE, fontWeight:'800', fontSize:'18px', letterSpacing:'-0.5px', marginRight:'32px' }}>Interscale</span>
-          {TAB_ITEMS.map(t => (
-            <button key={t.id} onClick={() => { setTab(t.id); if (t.id==='people'&&!sel) setSel(people[0]?.name||null); }}
-              style={{ padding:'0 18px', height:'52px', border:'none', background:'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color:tab===t.id?ORANGE:MUTED, borderBottom:tab===t.id?`2px solid ${ORANGE}`:'2px solid transparent', whiteSpace:'nowrap' }}>
-              {t.l}
-            </button>
-          ))}
-        </div>
+      {/* Top bar — logo only. */}
+      <div style={{ background:NAV, padding:'0 28px', height:'56px', display:'flex', alignItems:'center', borderBottom:`1px solid ${BORDER}` }}>
         <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', background:CARD, border:`1px solid ${BORDER}`, borderRadius:'8px', padding:'6px 12px', minWidth:'200px' }}>
-            <svg width="13" height="13" fill="none" viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="5" stroke={MUTED} strokeWidth="1.5"/><path d="M10.5 10.5 14 14" stroke={MUTED} strokeWidth="1.5" strokeLinecap="round"/></svg>
-            <span style={{ fontSize:'12px', color:MUTED }}>Search tasks, people...</span>
+          <div style={{ width:'30px', height:'30px', borderRadius:'7px', background:ORANGE, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:'800', fontSize:'14px' }}>I</div>
+          <div>
+            <div style={{ color:TEXT, fontWeight:'800', fontSize:'15px', letterSpacing:'-0.3px', lineHeight:1 }}>Interscale</div>
+            <div style={{ color:MUTED, fontSize:'10px', marginTop:'2px' }}>Construction scheduling</div>
           </div>
-          <button style={{ padding:'6px 14px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', color:TEXT, fontSize:'12px', cursor:'pointer' }}>
-            AI Chat and Notifications?
-          </button>
         </div>
       </div>
+
+      {/* Body — sidebar + main content in a horizontal split */}
+      <div style={{ display:'flex', alignItems:'stretch', minHeight:'calc(100vh - 56px)' }}>
+
+        {/* ── Sidebar ── */}
+        <div style={{ width:'220px', flexShrink:0, background:NAV, borderRight:`1px solid ${BORDER}`, padding:'18px 14px', display:'flex', flexDirection:'column', gap:'22px' }}>
+          {NAV_GROUPS.map(grp => (
+            <div key={grp.group}>
+              <div style={{ fontSize:'10px', fontWeight:'700', color:FAINT, textTransform:'uppercase', letterSpacing:'0.08em', padding:'0 8px', marginBottom:'8px' }}>
+                {grp.group}
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:'2px' }}>
+                {grp.items.map(t => {
+                  const active = tab === t.id;
+                  return (
+                    <button key={t.id}
+                      onClick={() => { setTab(t.id); if (t.id==='people'&&!sel) setSel(people[0]?.name||null); }}
+                      style={{
+                        display:'flex', alignItems:'center', gap:'11px', width:'100%',
+                        padding:'9px 12px', borderRadius:'8px', border:'none', cursor:'pointer',
+                        background: active ? ORANGE+'15' : 'transparent',
+                        color: active ? ORANGE : MUTED,
+                        fontSize:'13px', fontWeight: active ? '700' : '500',
+                        textAlign:'left', transition:'background 0.12s',
+                      }}
+                      onMouseEnter={e => { if (!active) e.currentTarget.style.background = CARD; }}
+                      onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                        stroke={active ? ORANGE : MUTED} strokeWidth="1.5"
+                        strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}>
+                        {ICONS[t.id]}
+                      </svg>
+                      {t.l}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Main content column ── */}
+        <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column' }}>
 
       {/* KPI row — shown on every tab EXCEPT Dashboard.
           The Dashboard has its own KPI strip; doubling them is redundant. */}
@@ -1070,6 +1120,8 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         {tab==='conflicts' && <ConflictsTab tasks={tasks} pendingReassigns={pendingReassigns} onStageReassign={stageReassign} onCancelReassign={cancelReassign} onEdit={handleEdit} />}
         {tab==='people'    && <PeopleTab tasks={tasks} sel={sel} onSel={setSel} statusOverrides={statusOverrides} todayMs={todayMs} onAssignExisting={handleAssignExisting} onCreateNew={handleCreateAndAssign} onAddPerson={handleAddPerson} onImportPeople={handleImportPeople} onImportTasksForPerson={handleImportTasksForPerson} />}
       </div>
+        </div>{/* /main content column */}
+      </div>{/* /body flex row */}
     </div>
   );
 }
