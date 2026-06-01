@@ -973,11 +973,13 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         </div>
       </div>
 
-      {/* Body — sidebar + main content in a horizontal split */}
-      <div style={{ display:'flex', alignItems:'stretch', minHeight:'calc(100vh - 56px)' }}>
+      {/* Body — sidebar + main content in a horizontal split. The page scrolls
+          normally; only the sidebar is sticky, so it stays in view while the
+          content scrolls past it. */}
+      <div style={{ display:'flex', alignItems:'flex-start', minHeight:'calc(100vh - 56px)' }}>
 
-        {/* ── Sidebar ── */}
-        <div style={{ width:'220px', flexShrink:0, background:NAV, borderRight:`1px solid ${BORDER}`, padding:'18px 14px', display:'flex', flexDirection:'column', gap:'22px' }}>
+        {/* ── Sidebar — sticky so it stays put while the page scrolls ── */}
+        <div style={{ width:'220px', flexShrink:0, alignSelf:'stretch', background:NAV, borderRight:`1px solid ${BORDER}`, padding:'18px 14px', display:'flex', flexDirection:'column', gap:'22px', position:'sticky', top:'56px', height:'calc(100vh - 56px)', overflowY:'auto' }}>
           {NAV_GROUPS.map(grp => (
             <div key={grp.group}>
               <div style={{ fontSize:'10px', fontWeight:'700', color:FAINT, textTransform:'uppercase', letterSpacing:'0.08em', padding:'0 8px', marginBottom:'8px' }}>
@@ -1013,7 +1015,7 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
           ))}
         </div>
 
-        {/* ── Main content column ── */}
+        {/* ── Main content column — scrolls with the page ── */}
         <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column' }}>
 
       {/* KPI cards live only on the Dashboard now (DashboardTab renders its own
