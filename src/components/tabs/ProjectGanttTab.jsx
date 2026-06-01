@@ -895,9 +895,9 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                 return (
                   <g key={proj.id+'-r'}>
                     <rect x={0} y={y} width={TD*dpx} height={PRH} fill={NEUTRAL+'15'} />
-                    {/* Neutral pill (shadow + body + outline) */}
-                    <rect x={bx+2} y={midY-11} width={bw} height={22} rx="11" fill={NEUTRAL+'25'} />
-                    <rect x={bx} y={midY-11} width={bw} height={22} rx="11" fill="none" stroke={pillColor} strokeWidth="2" />
+                    {/* Neutral pill — soft fill + thin border to match leaf bars */}
+                    <rect x={bx+1.5} y={midY-9} width={bw} height={22} rx="11" fill="rgba(15,23,42,0.05)" />
+                    <rect x={bx} y={midY-11} width={bw} height={22} rx="11" fill={pillColor+'22'} stroke={pillColor+'66'} strokeWidth="1" />
                     {/* Red conflict bands — drawn AFTER the neutral pill body so they sit on top.
                         Each band spans the conflicting task's time-range inside the pill.
                         We clip-path them to the pill's rounded shape via the same rx="11". */}
@@ -993,7 +993,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                     const gx = txR(info.sd), gw = Math.max(info.cd*dpx, 4);
                     return (
                       <g key={taskId+'-ra-ghost'} style={{ pointerEvents:'none' }}>
-                        <rect x={gx} y={by0} width={gw} height={SBH} rx="4"
+                        <rect x={gx} y={by0} width={gw} height={SBH} rx="5"
                           fill={GHOST_GREY+'22'} stroke={GHOST_GREY} strokeWidth="1.5"
                           strokeDasharray="4 3" />
                         {gw > 50 && (
@@ -1019,7 +1019,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                     );
                     return (
                       <rect key={t.id+'-ghost'}
-                        x={gx} y={by0} width={gw} height={SBH} rx="4"
+                        x={gx} y={by0} width={gw} height={SBH} rx="5"
                         fill={GHOST_GREY+'22'} stroke={GHOST_GREY} strokeWidth="1.5"
                         strokeDasharray="4 3" style={{pointerEvents:'none'}} />
                     );
@@ -1111,14 +1111,21 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                     // Status drives both fill and stroke via colorsFor(). The
                     // exceptions: dep-violations get an amber dashed treatment
                     // (the dashes signal "broken constraint"), and a completed
-                    // bar still uses the green family but with a much lower
-                    // fill opacity so it visually recedes — done means done.
+                    // bar still uses the green family but recedes.
+                    //
+                    // SiteWize-style bars: SOFT SOLID pastel fills (not translucent
+                    // outlined boxes) with a subtle same-hue border. The pale fill
+                    // reads as a calm filled bar; the thin border defines the edge
+                    // without shouting. Completed bars use a paler green and recede.
                     const barStroke = t.isDV && !effectiveCompleted ? STATUS_AMBER : c.stroke;
-                    const barFill   = effectiveCompleted ? STATUS_GREEN+'18'
-                                    : t.isDV             ? STATUS_AMBER+'14'
-                                    : c.fill + '28';
+                    const barFill   = effectiveCompleted ? STATUS_GREEN+'22'
+                                    : t.isDV             ? STATUS_AMBER+'1E'
+                                    : c.fill + '33';
+                    // Border: thin, same-hue, low opacity — present but quiet.
+                    const barBorder = effectiveCompleted ? STATUS_GREEN+'55'
+                                    : t.isDV             ? STATUS_AMBER
+                                    : c.fill + '66';
                     const barDash = (t.isDV && !effectiveCompleted) ? '5 3' : 'none';
-                    const labelColor = c.fill;
                     const labelDecoration = effectiveCompleted ? 'line-through' : 'none';
 
                     // Badge position. For normal-width bars the badge sits
@@ -1138,19 +1145,27 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                         onMouseEnter={()=>setHov(t.id)} onMouseLeave={()=>setHov(null)}
                         onClick={()=>onEdit({ type:'task', id:t.id })}>
 
-                        <rect x={x+2} y={by0+2} width={w} height={SBH} rx="4" fill="rgba(0,0,0,0.06)" />
-                        <rect x={x} y={by0} width={w} height={SBH} rx="4"
+                        <rect x={x+1.5} y={by0+2} width={w} height={SBH} rx="5" fill="rgba(15,23,42,0.05)" />
+                        <rect x={x} y={by0} width={w} height={SBH} rx="5"
                           fill={barFill}
-                          stroke={barStroke}
-                          strokeWidth={ih ? 2 : 1.5}
+                          stroke={barBorder}
+                          strokeWidth={ih ? 1.5 : 1}
                           strokeDasharray={barDash} />
-                        <rect x={x+1.5} y={by0+1.5} width={5} height={SBH-3} rx="3" fill={barStroke} />
+                        <rect x={x} y={by0} width={4} height={SBH} rx="2" fill={barStroke} />
                         {t.delay>0 && !effectiveCompleted && w>10 && <rect x={x+w-7} y={by0} width={7} height={SBH} fill={STATUS_TOKENS.DANGER_TEXT} opacity="0.75" rx="4" />}
                         {w>52 && <text x={x+12} y={by0+SBH/2} dominantBaseline="middle"
-                          fill={labelColor} fontSize="10" fontWeight="600"
+                          fill={TEXT} fontSize="10" fontWeight="600"
                           textDecoration={labelDecoration}
                           style={{pointerEvents:'none',userSelect:'none'}}>
-                          {(()=>{const mc=Math.floor((w-18)/5.8);return t.name.length>mc?t.name.slice(0,mc)+'…':t.name;})()}
+                          {(()=>{
+                            // SiteWize-style "Assignee: Task" label. Prefix the
+                            // person's first name when there's room; fall back to
+                            // task-name-only on narrower bars.
+                            const first = (t.person||'').split(' ')[0];
+                            const full = first ? `${first}: ${t.name}` : t.name;
+                            const mc = Math.floor((w-18)/5.8);
+                            return full.length>mc ? full.slice(0,mc)+'…' : full;
+                          })()}
                         </text>}
 
                         {/* Badge — completed ✓ takes priority, then conflict, fragile, overdue, DV.
