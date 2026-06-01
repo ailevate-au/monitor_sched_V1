@@ -6,14 +6,16 @@ import { addW, calDiff, wdayGap, parseDate } from './dates.jsx';
 
 // ── Dependency normalization ────────────────────────────────────────────────
 /**
- * Normalize a dep entry (string or {id,type}) into {id, type}.
- * Default type is 'FS' (Finish-to-Start).
- * @param {string|{id:string,type?:string}} d
- * @returns {{id:string, type:string}}
+ * Normalize a dep entry (string or {id,type,lag}) into {id, type, lag}.
+ * Default type is 'FS' (Finish-to-Start). Default lag is 0 working days.
+ * `lag` is the number of WORKING days to wait after the predecessor's
+ * constraint (its finish for FS, its start for SS) before this task may begin.
+ * @param {string|{id:string,type?:string,lag?:number}} d
+ * @returns {{id:string, type:string, lag:number}}
  */
 export function normDep(d) {
-  if (typeof d === 'string') return { id: d, type: 'FS' };
-  return { id: d.id, type: d.type || 'FS' };
+  if (typeof d === 'string') return { id: d, type: 'FS', lag: 0 };
+  return { id: d.id, type: d.type || 'FS', lag: Number.isFinite(d.lag) ? d.lag : 0 };
 }
 
 /**
@@ -103,19 +105,24 @@ export function buildSched(rawTasks, tdepMap, base, extraDelays = {}, cascadeMod
       return actualStart;
     }
 
-    // Latest constraint from deps (respects FS vs SS type)
-    let latestDepEnd = null;
+    // Latest constraint from deps (respects FS vs SS type AND per-dep lag).
+    // We compute each dep's *effective earliest start* for this task, then take
+    // the latest. Effective start = constraint + 1 working day (standard
+    // adjacency: begin the working day after the predecessor's finish/start)
+    // PLUS `lag` additional working days. So "FS, lag 3" = start 3 working days
+    // later than it otherwise would. Computing the full effective-start per dep
+    // (not just the raw constraint) means a high-lag dep correctly wins even if
+    // another dep finishes later but has no lag.
+    let earliestStart = null;
     for (const depRaw of (t.deps || [])) {
-      const { id: depId, type: depType } = normDep(depRaw);
+      const { id: depId, type: depType, lag } = normDep(depRaw);
       const constraint = depType === 'SS' ? getStart(depId) : getEnd(depId);
-      if (!latestDepEnd || constraint > latestDepEnd) latestDepEnd = constraint;
+      const effStart = addW(constraint, 1 + Math.max(0, lag));
+      if (!earliestStart || effStart > earliestStart) earliestStart = effStart;
     }
 
-    if (latestDepEnd && latestDepEnd > actualStart) {
-      // Both 'full' and 'min' must wait until dep finishes if it ends after our start.
-      // ('min' previously had a dead-code branch here — both sides of the ternary
-      //  called wdayGap with the same args and the result was discarded. Removed.)
-      actualStart = addW(latestDepEnd, 1);
+    if (earliestStart && earliestStart > actualStart) {
+      actualStart = earliestStart;
     }
     // For 'min': if dep ends BEFORE our original start, we absorb. No movement.
     // floatConsumed is computed below from the original gap shrinking.

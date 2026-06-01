@@ -19,7 +19,7 @@ export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onCl
   };
 
   const [tasks, setTasks] = useState([
-    { seq: nextLetter(), name:'', person:'', role:'', rate:'', start:'', end:'', deps:[], depType:'FS' }
+    { seq: nextLetter(), name:'', person:'', role:'', rate:'', start:'', end:'', deps:[], depType:'FS', lag:0 }
   ]);
   const [error, setError] = useState('');
   const [workflows] = useState(() => loadWorkflows());
@@ -39,7 +39,7 @@ export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onCl
       const l = i < 26 ? String.fromCharCode(65+i) : String.fromCharCode(65+i-26).repeat(2);
       if (!used.includes(l)) { seq = l; break; }
     }
-    setTasks(prev => [...prev, { seq, name:'', person:'', role:'', rate:'', start:'', end:'', deps:[], depType:'FS' }]);
+    setTasks(prev => [...prev, { seq, name:'', person:'', role:'', rate:'', start:'', end:'', deps:[], depType:'FS', lag:0 }]);
   };
 
   const removeRow = i => setTasks(prev => prev.filter((_, idx) => idx !== i));
@@ -55,7 +55,7 @@ export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onCl
     };
     const newRows = wf.tasks.map(t => ({
       seq: nextSeq(), name: t.name, person:'', role: t.role||'', rate:'', start:'', end:'',
-      deps: t.deps || [], depType: t.depType || 'FS',
+      deps: t.deps || [], depType: t.depType || 'FS', lag: t.lag || 0,
     }));
     setTasks(newRows);
   };
@@ -78,7 +78,7 @@ export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onCl
     const depMap = loadDepOverrides();
     for (const t of valid) {
       if (t.deps.length) {
-        depMap.set(`${proj.id}-${t.seq}`, t.deps.map(d => ({ id:`${proj.id}-${d}`, type: t.depType })));
+        depMap.set(`${proj.id}-${t.seq}`, t.deps.map(d => ({ id:`${proj.id}-${d}`, type: t.depType, lag: Math.max(0, parseInt(t.lag,10) || 0) })));
       }
     }
     saveDepOverrides(depMap);
@@ -101,16 +101,18 @@ export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onCl
     <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(10,10,15,0.7)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target===e.currentTarget) onClose(); }}>
       <div style={{ background:CARD, borderRadius:'16px', width:'700px', maxWidth:'95vw', maxHeight:'85vh', display:'flex', flexDirection:'column', boxShadow:'0 24px 64px rgba(0,0,0,0.5)', border:`1px solid ${BORDER}`, overflow:'hidden' }}>
-        <div style={{ padding:'18px 22px 14px', borderBottom:`2px solid ${proj.color}`, background:PANEL, flexShrink:0 }}>
+        {/* Dark header — SiteWize "Register New Programme Task" style. The
+            navy band makes the modal feel like a distinct workflow surface. */}
+        <div style={{ padding:'16px 22px', background:'#0F172A', flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <div>
-              <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                <div style={{ width:'10px', height:'10px', borderRadius:'50%', background:proj.color }} />
-                <div style={{ fontSize:'15px', fontWeight:'700', color:TEXT }}>Add Tasks to {proj.id}</div>
+              <div style={{ display:'flex', alignItems:'center', gap:'9px' }}>
+                <div style={{ width:'9px', height:'9px', borderRadius:'50%', background:ORANGE }} />
+                <div style={{ fontSize:'15px', fontWeight:'700', color:'#F8FAFC' }}>Register Tasks · {proj.id}</div>
               </div>
-              <div style={{ fontSize:'11px', color:MUTED, marginTop:'3px' }}>{proj.name} · {existingTasks.length} existing tasks</div>
+              <div style={{ fontSize:'11px', color:'#94A3B8', marginTop:'3px' }}>{proj.name} · {existingTasks.length} existing tasks</div>
             </div>
-            <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:MUTED, fontSize:'22px', lineHeight:1, padding:0 }}>×</button>
+            <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#94A3B8', fontSize:'22px', lineHeight:1, padding:0 }}>×</button>
           </div>
         </div>
 
@@ -142,23 +144,35 @@ export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onCl
                 <input value={t.person} onChange={e=>updateTask(i,'person',e.target.value)} placeholder="Name" list="known-people-add" style={INPUT} />
                 <input value={t.start}  onChange={e=>updateTask(i,'start', e.target.value)} placeholder="DD/MM/YYYY" style={INPUT} />
                 <input value={t.end}    onChange={e=>updateTask(i,'end',   e.target.value)} placeholder="DD/MM/YYYY" style={INPUT} />
-                {/* Dep type + letter selector */}
-                <div style={{ display:'flex', gap:'4px', flexWrap:'wrap', alignItems:'center' }}>
+                {/* Dep type + letter selector — wrapped in a subtle tinted box
+                    to echo SiteWize's grouped "FS/SS Dependency Linkage" panel. */}
+                <div style={{ display:'flex', gap:'4px', flexWrap:'wrap', alignItems:'center', padding:'4px 6px', borderRadius:'7px', background: t.deps.length>0 ? STATUS_TOKENS.INFO_SUBTLE : 'transparent', border:`1px solid ${t.deps.length>0 ? STATUS_TOKENS.INFO_BORDER : 'transparent'}` }}>
                   <div style={{ display:'flex', borderRadius:'6px', overflow:'hidden', border:`1px solid ${BORDER}`, flexShrink:0 }}>
                     {['FS','SS'].map(tp => (
                       <button key={tp} onClick={() => updateTask(i,'depType',tp)}
-                        style={{ padding:'3px 7px', border:'none', cursor:'pointer', fontSize:'10px', fontWeight:'700', background: t.depType===tp ? proj.color : 'transparent', color: t.depType===tp ? 'white' : MUTED }}>
+                        style={{ padding:'3px 7px', border:'none', cursor:'pointer', fontSize:'10px', fontWeight:'700', background: t.depType===tp ? proj.color : CARD, color: t.depType===tp ? 'white' : MUTED }}>
                         {tp}
                       </button>
                     ))}
                   </div>
                   {prevSeqs.map(seq => (
                     <button key={seq} onClick={() => toggleDep(i, seq)}
-                      style={{ padding:'3px 8px', borderRadius:'5px', border:`1px solid ${t.deps.includes(seq) ? proj.color : BORDER}`, background: t.deps.includes(seq) ? proj.color+'20' : 'transparent', cursor:'pointer', fontSize:'10px', fontWeight:'700', color: t.deps.includes(seq) ? proj.color : MUTED }}>
+                      style={{ padding:'3px 8px', borderRadius:'5px', border:`1px solid ${t.deps.includes(seq) ? proj.color : BORDER}`, background: t.deps.includes(seq) ? proj.color+'20' : CARD, cursor:'pointer', fontSize:'10px', fontWeight:'700', color: t.deps.includes(seq) ? proj.color : MUTED }}>
                       {seq}
                     </button>
                   ))}
                   {prevSeqs.length === 0 && <span style={{ fontSize:'10px', color:MUTED, fontStyle:'italic' }}>—</span>}
+                  {/* Lag (working days) — only meaningful when a dep is selected. */}
+                  {t.deps.length > 0 && (
+                    <div style={{ display:'flex', alignItems:'center', gap:'3px', flexShrink:0 }} title="Lag — working days to wait after the predecessor before this task starts">
+                      <span style={{ fontSize:'9px', color:MUTED, fontWeight:'600' }}>+</span>
+                      <input value={t.lag ?? 0}
+                        onChange={e => updateTask(i, 'lag', e.target.value.replace(/[^0-9]/g,''))}
+                        inputMode="numeric"
+                        style={{ width:'28px', padding:'3px 4px', borderRadius:'5px', border:`1px solid ${BORDER}`, background:CARD, color:TEXT, fontSize:'10px', fontWeight:'700', textAlign:'center', outline:'none' }} />
+                      <span style={{ fontSize:'9px', color:MUTED }}>d</span>
+                    </div>
+                  )}
                 </div>
                 <button onClick={()=>removeRow(i)} disabled={tasks.length===1}
                   style={{ width:'24px', height:'24px', borderRadius:'5px', border:`1px solid ${BORDER}`, background:'transparent', color:MUTED, cursor:tasks.length===1?'default':'pointer', fontSize:'14px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, opacity:tasks.length===1?0.3:1 }}>×</button>
@@ -177,8 +191,8 @@ export function AddTasksModal({ proj, existingTasks, existingPeople, onAdd, onCl
 
         <div style={{ padding:'14px 22px', borderTop:`1px solid ${BORDER}`, display:'flex', gap:'10px', justifyContent:'flex-end', flexShrink:0, background:PANEL }}>
           <button onClick={onClose} style={{ padding:'8px 18px', borderRadius:'8px', border:`1px solid ${BORDER}`, background:'transparent', color:MUTED, fontSize:'13px', cursor:'pointer' }}>Cancel</button>
-          <button onClick={handleAdd} style={{ padding:'8px 22px', borderRadius:'8px', border:'none', background:proj.color, color:'white', fontSize:'13px', fontWeight:'700', cursor:'pointer' }}>
-            + Add Tasks
+          <button onClick={handleAdd} style={{ padding:'8px 22px', borderRadius:'8px', border:'none', background:ORANGE, color:'white', fontSize:'13px', fontWeight:'700', cursor:'pointer' }}>
+            Save Tasks
           </button>
         </div>
       </div>
