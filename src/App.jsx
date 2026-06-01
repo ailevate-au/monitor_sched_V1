@@ -23,7 +23,6 @@ import { addW, parseDate, fmtDDMMYYYY } from './engine/dates.jsx';
 import { NAV, SURFACE, CARD, BORDER, ORANGE, TEXT, MUTED, FAINT, TASK_BLUE, STATUS_TOKENS } from './theme.jsx';
 
 import { EditModal } from './components/EditModal.jsx';
-import { ConflictResolutionPopover } from './components/ConflictResolutionPopover.jsx';
 import { ProjectGanttTab } from './components/tabs/ProjectGanttTab.jsx';
 import { DashboardTab } from './components/tabs/DashboardTab.jsx';
 import { ProjectViewTab } from './components/tabs/ProjectViewTab.jsx';
@@ -530,7 +529,6 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
   const [tab,        setTab]        = useState('dashboard');
   const [sel,        setSel]        = useState(null);
   const [editTarget, setEditTarget] = useState(null);
-  const [showResolver, setShowResolver] = useState(false);
   const [addTasksProj, setAddTasksProj] = useState(null);
 
   const handleEdit  = useCallback(target => setEditTarget(target), []);
@@ -1018,81 +1016,8 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         {/* ── Main content column ── */}
         <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column' }}>
 
-      {/* KPI row — shown on every tab EXCEPT Dashboard.
-          The Dashboard has its own KPI strip; doubling them is redundant. */}
-      {tab !== 'dashboard' && (
-      <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', padding:'20px 28px 0' }}>
-        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'130px', flex:1 }}>
-          <div style={{ fontSize:'11px', color:MUTED, marginBottom:'6px' }}>
-            <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="1" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="1" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/><rect x="9" y="9" width="6" height="6" rx="1" stroke={MUTED} strokeWidth="1.4"/></svg>
-          </div>
-          <div style={{ fontSize:'28px', fontWeight:'800', color:TEXT, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{activeProjs.length}</div>
-          <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>Total Projects</div>
-        </div>
-
-        <div style={{ background:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${BORDER}`, minWidth:'130px', flex:1 }}>
-          <div style={{ fontSize:'11px', color:MUTED, marginBottom:'6px' }}>
-            <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2" stroke={MUTED} strokeWidth="1.4"/><path d="M1 6h14" stroke={MUTED} strokeWidth="1.4"/><path d="M5 1v2M11 1v2" stroke={MUTED} strokeWidth="1.4" strokeLinecap="round"/></svg>
-          </div>
-          <div style={{ fontSize:'28px', fontWeight:'800', color:TEXT, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{onSchedulePct}<span style={{ fontSize:'16px', fontWeight:'600' }}>%</span></div>
-          <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>Projects On Schedule</div>
-        </div>
-
-        <div onClick={() => { if (kpi.hasProjRisk) setTab('conflicts'); }}
-          style={{ background:kpi.hasProjRisk?STATUS_TOKENS.DANGER_SUBTLE:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasProjRisk?STATUS_TOKENS.DANGER_BORDER:BORDER}`, minWidth:'130px', cursor:kpi.hasProjRisk?'pointer':'default', position:'relative', flex:1 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.hasProjRisk?STATUS_TOKENS.DANGER_TEXT:MUTED }}>Project Risk</span>
-            {kpi.hasProjRisk && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4" strokeLinecap="round"/></svg>}
-          </div>
-          <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.hasProjRisk?STATUS_TOKENS.DANGER_TEXT:MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.hasProjRisk?projRisk.length:'—'}</span>
-            {kpi.hasProjRisk && projRisk[0] && <span style={{ fontSize:'13px', color:STATUS_TOKENS.DANGER_TEXT, fontWeight:'600' }}>({projRisk[0].id})</span>}
-          </div>
-          {kpi.hasProjRisk
-            ? <div style={{ fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT2, marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
-            : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>No issues</div>
-          }
-          {showResolver && kpi.conflicts>0 && (
-            <ConflictResolutionPopover tasks={tasks} simDelays={simDelays} onApply={handleApply} onClose={() => setShowResolver(false)} />
-          )}
-        </div>
-
-        <div onClick={() => { if (kpi.hasCrossRisk) setTab('conflicts'); }}
-          style={{ background:kpi.hasCrossRisk?STATUS_TOKENS.DANGER_SUBTLE:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.hasCrossRisk?STATUS_TOKENS.DANGER_BORDER:BORDER}`, minWidth:'130px', cursor:kpi.hasCrossRisk?'pointer':'default', flex:1 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.hasCrossRisk?STATUS_TOKENS.DANGER_TEXT:MUTED }}>Cross Project Risk</span>
-            {kpi.hasCrossRisk && <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2L14 14H2L8 2Z" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4"/><path d="M8 7v3M8 11.5v.5" stroke={STATUS_TOKENS.DANGER_TEXT} strokeWidth="1.4" strokeLinecap="round"/></svg>}
-          </div>
-          <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.hasCrossRisk?STATUS_TOKENS.DANGER_TEXT:MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.hasCrossRisk?crossRisk.length:'—'}</span>
-            {kpi.hasCrossRisk && crossRisk[0] && <span style={{ fontSize:'13px', color:STATUS_TOKENS.DANGER_TEXT, fontWeight:'600' }}>({crossRisk[0].id})</span>}
-          </div>
-          {kpi.hasCrossRisk
-            ? <div style={{ fontSize:'11px', color:STATUS_TOKENS.DANGER_TEXT2, marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
-            : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>No issues</div>
-          }
-        </div>
-
-        {/* Fragile Tasks — yellow-themed (warning, not failure). Counts individual
-            tasks rather than projects: fragile is a per-task property of the
-            schedule's tightness, not a project-level health metric. */}
-        <div onClick={() => { if (kpi.fragile > 0) setTab('conflicts'); }}
-          style={{ background:kpi.fragile>0?STATUS_TOKENS.WARN_SUBTLE2:CARD, borderRadius:'10px', padding:'16px 18px', border:`1px solid ${kpi.fragile>0?STATUS_TOKENS.WARN_BORDER:BORDER}`, minWidth:'130px', cursor:kpi.fragile>0?'pointer':'default', flex:1 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-            <span style={{ fontSize:'12px', fontWeight:'600', color:kpi.fragile>0?STATUS_TOKENS.WARN_BADGE:MUTED }}>Fragile Tasks</span>
-            {kpi.fragile>0 && <span style={{ fontSize:'14px', color:STATUS_TOKENS.WARN_BADGE, fontWeight:'800', lineHeight:'1' }}>~</span>}
-          </div>
-          <div style={{ display:'flex', alignItems:'baseline', gap:'6px' }}>
-            <span style={{ fontSize:'28px', fontWeight:'800', color:kpi.fragile>0?STATUS_TOKENS.WARN_BADGE:MUTED, lineHeight:'1', fontVariantNumeric:'tabular-nums' }}>{kpi.fragile>0?kpi.fragile:'—'}</span>
-            {kpi.fragile>0 && <span style={{ fontSize:'13px', color:STATUS_TOKENS.WARN_BADGE, fontWeight:'600' }}>task{kpi.fragile===1?'':'s'}</span>}
-          </div>
-          {kpi.fragile>0
-            ? <div style={{ fontSize:'11px', color:STATUS_TOKENS.WARN_BADGE, marginTop:'6px', display:'flex', alignItems:'center', gap:'4px' }}>View <span>›</span></div>
-            : <div style={{ fontSize:'11px', color:MUTED, marginTop:'4px' }}>None</div>
-          }
-        </div>
-      </div>
-      )}
+      {/* KPI cards live only on the Dashboard now (DashboardTab renders its own
+          strip). Other tabs go straight to the action row + content. */}
 
       {/* Action row */}
       <div style={{ display:'flex', justifyContent:'flex-end', gap:'10px', padding:'14px 28px 0' }}>

@@ -112,7 +112,7 @@ const STATUS = {
 // ── Task / Gantt bar colours (status-driven) ─────────────────────────────────
 // The bar fills (TASK_BLUE family) read on both themes, kept as-is. The pill
 // BACKGROUNDS (BG/BG2) flip from dark steel to pale blue-grey for light.
-export const TASK_BLUE       = '#5B7B9A';  // default — on track / in progress
+export const TASK_BLUE       = '#456487';  // default — on track / in progress (deeper steel-blue, less faded)
 export const TASK_BLUE_HI    = '#4A6B8A';  // deeper stroke for in-progress (reads on light pill)
 export const TASK_BLUE_LO    = '#94A3B8';  // lighter blue border (light theme)
 export const TASK_BLUE_LO2   = '#CBD5E1';  // lightest blue border
@@ -195,10 +195,10 @@ export const ALL_MONS = [
 ];
 
 // ── Gantt rendering constants ───────────────────────────────────────────────
-export const DPX = 16, RH = 76, BH = 42, HH = 56, LW = 190;
-export const PRH = 48;   // project header row
+export const DPX = 28, RH = 76, BH = 42, HH = 56, LW = 190;
+export const PRH = 40;   // project header row
 export const RRH = 40;   // role sub-header row
-export const SRH = 48;   // person leaf row (shorter — was 68)
+export const SRH = 40;   // person leaf row (shorter — was 68)
 export const SBH = 28;   // person bar height (shorter — was 38)
 
 // ── Roles ────────────────────────────────────────────────────────────────────

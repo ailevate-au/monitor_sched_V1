@@ -96,6 +96,9 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
 
   // ── Filter state — owned here, not in parent ──────────────────────────────
   const [filterProj,   setFilterProj]   = useState(null); // null = All
+  // Gantt sub-view: 'overall' = classic Project→Task timeline (default),
+  // 'resources' = Role→Person workload view (the legacy grouped render).
+  const [ganttView, setGanttView] = useState('overall');
   const [filterPerson, setFilterPerson] = useState(null); // null = All
   const [zoomPeriod,   setZoomPeriod]   = useState(null);
   const [filterMenuOpen,   setFilterMenuOpen]   = useState(false);
@@ -114,6 +117,8 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
     const s = new Set(projs.map(p => p.id));
     const roleNames = [...new Set(people.map(per => (per.role || 'Unassigned').trim() || 'Unassigned'))];
     projs.forEach(p => roleNames.forEach(rn => s.add(`${p.id}-${rn}`)));
+    // Resources view uses a fixed synthetic project id for its role keys.
+    roleNames.forEach(rn => s.add(`__resources__-${rn}`));
     return s;
   });
   const [hov, setHov]     = useState(null);
@@ -371,6 +376,117 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
     return { rowList: list, totalH: y };
   }, [projData, expanded]);
 
+  // ── RESOURCES VIEW data: Role → Person aggregated across ALL projects ──────
+  // The default (overall) and resources views share the same person/role row
+  // renderers, but resources has NO project layer — a person appears once, with
+  // their tasks from every project on one row. We build a synthetic "pd" with a
+  // fixed project id so the existing role/person render branches (which key off
+  // pd.proj.id) keep working without forking the renderer.
+  const RES_PID = '__resources__';
+  const resourceData = useMemo(() => {
+    // All visible tasks across every (non-completed, non-draft) project.
+    const completedSet = new Set(
+      (allProjs || projs).filter(p => p.status === 'completed').map(p => p.id)
+    );
+    const draftSet = new Set(draftProjIds || []);
+    const allVisible = tasks
+      .filter(t => !completedSet.has(t.projId) && !draftSet.has(t.projId))
+      .filter(t => {
+        if (showCompleted) return true;
+        const eff = computeStatus(t, statusOverrides, todayMs || Date.now());
+        return eff !== 'Completed';
+      })
+      .filter(t => !filterPerson || t.person === filterPerson);
+
+    // Distinct people who own visible tasks (+ reassignment destinations).
+    const peopleNames = new Set(allVisible.map(t => t.person));
+    if (hasReassigns && pendingReassigns) {
+      for (const [taskId, ra] of Object.entries(pendingReassigns)) {
+        if (allVisible.some(x => x.id === taskId)) peopleNames.add(ra.to);
+      }
+    }
+    const resPeople = [...peopleNames].map(name => {
+      const known = people.find(p => p.name === name);
+      if (known) return known;
+      return { name, role: 'Unassigned', init: name.slice(0,2).toUpperCase(), color: NEUTRAL, rate: '$42/hr' };
+    });
+
+    // Group by role, person rows carry ALL their tasks (any project), date-sorted.
+    const roleNames = [];
+    for (const per of resPeople) {
+      const rn = (per.role || 'Unassigned').trim() || 'Unassigned';
+      if (!roleNames.includes(rn)) roleNames.push(rn);
+    }
+    const roleGroups = roleNames.map(roleName => {
+      const members = resPeople.filter(
+        per => ((per.role || 'Unassigned').trim() || 'Unassigned') === roleName
+      );
+      if (!members.length) return null;
+      return {
+        role: { key: roleName, label: roleName, color: NEUTRAL },
+        personRows: members.map(per => ({
+          per,
+          tasks: allVisible.filter(t => t.person === per.name).sort((a, b) => a.s - b.s),
+        })),
+      };
+    }).filter(Boolean);
+
+    // Synthetic pd so the role/person renderers (which read pd.proj.id) work.
+    const pd = { proj: { id: RES_PID, name: 'All Resources', color: NEUTRAL }, pt: allVisible, roleGroups };
+    return pd;
+  }, [tasks, projs, allProjs, draftProjIds, filterPerson, showCompleted, statusOverrides, todayMs, hasReassigns, pendingReassigns, people, NEUTRAL]);
+
+  // Flat row list for resources view: role → person (NO proj rows).
+  const { resourceRowList, resourceTotalH } = useMemo(() => {
+    const list = [];
+    let y = HH;
+    for (const rg of resourceData.roleGroups) {
+      const roleKey = `${RES_PID}-${rg.role.key}`;
+      list.push({ kind: 'role', pd: resourceData, rg, y });
+      y += RRH;
+      if (expanded.has(roleKey)) {
+        for (const pr of rg.personRows) {
+          list.push({ kind: 'person', pd: resourceData, rg, pr, y });
+          y += SRH;
+        }
+      }
+    }
+    return { resourceRowList: list, resourceTotalH: y };
+  }, [resourceData, expanded]);
+
+  // ── OVERALL VIEW row list: Project → Task (one row per task) ───────────────
+  // The classic Gantt: each project is a collapsible header, and under it every
+  // task gets its own row (no role/person grouping). Reuses projData (which
+  // already has each project's tasks) but flattens to task rows. Task rows use
+  // kind:'task' with the task object on row.t. Tasks are sorted by start day so
+  // the chart reads top-to-bottom in roughly chronological order.
+  const SBH_TASK = SRH; // task rows reuse the person-row height for bar spacing
+  const { overallRowList, overallTotalH } = useMemo(() => {
+    const list = [];
+    let y = HH;
+    for (const pd of projData) {
+      list.push({ kind: 'proj', pd, y });
+      y += PRH;
+      if (expanded.has(pd.proj.id)) {
+        // All this project's tasks (with duration), date-sorted.
+        const projTasks = [...pd.pt].sort((a, b) => (a.sd - b.sd) || (a.s - b.s));
+        for (const t of projTasks) {
+          list.push({ kind: 'task', pd, t, y });
+          y += SBH_TASK;
+        }
+      }
+    }
+    return { overallRowList: list, overallTotalH: y };
+  }, [projData, expanded, SBH_TASK]);
+
+  // The active row list + height depend on the sub-view.
+  const activeRowList = ganttView === 'resources' ? resourceRowList
+                      : ganttView === 'overall'   ? overallRowList
+                      : rowList;
+  const activeTotalH  = ganttView === 'resources' ? resourceTotalH
+                      : ganttView === 'overall'   ? overallTotalH
+                      : totalH;
+
   const ht = hov ? tasks.find(t => t.id === hov) : null;
 
   // Pixel positions for every visible task:
@@ -378,12 +494,16 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
   //   • collapsed role rows → yc at role row centre (tasks show as mini bars)
   const posMap = useMemo(() => {
     const m = {};
-    for (const row of rowList) {
+    for (const row of activeRowList) {
       if (row.kind === 'person') {
         const yc = row.y + SRH / 2;
         for (const t of row.pr.tasks) {
           m[t.id] = { xs: txR(t.sd), xe: txR(t.sd + t.cd), yc, collapsed: false };
         }
+      } else if (row.kind === 'task') {
+        // Overall view: one task per row. Position it at the row centre.
+        const t = row.t;
+        m[t.id] = { xs: txR(t.sd), xe: txR(t.sd + t.cd), yc: row.y + SBH_TASK / 2, collapsed: false };
       } else if (row.kind === 'role') {
         const roleKey = `${row.pd.proj.id}-${row.rg.role.key}`;
         if (!expanded.has(roleKey)) {
@@ -398,7 +518,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
       }
     }
     return m;
-  }, [rowList, expanded, dpx]);
+  }, [activeRowList, expanded, dpx, SBH_TASK]);
 
   // Dep lines — between any two tasks that both have a position in posMap
   const depLines = useMemo(() => {
@@ -439,6 +559,30 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
 
   return (
     <div>
+      {/* ── Gantt sub-tabs: Overall Programme View | By Resources ── */}
+      <div style={{ display:'flex', alignItems:'center', gap:'4px', padding:'12px 16px 0', borderBottom:`1px solid ${BORDER}` }}>
+        {[
+          { id:'overall',   label:'Overall Programme View' },
+          { id:'resources', label:'By Resources' },
+        ].map(v => {
+          const active = ganttView === v.id;
+          return (
+            <button key={v.id} onClick={() => setGanttView(v.id)}
+              style={{
+                padding:'9px 16px', border:'none', cursor:'pointer',
+                background: active ? CARD : 'transparent',
+                color: active ? ORANGE : MUTED,
+                fontSize:'13px', fontWeight: active ? '700' : '500',
+                borderRadius:'8px 8px 0 0',
+                borderBottom: active ? `2px solid ${ORANGE}` : '2px solid transparent',
+                marginBottom:'-1px',
+              }}>
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Confirm modal for project completion */}
       <ConfirmModal
         open={!!pendingCompleteProj}
@@ -545,13 +689,15 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
           Details <span style={{ fontSize:'11px', color:MUTED }}>›</span>
         </button>
 
-        {/* Dependencies toggle */}
+        {/* Dependencies toggle — overall view only (no dep arrows in resources) */}
+        {ganttView === 'overall' && (
         <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', borderRight:`1px solid ${BORDER}`, cursor:'pointer' }} onClick={() => setShowDeps(v => !v)}>
           <span style={{ fontSize:'13px', fontWeight:'500', color:TEXT }}>Dependencies</span>
           <div style={{ width:'36px', height:'20px', borderRadius:'10px', background: showDeps ? ORANGE : BORDER_HI, position:'relative', transition:'background 0.2s', flexShrink:0 }}>
             <div style={{ position:'absolute', top:'3px', left: showDeps ? '18px' : '3px', width:'14px', height:'14px', borderRadius:'50%', background:'white', transition:'left 0.2s' }} />
           </div>
         </div>
+        )}
 
         {/* Show Completed toggle */}
         <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', borderRight:`1px solid ${BORDER}`, cursor:'pointer' }} onClick={() => setShowCompleted(v => !v)}>
@@ -664,7 +810,9 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
             )}
           </div>
 
-          {/* Project filter — custom dropdown */}
+          {/* Project filter — custom dropdown. Only meaningful in the overall
+              (project-grouped) view; hidden in the resources workload view. */}
+          {ganttView !== 'resources' && (
           <div ref={filterMenuRef} style={{ position:'relative', borderLeft:`1px solid ${BORDER}` }}>
             <button onClick={() => setFilterMenuOpen(v => !v)}
               style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px', height:'48px', border:'none', background: filterProj ? ORANGE+'12' : 'none', cursor:'pointer', fontSize:'13px', fontWeight:'500', color: filterProj ? ORANGE : TEXT, minWidth:'140px' }}>
@@ -700,6 +848,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
 
@@ -709,12 +858,12 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
 
         {/* ── STICKY LEFT PANEL — does not scroll ── */}
         <div style={{ width:LW, flexShrink:0, position:'relative', zIndex:5, boxShadow:'4px 0 12px rgba(0,0,0,0.4)' }}>
-          <svg width={LW} height={totalH} style={{ display:'block', fontFamily:'-apple-system,system-ui,sans-serif' }}>
+          <svg width={LW} height={activeTotalH} style={{ display:'block', fontFamily:'-apple-system,system-ui,sans-serif' }}>
             {/* Header bg */}
             <rect x={0} y={0} width={LW} height={HH} fill={CANVAS} />
             <line x1={0} y1={HH} x2={LW} y2={HH} stroke={BORDER} strokeWidth="1.5" />
 
-            {rowList.map(row => {
+            {activeRowList.map(row => {
               if (row.kind === 'proj') {
                 const { pd, y } = row;
                 const { proj, pt } = pd;
@@ -799,16 +948,77 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                   </g>
                 );
               }
+
+              // ── Task leaf row (OVERALL view) — one row per task ──────────────
+              if (row.kind === 'task') {
+                const { t, y: ty } = row;
+                const tMidY = ty + SBH_TASK / 2;
+                const tStatus = computeStatus(t, statusOverrides, todayMs || Date.now());
+                const tDone = effectiveCompletedIds?.has?.(t.id) || tStatus === 'Completed';
+                const tHasC = t.isC && !tDone;
+                const tOverdue = t.isOverdue && !t.isC && !tDone;
+                const tHasF = t.isF && !t.isC && !t.isOverdue && !tDone;
+                const dotC = tDone ? STATUS_TOKENS.OK
+                           : tHasC ? CONFLICT_RED
+                           : tOverdue ? STATUS_AMBER
+                           : tHasF ? STATUS_TOKENS.WARN_BADGE
+                           : NEUTRAL;
+                const tHovered = hov === t.id;
+                // Subtext: assignee · trade (role). SiteWize style.
+                const per = people.find(p => p.name === t.person);
+                const trade = (per?.role || '').trim();
+                const sub = [t.person || 'Unassigned', trade].filter(Boolean).join(' · ');
+                return (
+                  <g key={`${t.id}-lbl`} style={{ cursor:'pointer' }}
+                    onMouseEnter={() => setHov(t.id)} onMouseLeave={() => setHov(null)}
+                    onClick={() => onEdit({ type:'task', id:t.id })}>
+                    <rect x={0} y={ty} width={LW} height={SBH_TASK} fill={tHovered ? CHIP : SURFACE} />
+                    <line x1={18} y1={ty} x2={18} y2={ty+SBH_TASK} stroke={NEUTRAL+'40'} strokeWidth="1.5" />
+                    <circle cx={32} cy={tMidY} r={4} fill={dotC} />
+                    <text x={44} y={tMidY-5} fill={tDone?MUTED:TEXT} fontSize="12" fontWeight="600"
+                      textDecoration={tDone?'line-through':'none'} style={{userSelect:'none'}}>
+                      {t.name.length > 18 ? t.name.slice(0,18)+'…' : t.name}
+                    </text>
+                    <text x={44} y={tMidY+9} fill={MUTED} fontSize="9.5" style={{userSelect:'none'}}>
+                      {sub.length > 24 ? sub.slice(0,24)+'…' : sub}
+                    </text>
+                    {/* Status badge — only when NOT hovered (hover shows the complete toggle instead) */}
+                    {!tHovered && tHasC && <g>
+                      <circle cx={LW-8} cy={tMidY} r={7} fill={STATUS_TOKENS.DANGER} />
+                      <text x={LW-8} y={tMidY} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="700">!</text>
+                    </g>}
+                    {!tHovered && tOverdue && <g>
+                      <circle cx={LW-8} cy={tMidY} r={7} fill={STATUS_TOKENS.WARN} />
+                      <text x={LW-8} y={tMidY} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="800">⚠</text>
+                    </g>}
+                    {!tHovered && tHasF && <g>
+                      <circle cx={LW-8} cy={tMidY} r={7} fill={STATUS_TOKENS.WARN_BADGE} />
+                      <text x={LW-8} y={tMidY} textAnchor="middle" dominantBaseline="middle" fill={TEXT} fontSize="10" fontWeight="800">~</text>
+                    </g>}
+                    {!tHovered && tDone && <g>
+                      <circle cx={LW-8} cy={tMidY} r={7} fill={STATUS_TOKENS.OK} />
+                      <text x={LW-8} y={tMidY} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="800">✓</text>
+                    </g>}
+                    {/* Hover: complete/uncomplete toggle (overrides the badge) */}
+                    {tHovered && <g style={{ cursor:'pointer' }}
+                      onClick={e => { e.stopPropagation(); onToggleComplete(t.id); }}>
+                      <circle cx={LW-8} cy={tMidY} r={9} fill={tDone ? STATUS_TOKENS.OK : CARD} stroke={tDone ? STATUS_TOKENS.OK : BORDER_HI} strokeWidth="1.5" />
+                      <text x={LW-8} y={tMidY} textAnchor="middle" dominantBaseline="middle" fill={tDone ? 'white' : MUTED} fontSize="10" fontWeight="800">✓</text>
+                    </g>}
+                    <line x1={0} y1={ty+SBH_TASK} x2={LW} y2={ty+SBH_TASK} stroke={BORDER} strokeWidth="0.8" />
+                  </g>
+                );
+              }
               return null;
             })}
 
-            <line x1={LW-1} y1={0} x2={LW-1} y2={totalH} stroke={BORDER} strokeWidth="1" />
+            <line x1={LW-1} y1={0} x2={LW-1} y2={activeTotalH} stroke={BORDER} strokeWidth="1" />
           </svg>
         </div>
 
         {/* ── SCROLLABLE TIMELINE — right side only ── */}
         <div ref={scrollRef} style={{ overflowX:'auto', flex:1 }}>
-          <svg width={TD*dpx} height={totalH} style={{ display:'block', fontFamily:'-apple-system,system-ui,sans-serif' }}>
+          <svg width={TD*dpx} height={activeTotalH} style={{ display:'block', fontFamily:'-apple-system,system-ui,sans-serif' }}>
 
             {/* Month header row — top */}
             {MONS.slice(0,-1).map((m, i) => {
@@ -817,7 +1027,7 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                 <g key={m.n+'-'+i}>
                   <rect x={x1} y={0} width={x2-x1} height={HH*0.55} fill={i%2 ? PANEL : CARD} />
                   <text x={(x1+x2)/2} y={HH*0.55/2+4} textAnchor="middle" fill={FAINT} fontSize="12" fontWeight="500">{m.n} 2026</text>
-                  <line x1={x1} y1={0} x2={x1} y2={totalH} stroke={BORDER} strokeWidth={i===0?1:0.5} />
+                  <line x1={x1} y1={0} x2={x1} y2={activeTotalH} stroke={BORDER} strokeWidth={i===0?1:0.5} />
                 </g>
               );
             })}
@@ -852,8 +1062,8 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                       <text x={cx + cw/2} y={dayRowY + dayRowH/2 + 4} textAnchor="middle"
                         fill={isWeekend ? FAINT : MUTED} fontSize="9.5" fontWeight="500">{dom}</text>
                     )}
-                    <line x1={cx} y1={dayRowY} x2={cx} y2={totalH}
-                      stroke={BORDER} strokeWidth="0.4" opacity={d % 7 === 0 ? 0.7 : 0.35} />
+                    <line x1={cx} y1={dayRowY} x2={cx} y2={HH}
+                      stroke={BORDER_HI} strokeWidth={d % 7 === 0 ? 1 : 0.7} opacity={d % 7 === 0 ? 1 : 0.8} />
                   </g>
                 );
               }
@@ -866,8 +1076,8 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
             {/* Daily gridlines through chart body — week boundaries (every 7th)
                 slightly stronger so the eye can still group weeks. */}
             {Array.from({length:TD},(_, d)=>d).filter(d=>d>0).map(d=>(
-              <line key={d} x1={txR(d)} y1={HH} x2={txR(d)} y2={totalH}
-                stroke={BORDER} strokeWidth="0.4" opacity={d % 7 === 0 ? 0.5 : 0.18} />
+              <line key={d} x1={txR(d)} y1={HH} x2={txR(d)} y2={activeTotalH}
+                stroke={BORDER_HI} strokeWidth={d % 7 === 0 ? 1 : 0.7} opacity={d % 7 === 0 ? 1 : 0.75} />
             ))}
 
             {/* Period highlight band */}
@@ -877,9 +1087,9 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
               const px1 = txR(period.startDay), px2 = txR(period.endDay + 1);
               return (
                 <g>
-                  <rect x={px1} y={0} width={px2-px1} height={totalH} fill={ORANGE} opacity="0.04" />
-                  <line x1={px1} y1={0} x2={px1} y2={totalH} stroke={ORANGE} strokeWidth="1.5" opacity="0.4" strokeDasharray="4 3"/>
-                  <line x1={px2} y1={0} x2={px2} y2={totalH} stroke={ORANGE} strokeWidth="1.5" opacity="0.4" strokeDasharray="4 3"/>
+                  <rect x={px1} y={0} width={px2-px1} height={activeTotalH} fill={ORANGE} opacity="0.04" />
+                  <line x1={px1} y1={0} x2={px1} y2={activeTotalH} stroke={ORANGE} strokeWidth="1.5" opacity="0.4" strokeDasharray="4 3"/>
+                  <line x1={px2} y1={0} x2={px2} y2={activeTotalH} stroke={ORANGE} strokeWidth="1.5" opacity="0.4" strokeDasharray="4 3"/>
                   <rect x={px1} y={2} width={px2-px1} height={20} rx="4" fill={ORANGE} opacity="0.15" />
                   <text x={(px1+px2)/2} y={13} textAnchor="middle" fill={ORANGE} fontSize="10" fontWeight="700" opacity="0.8">
                     {period.label}
@@ -889,12 +1099,12 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
             })()}
 
             {/* Today line */}
-            <line x1={txR(todayDay)} y1={0} x2={txR(todayDay)} y2={totalH} stroke={ORANGE} strokeWidth="1.5" strokeDasharray="4 3" opacity="0.8" />
+            <line x1={txR(todayDay)} y1={0} x2={txR(todayDay)} y2={activeTotalH} stroke={ORANGE} strokeWidth="1.5" strokeDasharray="4 3" opacity="0.8" />
             <rect x={txR(todayDay)-22} y={HH/2-10} width={44} height={19} rx="4" fill={ORANGE} />
             <text x={txR(todayDay)} y={HH/2+0.5} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="700">Today</text>
 
             {/* Row backgrounds + bars */}
-            {rowList.map(row => {
+            {activeRowList.map(row => {
               if (row.kind === 'proj') {
                 const { pd, y } = row;
                 const { proj, pt, minSd, maxEd } = pd;
@@ -985,6 +1195,64 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                   </g>
                 );
               }
+
+              // ── Task row body (OVERALL view) — single bar for row.t ─────────
+              if (row.kind === 'task') {
+                const { t, y: ty } = row;
+                const tby0 = ty + (SBH_TASK - SBH) / 2;
+                const tMid = ty + SBH_TASK / 2;
+                // Milestone: diamond, no bar.
+                if (t.isMilestone || !t.cd) {
+                  const mx = txR(t.sd), mSize = 7;
+                  return (
+                    <g key={`${t.id}-bar`} style={{ cursor:'pointer' }}
+                      onMouseEnter={() => setHov(t.id)} onMouseLeave={() => setHov(null)}
+                      onClick={() => onEdit({ type:'task', id:t.id })}>
+                      <rect x={0} y={ty} width={TD*dpx} height={SBH_TASK} fill={SURFACE} />
+                      <line x1={0} y1={ty+SBH_TASK} x2={TD*dpx} y2={ty+SBH_TASK} stroke={BORDER} strokeWidth="0.8" />
+                      <polygon points={`${mx},${tMid-mSize} ${mx+mSize},${tMid} ${mx},${tMid+mSize} ${mx-mSize},${tMid}`}
+                        fill={taskColor(t)} stroke={SURFACE} strokeWidth="1.5" />
+                    </g>
+                  );
+                }
+                const c = colorsFor(t);
+                const effDone = effectiveCompletedIds?.has?.(t.id) || computeStatus(t, statusOverrides, todayMs||Date.now())==='Completed';
+                const x = txR(t.sd), w = Math.max(t.cd * dpx, 4);
+                const isHovT = hov === t.id;
+                const barFill   = effDone ? STATUS_GREEN+'22' : t.isDV ? STATUS_AMBER+'1E' : c.fill+'55';
+                const barBorder = effDone ? STATUS_GREEN+'55' : t.isDV ? STATUS_AMBER     : c.fill+'99';
+                const barStroke = t.isDV && !effDone ? STATUS_AMBER : c.stroke;
+                const barDash = (t.isDV && !effDone) ? '5 3' : 'none';
+                const first = (t.person||'').split(' ')[0];
+                const lbl = first ? `${first}: ${t.name}` : t.name;
+                return (
+                  <g key={`${t.id}-bar`} style={{ cursor:'pointer' }}
+                    onMouseEnter={() => setHov(t.id)} onMouseLeave={() => setHov(null)}
+                    onClick={() => onEdit({ type:'task', id:t.id })}>
+                    <rect x={0} y={ty} width={TD*dpx} height={SBH_TASK} fill={SURFACE} />
+                    <line x1={0} y1={ty+SBH_TASK} x2={TD*dpx} y2={ty+SBH_TASK} stroke={BORDER} strokeWidth="0.8" />
+                    <rect x={x+1.5} y={tby0+2} width={w} height={SBH} rx="5" fill="rgba(15,23,42,0.05)" />
+                    <rect x={x} y={tby0} width={w} height={SBH} rx="5"
+                      fill={barFill} stroke={barBorder} strokeWidth={isHovT ? 1.5 : 1} strokeDasharray={barDash} />
+                    <rect x={x} y={tby0} width={4} height={SBH} rx="2" fill={barStroke} />
+                    {w>52 && <text x={x+12} y={tby0+SBH/2} dominantBaseline="middle"
+                      fill={TEXT} fontSize="10" fontWeight="600"
+                      textDecoration={effDone?'line-through':'none'}
+                      style={{pointerEvents:'none',userSelect:'none'}}>
+                      {(()=>{ const mc=Math.floor((w-18)/5.8); return lbl.length>mc?lbl.slice(0,mc)+'…':lbl; })()}
+                    </text>}
+                    {effDone && <g style={{pointerEvents:'none'}}>
+                      <circle cx={Math.min(x+8,x+w-5)} cy={tby0+8} r={7} fill={STATUS_TOKENS.OK} stroke={SURFACE} strokeWidth="1.5" />
+                      <text x={Math.min(x+8,x+w-5)} y={tby0+8} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="9" fontWeight="800">✓</text>
+                    </g>}
+                    {!effDone && t.isC && <g style={{pointerEvents:'none'}}>
+                      <circle cx={x+w<18?x+w+7:Math.min(x+8,x+w-5)} cy={tby0+8} r={7} fill={STATUS_TOKENS.DANGER} stroke={SURFACE} strokeWidth="1.5" />
+                      <text x={x+w<18?x+w+7:Math.min(x+8,x+w-5)} y={tby0+8} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="8.5" fontWeight="800">!</text>
+                    </g>}
+                  </g>
+                );
+              }
+
               const { rg: prg, pd, pr, y } = row;
               const { proj } = pd;
               const { per, tasks: pTasks } = pr;
@@ -1135,11 +1403,11 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                     const barStroke = t.isDV && !effectiveCompleted ? STATUS_AMBER : c.stroke;
                     const barFill   = effectiveCompleted ? STATUS_GREEN+'22'
                                     : t.isDV             ? STATUS_AMBER+'1E'
-                                    : c.fill + '33';
+                                    : c.fill + '55';
                     // Border: thin, same-hue, low opacity — present but quiet.
                     const barBorder = effectiveCompleted ? STATUS_GREEN+'55'
                                     : t.isDV             ? STATUS_AMBER
-                                    : c.fill + '66';
+                                    : c.fill + '99';
                     const barDash = (t.isDV && !effectiveCompleted) ? '5 3' : 'none';
                     const labelDecoration = effectiveCompleted ? 'line-through' : 'none';
 
@@ -1234,8 +1502,11 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
               );
             })}
 
-            {/* Dep lines — elbow routing, last so they paint on top */}
-            {showDeps && (
+            {/* Dep lines — elbow routing, last so they paint on top.
+                Only in the Overall view: in By Resources, tasks are grouped by
+                person across projects, so dependency arrows between rows are
+                misleading (a dep can span unrelated person rows). */}
+            {showDeps && ganttView === 'overall' && (
               <g style={{ pointerEvents:'none' }}>
                 {depLines.map((line, i) => {
                   const { from, to, projId, taskId, depId, type: depType } = line;
@@ -1335,34 +1606,51 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                       `Q ${loopX} ${y4} ${loopX + r} ${y4}`,
                       `L ${x4} ${y4}`,
                     ].join(' ');
-                  } else if (gap >= r * 2) {
-                    // ── FS, forward, different rows: standard elbow ───────────
-                    const xMid = x1 + Math.max(gap / 2, r + 2);
-                    pathD = [
-                      `M ${x1} ${y1}`,
-                      `L ${xMid - r} ${y1}`,
-                      `Q ${xMid} ${y1} ${xMid} ${y1 + (goDown ? r : -r)}`,
-                      `L ${xMid} ${y4 + (goDown ? -r : r)}`,
-                      `Q ${xMid} ${y4} ${xMid + r} ${y4}`,
-                      `L ${x4} ${y4}`,
-                    ].join(' ');
                   } else if (gap > -SIDE) {
-                    // ── FS, different rows, slight overlap / near-aligned ─────
-                    // Target is only slightly behind (or barely ahead of) the
-                    // source's end — not a TRUE backward dependency. A short
-                    // step-out + drop reads far cleaner than the full loop.
-                    // We route just past the source's right edge, drop to the
-                    // target's row, and come in from the left. `xKnee` is
-                    // clamped so it never lands left of where we started.
-                    const xKnee = Math.max(x1 + STUB, x4 - STUB);
-                    pathD = [
-                      `M ${x1} ${y1}`,
-                      `L ${xKnee - r} ${y1}`,
-                      `Q ${xKnee} ${y1} ${xKnee} ${y1 + (goDown ? r : -r)}`,
-                      `L ${xKnee} ${y4 + (goDown ? -r : r)}`,
-                      `Q ${xKnee} ${y4} ${xKnee + r} ${y4}`,
-                      `L ${x4} ${y4}`,
-                    ].join(' ');
+                    // ── FS, forward (or near-aligned), different rows ─────────
+                    // BOTTOM-EXIT routing: leave from the bottom edge of the
+                    // source bar, drop straight down toward the target's row,
+                    // then step right into the target's left edge. This reads
+                    // far cleaner than a side-exit elbow when tasks stair-step
+                    // (each starting just after the previous) — there's no
+                    // horizontal room on the side, but always vertical room.
+                    //
+                    // The vertical drop sits one "block" (≈ one day) before the
+                    // target's left edge when there's room, else right at it
+                    // (tasks can't start before their dependency, so the target
+                    // edge is never left of the source's bottom-exit x).
+                    const yBottom = y1 + SBH / 2;          // bottom of source bar
+                    // Exit from the MIDDLE of the source bar's last day cell,
+                    // not its hard right edge — reads more natural. (xe is the
+                    // bar's right edge; back off half a day.)
+                    const xExit = Math.max(from.xs, from.xe - dpx / 2);
+                    // Drop column: sit ~one day before the target's start when
+                    // there's room, but never left of the exit x.
+                    const xDrop = Math.max(xExit, Math.min(x4 - dpx, x4 - r));
+                    const downR = goDown ? r : -r;
+                    if (Math.abs(xDrop - xExit) < r) {
+                      // Common stair-step: drop straight down from source bottom,
+                      // round the corner, step right into the target. Clean "L".
+                      pathD = [
+                        `M ${xExit} ${yBottom}`,
+                        `L ${xExit} ${y4 - downR}`,
+                        `Q ${xExit} ${y4} ${xExit + r} ${y4}`,
+                        `L ${x4} ${y4}`,
+                      ].join(' ');
+                    } else {
+                      // Target further right: bottom exit, short step to the drop
+                      // column, down, then right into the target.
+                      pathD = [
+                        `M ${xExit} ${yBottom}`,
+                        `L ${xExit} ${yBottom + downR}`,
+                        `Q ${xExit} ${yBottom + downR*2} ${xExit + r} ${yBottom + downR*2}`,
+                        `L ${xDrop - r} ${yBottom + downR*2}`,
+                        `Q ${xDrop} ${yBottom + downR*2} ${xDrop} ${yBottom + downR*3}`,
+                        `L ${xDrop} ${y4 - downR}`,
+                        `Q ${xDrop} ${y4} ${xDrop + r} ${y4}`,
+                        `L ${x4} ${y4}`,
+                      ].join(' ');
+                    }
                   } else {
                     // ── FS, genuine backward dependency ───────────────────────
                     // Target starts meaningfully BEHIND the source's end, on a
@@ -1399,14 +1687,16 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                         strokeLinecap="round" strokeLinejoin="round"
                         strokeDasharray={depType === 'SS' ? '5 3' : 'none'} />
                       <polygon points={arrowPts} fill={pc} />
-                      {/* Type label — only show when hovered or always if zoomed in */}
-                      {(isHov || dpx >= 20) && (
+                      {/* Type label — only for SS deps (the non-obvious type).
+                          FS is the default/expected relationship, so labeling it
+                          just adds clutter. Shown when hovered or zoomed in. */}
+                      {depType === 'SS' && (isHov || dpx >= 20) && (
                         <g>
                           <rect x={labelX - 9} y={labelY - 7} width={18} height={13} rx="3"
                             fill={pc} opacity="0.9" />
                           <text x={labelX} y={labelY + 0.5} textAnchor="middle" dominantBaseline="middle"
                             fill="white" fontSize="8" fontWeight="800" style={{ pointerEvents:'none' }}>
-                            {depType || 'FS'}
+                            SS
                           </text>
                         </g>
                       )}
@@ -1415,6 +1705,18 @@ export function ProjectGanttTab({ tasks: tasksProp, previewTasks, pendingShift, 
                 })}
               </g>
             )}
+
+            {/* Gridline overlay — redrawn ON TOP of the per-row background fills
+                so the grid stays visible inside expanded project/role sections
+                (those row backgrounds would otherwise paint over the gridlines
+                drawn earlier). Kept subtle so it reads as a grid, not clutter;
+                week boundaries (every 7th day) slightly stronger. Non-interactive. */}
+            <g style={{ pointerEvents:'none' }}>
+              {Array.from({length:TD},(_, d)=>d).filter(d=>d>0).map(d=>(
+                <line key={`grid-ov-${d}`} x1={txR(d)} y1={HH} x2={txR(d)} y2={activeTotalH}
+                  stroke={BORDER_HI} strokeWidth={d % 7 === 0 ? 1 : 0.7} opacity={d % 7 === 0 ? 0.85 : 0.6} />
+              ))}
+            </g>
           </svg>
         </div>
 
