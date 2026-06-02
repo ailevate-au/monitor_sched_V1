@@ -962,8 +962,8 @@ function ScheduleApp({ schedData, baseData, onImport, onClear, onNewProject, onM
         />
       )}
 
-      {/* Top bar — logo only. */}
-      <div style={{ background:NAV, padding:'0 28px', height:'56px', display:'flex', alignItems:'center', borderBottom:`1px solid ${BORDER}` }}>
+      {/* Top bar — logo only. Sticky so it stays pinned while the page scrolls. */}
+      <div style={{ background:NAV, padding:'0 28px', height:'56px', display:'flex', alignItems:'center', borderBottom:`1px solid ${BORDER}`, position:'sticky', top:0, zIndex:100 }}>
         <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
           <div style={{ width:'30px', height:'30px', borderRadius:'7px', background:ORANGE, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:'800', fontSize:'14px' }}>I</div>
           <div>
