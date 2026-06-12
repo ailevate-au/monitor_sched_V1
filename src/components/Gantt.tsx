@@ -17,6 +17,18 @@ import {
   type PendingDraft,
   type SmartRecommendation,
 } from "../lib/ganttDraft";
+import {
+  computeAdjustment,
+  applyMoves,
+  computeSimulatedStatuses,
+  detectAdjustmentWarnings,
+  summarizeAdjustment,
+  type CascadeMode,
+  type TaskMove,
+} from "../lib/timelineAdjust";
+import { changeHistory, makeChangeSetId, type ChangeSet } from "../lib/changeHistory";
+import TimelineAdjustPanel from "./TimelineAdjustPanel";
+import ChangeHistoryTab from "./ChangeHistoryTab";
 
 const C = {
   navy:       "#0F1F3D",
@@ -262,7 +274,16 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   const { autoCascadeDependents } = useProgrammeSettings();
   const autoCascadeRef = useRef(autoCascadeDependents);
   autoCascadeRef.current = autoCascadeDependents;
-  const [scheduleViewMode, setScheduleViewMode] = useState<"projectteam" | "overall" | "resource" | "kanban">("projectteam");
+  const [scheduleViewMode, setScheduleViewMode] = useState<"projectteam" | "overall" | "resource" | "kanban" | "history">("projectteam");
+
+  // Timeline adjustment (staged delay) state
+  const MAX_DELAY_DAYS = 30;
+  const [adjustAnchorId, setAdjustAnchorId] = useState<string | null>(null);
+  const [adjustMode, setAdjustMode] = useState<CascadeMode>("full");
+  const [adjustDelay, setAdjustDelay] = useState(0);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [changeSets, setChangeSets] = useState<ChangeSet[]>(() => changeHistory.list());
+  const adjustActive = adjustAnchorId !== null;
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const [leftColWidth, setLeftColWidth] = useState(340);
@@ -421,6 +442,57 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   }, [tasks, pendingDrafts, draftNewTasks, draftConflicts]);
 
   displayTasksRef.current = displayTasks;
+
+  // ── Timeline adjustment simulation ──────────────────────────────────────────
+  const stateFor = useCallback(
+    (task: Task) => {
+      const proj = projects.find((p) => p.id === task.projectId || p.name === task.project);
+      if (proj?.state) return proj.state;
+      const res = resources.find((r) => r.id === task.assigneeId);
+      return res?.state || "NSW";
+    },
+    [projects, resources]
+  );
+
+  // Eligible anchors: assigned, concrete (server) tasks that are not yet complete.
+  const adjustCandidateTasks = useMemo(
+    () =>
+      tasks.filter(
+        (t) => t.assigneeId && t.assignee !== "Unassigned" && (t.percent_complete ?? 0) < 100
+      ),
+    [tasks]
+  );
+
+  const adjustAnchorTask = useMemo(
+    () => (adjustAnchorId ? tasks.find((t) => t.id === adjustAnchorId) ?? null : null),
+    [adjustAnchorId, tasks]
+  );
+
+  const adjustMoves = useMemo<TaskMove[]>(() => {
+    if (!adjustAnchorId) return [];
+    return computeAdjustment(tasks, adjustAnchorId, adjustDelay, adjustMode, stateFor);
+  }, [adjustAnchorId, tasks, adjustDelay, adjustMode, stateFor]);
+
+  const adjustMovesById = useMemo(() => {
+    const map = new Map<string, TaskMove>();
+    adjustMoves.forEach((m) => map.set(m.taskId, m));
+    return map;
+  }, [adjustMoves]);
+
+  const adjustSimTasks = useMemo(() => {
+    if (!adjustActive) return tasks;
+    return computeSimulatedStatuses(applyMoves(tasks, adjustMoves), stateFor);
+  }, [adjustActive, tasks, adjustMoves, stateFor]);
+
+  const adjustWarnings = useMemo(
+    () => (adjustActive ? detectAdjustmentWarnings(adjustSimTasks, adjustMoves) : []),
+    [adjustActive, adjustSimTasks, adjustMoves]
+  );
+
+  const adjustSummary = useMemo(
+    () => summarizeAdjustment(adjustMoves, adjustSimTasks, tasks),
+    [adjustMoves, adjustSimTasks, tasks]
+  );
 
   const taskHasDependents = useCallback(
     (taskId: string) =>
@@ -642,9 +714,156 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
     applyDraftRecommendation(rec.taskId, rec.resourceId);
   };
 
+  // ── Timeline adjustment handlers ────────────────────────────────────────────
+  const openAdjust = (anchorId?: string) => {
+    if (hasPendingDrafts) {
+      setSavingMsg("Save or discard your draft changes before staging a delay.");
+      window.setTimeout(() => setSavingMsg(null), 3500);
+      return;
+    }
+    const target = anchorId || selectedTaskId || adjustCandidateTasks[0]?.id || null;
+    if (!target) {
+      setSavingMsg("No assigned tasks available to delay.");
+      window.setTimeout(() => setSavingMsg(null), 3000);
+      return;
+    }
+    setAdjustAnchorId(target);
+    setAdjustMode("full");
+    setAdjustDelay(0);
+    if (scheduleViewMode === "kanban" || scheduleViewMode === "history") {
+      setScheduleViewMode("projectteam");
+    }
+  };
+
+  const closeAdjust = () => {
+    setAdjustAnchorId(null);
+    setAdjustDelay(0);
+  };
+
+  const confirmAdjust = async () => {
+    if (!adjustAnchorTask || adjustMoves.length === 0) return;
+    const warningMessages = adjustWarnings.map((w) => w.message);
+    if (warningMessages.length > 0) {
+      const ok = window.confirm(
+        `This adjustment creates ${warningMessages.length} warning(s):\n\n` +
+          warningMessages.slice(0, 8).join("\n") +
+          `\n\nConfirm and apply to the live programme anyway?`
+      );
+      if (!ok) return;
+    }
+
+    setSavingMsg("Applying timeline adjustment…");
+    try {
+      for (const m of adjustMoves) {
+        const res = await fetch(`/api/v1/tasks/${m.taskId}/update`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ start: m.toStart, end: m.toEnd, cascade: false }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error("Failed to apply move");
+      }
+
+      const cs: ChangeSet = {
+        id: makeChangeSetId(),
+        createdAt: new Date().toISOString(),
+        anchorTaskId: adjustAnchorTask.id,
+        anchorTaskName: adjustAnchorTask.name,
+        mode: adjustMode,
+        delayWorkingDays: adjustDelay,
+        moves: adjustMoves,
+        warningsAtConfirm: warningMessages,
+        reverted: false,
+      };
+      changeHistory.add(cs);
+      setChangeSets(changeHistory.list());
+      closeAdjust();
+      loadAllData();
+      setSavingMsg(`Adjustment applied — ${cs.moves.length} task(s) moved.`);
+      window.setTimeout(() => setSavingMsg(null), 4000);
+    } catch (err) {
+      console.error("Error applying timeline adjustment:", err);
+      setSavingMsg("Could not apply adjustment. Try again.");
+      window.setTimeout(() => setSavingMsg(null), 3000);
+    }
+  };
+
+  const revertChangeSet = async (cs: ChangeSet) => {
+    setSavingMsg("Reverting adjustment…");
+    try {
+      for (const m of cs.moves) {
+        const res = await fetch(`/api/v1/tasks/${m.taskId}/update`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ start: m.fromStart, end: m.fromEnd, cascade: false }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error("Failed to revert move");
+      }
+      changeHistory.update(cs.id, { reverted: true, revertedAt: new Date().toISOString() });
+      setChangeSets(changeHistory.list());
+      loadAllData();
+      setSavingMsg("Adjustment reverted — tasks restored to prior dates.");
+      window.setTimeout(() => setSavingMsg(null), 3500);
+    } catch (err) {
+      console.error("Error reverting adjustment:", err);
+      setSavingMsg("Could not revert. Try again.");
+      window.setTimeout(() => setSavingMsg(null), 3000);
+    }
+  };
+
+  /** Shared ghost-original + arrow overlay rendered behind a moved task's new bar. */
+  const AdjustmentGhost = ({
+    move,
+    rowHeight,
+  }: {
+    move: TaskMove;
+    rowHeight: number;
+  }) => {
+    const fromLeft = LW + getColFromDate(move.fromStart) * CW;
+    const fromWidth = Math.max(26, getColDuration(move.fromStart, move.fromEnd) * CW);
+    const toLeft = LW + getColFromDate(move.toStart) * CW;
+    const top = (rowHeight - BAR_HEIGHT) / 2;
+    const cy = top + BAR_HEIGHT / 2;
+    const ghostRight = fromLeft + fromWidth;
+    const gap = toLeft - ghostRight;
+    return (
+      <>
+        <div
+          style={{
+            position: "absolute",
+            left: fromLeft,
+            width: fromWidth,
+            top,
+            height: BAR_HEIGHT,
+            borderRadius: 6,
+            border: `1.5px dotted ${C.gray}`,
+            background: "rgba(148,163,184,0.18)",
+            zIndex: 1,
+            pointerEvents: "none",
+          }}
+          title={`Was: ${move.fromStart} → ${move.fromEnd}`}
+        />
+        {gap > 6 && (
+          <svg
+            style={{ position: "absolute", left: ghostRight, top: 0, width: gap, height: rowHeight, overflow: "visible", pointerEvents: "none", zIndex: 3 }}
+          >
+            <line x1={0} y1={cy} x2={gap} y2={cy} stroke={C.purple} strokeWidth={1.6} strokeDasharray="3 2" />
+            <path d={`M ${gap - 6} ${cy - 4} L ${gap} ${cy} L ${gap - 6} ${cy + 4}`} fill="none" stroke={C.purple} strokeWidth={1.6} />
+          </svg>
+        )}
+      </>
+    );
+  };
+
+  // When a delay is staged (with a non-zero shift), every timeline view renders
+  // from the simulated set (new positions + recomputed statuses); otherwise from
+  // the normal draft view.
+  const renderSourceTasks = adjustActive && adjustMoves.length > 0 ? adjustSimTasks : displayTasks;
+
   const filteredTasks = useMemo(() => {
     const q = filterSearch.trim().toLowerCase();
-    return displayTasks.filter((t) => {
+    return renderSourceTasks.filter((t) => {
       if (filterProjects.length > 0 && !filterProjects.includes(t.project || "")) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       const tradeLabel = t.trade || t.tradeRequired || "";
@@ -656,7 +875,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       }
       return true;
     });
-  }, [displayTasks, filterProjects, filterStatus, filterTrade, filterResources, filterSearch]);
+  }, [renderSourceTasks, filterProjects, filterStatus, filterTrade, filterResources, filterSearch]);
 
   const tradeFilterOptions = useMemo(() => {
     const set = new Set<string>();
@@ -1240,6 +1459,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
             { id: "overall",     label: "📁 By Project" },
             { id: "resource",    label: "👷 By Resource" },
             { id: "kanban",      label: "📋 Kanban" },
+            { id: "history",     label: "🕒 Change History" },
           ] as const).map(tab => (
             <button
               key={tab.id}
@@ -1260,11 +1480,19 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
 
         <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
           <button style={{ padding: "8px 14px", background: C.blue, color: C.white, border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600 }} onClick={handleOpenCreate}>+ Add Task</button>
+          <button
+            style={{ padding: "8px 14px", background: adjustActive ? C.purple : "#F3F2FF", color: adjustActive ? C.white : C.purple, border: `0.5px solid ${C.purple}`, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600 }}
+            onClick={() => (adjustActive ? closeAdjust() : openAdjust())}
+            title="Stage a working-day delay with full / partial / no cascade"
+          >
+            ⏱ {adjustActive ? "Close Adjuster" : "Adjust Timeline"}
+          </button>
           <button style={{ padding: "8px 14px", background: C.bgSecond, color: C.text, border: `0.5px solid ${C.grayLight}`, borderRadius: 8, fontSize: 12, cursor: "pointer" }} onClick={loadAllData} title="Reload tasks">↻ Refresh</button>
         </div>
       </div>
 
-      {/* Filters — Overall, Resource, and Kanban */}
+      {/* Filters — hidden in Change History mode */}
+      {scheduleViewMode !== "history" && (
       <div
         style={{
           display: "flex",
@@ -1393,6 +1621,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
           </span>
         </div>
       </div>
+      )}
 
       {/* Draft status bar — save only when no conflicts */}
       {hasPendingDrafts && (
@@ -1488,8 +1717,8 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
         </div>
       )}
 
-      {/* Legend rail – hides in Kanban mode for clarity */}
-      {scheduleViewMode !== "kanban" && (
+      {/* Legend rail – hides in Kanban / History mode for clarity */}
+      {scheduleViewMode !== "kanban" && scheduleViewMode !== "history" && (
         <div style={{ display:"flex", gap:16, alignItems:"center", fontSize:12, color:C.textMuted, flexWrap: "wrap", marginBottom:14 }}>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.red, borderRadius:"50%", display:"inline-block" }} />Conflict</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.amber, borderRadius:"50%", display:"inline-block" }} />Fragile</span>
@@ -1505,6 +1734,34 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
           <span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid #FFFFFF", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
           {savingMsg}
         </div>
+      )}
+
+      {/* Timeline adjustment staging panel */}
+      {adjustActive && adjustAnchorTask && scheduleViewMode !== "history" && (
+        <TimelineAdjustPanel
+          anchorTask={adjustAnchorTask}
+          candidateTasks={adjustCandidateTasks}
+          mode={adjustMode}
+          delayDays={adjustDelay}
+          maxDelay={MAX_DELAY_DAYS}
+          moves={adjustMoves}
+          warnings={adjustWarnings}
+          summary={adjustSummary}
+          onAnchorChange={(id) => setAdjustAnchorId(id)}
+          onModeChange={setAdjustMode}
+          onDelayChange={setAdjustDelay}
+          onConfirm={() => void confirmAdjust()}
+          onCancel={closeAdjust}
+        />
+      )}
+
+      {/* VIEW RENDER: CHANGE HISTORY */}
+      {scheduleViewMode === "history" && (
+        <ChangeHistoryTab
+          changeSets={changeSets}
+          currentTasks={tasks}
+          onRevert={(cs) => void revertChangeSet(cs)}
+        />
       )}
 
       {/* VIEW RENDER: PROJECT × TEAM (default) */}
@@ -1616,9 +1873,12 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                             const barColor = getTaskBarColor(task);
                             const done = isTaskDone(task);
                             const isDraft = isDraftTaskId(task.id, pendingDrafts);
+                            const adjMove = adjustActive ? adjustMovesById.get(task.id) : undefined;
 
                             return (
-                              <div key={task.id}
+                              <React.Fragment key={task.id}>
+                              {adjMove && <AdjustmentGhost move={adjMove} rowHeight={ROW_HEIGHT + 4} />}
+                              <div
                                 style={{
                                   position:"absolute",
                                   left: LW + renderedStartCol * CW,
@@ -1638,12 +1898,15 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                                 }}
                                 onMouseDown={(e) => {
                                   if (e.button !== 0) return;
+                                  if (adjustActive) return;
                                   e.preventDefault();
                                   dragDidMoveRef.current = false;
                                   setActiveDrag({ id: task.id, type: "move", startX: e.clientX, startCol: sCol, duration: lCol });
                                 }}
                                 onClick={() => {
                                   if (dragDidMoveRef.current) { dragDidMoveRef.current = false; return; }
+                                  if (adjustActive) { setAdjustAnchorId(task.id); return; }
+                                  setSelectedTaskId(task.id);
                                   handleOpenEdit(task);
                                 }}
                                 title={`${task.name} · ${task.start} → ${task.end}`}
@@ -1655,11 +1918,13 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                                 {task.percent_complete > 0 && ` (${task.percent_complete}%)`}
                                 <div style={{ position:"absolute", right:0, top:0, bottom:0, width:10, cursor:"ew-resize", background:"rgba(255,255,255,0.15)", borderLeft:"0.5px solid rgba(255,255,255,0.25)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, userSelect:"none" }}
                                   onMouseDown={(e) => {
+                                    if (adjustActive) return;
                                     e.stopPropagation(); e.preventDefault();
                                     dragDidMoveRef.current = false;
                                     setActiveDrag({ id: task.id, type: "resize", startX: e.clientX, startCol: sCol, duration: lCol });
                                   }}>⋮</div>
                               </div>
+                              </React.Fragment>
                             );
                           })}
                         </div>
@@ -1913,6 +2178,11 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                           </div>
                         ))}
 
+                        {/* Staged-adjustment ghost (original position) + arrow */}
+                        {adjustActive && adjustMovesById.has(task.id) && (
+                          <AdjustmentGhost move={adjustMovesById.get(task.id)!} rowHeight={ROW_HEIGHT} />
+                        )}
+
                         {/* Task visualization rendering */}
                           <div style={{
                             position:"absolute",
@@ -1934,6 +2204,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                           }}
                           onMouseDown={(e) => {
                             if (e.button !== 0) return;
+                            if (adjustActive) return;
                             e.preventDefault();
                             dragDidMoveRef.current = false;
                             setActiveDrag({
@@ -1949,6 +2220,8 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                               dragDidMoveRef.current = false;
                               return;
                             }
+                            if (adjustActive) { setAdjustAnchorId(task.id); return; }
+                            setSelectedTaskId(task.id);
                             handleOpenEdit(task);
                           }}
                           >
@@ -1969,6 +2242,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: "bold", userSelect: "none"
                               }}
                               onMouseDown={(e) => {
+                                if (adjustActive) return;
                                 e.stopPropagation();
                                 e.preventDefault();
                                 dragDidMoveRef.current = false;
@@ -2187,10 +2461,12 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                     const done = isTaskDone(task);
                     const isDraft = isDraftTaskId(task.id, pendingDrafts);
                     const projShortName = (task.project || "").split(" —")[0];
+                    const adjMove = adjustActive ? adjustMovesById.get(task.id) : undefined;
 
                     return (
+                      <React.Fragment key={task.id}>
+                      {adjMove && <AdjustmentGhost move={adjMove} rowHeight={ROW_HEIGHT + 8} />}
                       <div
-                        key={task.id}
                         style={{
                           position:"absolute",
                           left: LW + renderedStartCol * CW,
@@ -2211,6 +2487,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                         }}
                         onMouseDown={(e) => {
                           if (e.button !== 0) return;
+                          if (adjustActive) return;
                           e.preventDefault();
                           dragDidMoveRef.current = false;
                           setActiveDrag({
@@ -2226,6 +2503,8 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                             dragDidMoveRef.current = false;
                             return;
                           }
+                          if (adjustActive) { setAdjustAnchorId(task.id); return; }
+                          setSelectedTaskId(task.id);
                           handleOpenEdit(task);
                         }}
                       >
@@ -2244,6 +2523,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                             display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, userSelect: "none"
                           }}
                           onMouseDown={(e) => {
+                            if (adjustActive) return;
                             e.stopPropagation();
                             e.preventDefault();
                             dragDidMoveRef.current = false;
@@ -2259,6 +2539,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                           ⋮
                         </div>
                       </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>
@@ -2753,8 +3034,18 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
               )}
 
               {/* Action buttons */}
-              <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:10 }}>
-                <button 
+              <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:10, alignItems:"center" }}>
+                {editingTask && editingTask.assigneeId && !editingTask.id.startsWith("DRAFT-") && (
+                  <button
+                    type="button"
+                    onClick={() => { const id = editingTask.id; setShowAddModal(false); openAdjust(id); }}
+                    style={{ padding: "8px 14px", borderRadius: 8, background:"#F3F2FF", border:`0.5px solid ${C.purple}`, color:C.purple, fontSize:12, cursor:"pointer", fontWeight:600, marginRight:"auto" }}
+                    title="Stage a working-day delay with cascade options"
+                  >
+                    ⏱ Delay / adjust…
+                  </button>
+                )}
+                <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
                   style={{ padding: "8px 16px", borderRadius: 8, background:C.white, border:`0.5px solid ${C.grayLight}`, fontSize:12, cursor:"pointer" }}
