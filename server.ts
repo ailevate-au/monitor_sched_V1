@@ -1,0 +1,1129 @@
+import express from "express";
+import http from "http";
+import path from "path";
+import { createServer as createViteServer } from "vite";
+import PDFDocument from "pdfkit";
+import ExcelJS from "exceljs";
+import { dbInstance } from "./src/server/db";
+import { runConflictDetection, computeCascade, getConflictHubPayload } from "./src/server/conflictEngine";
+import { getBOMForecast } from "./src/server/bomWeather";
+import {
+  getMastersBundle,
+  getMasterList,
+  isMasterType,
+  upsertMaster,
+  toggleMaster,
+} from "./src/server/mastersStore";
+import { calculateTaskCost, sumProjectScheduledCost } from "./src/server/taskCost";
+
+function toSafeExportName(input: string): string {
+  const normalized = input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "report";
+}
+
+function buildPdfBuffer(params: {
+  reportType: string;
+  reportFormat: "PDF" | "Excel";
+  projectName: string;
+  projectId: string;
+  generatedAt: string;
+  totalTasks: number;
+  completedTasks: number;
+  totalClaims: number;
+  pendingClaims: number;
+}): Promise<Buffer> {
+  const {
+    reportType,
+    reportFormat,
+    projectName,
+    projectId,
+    generatedAt,
+    totalTasks,
+    completedTasks,
+    totalClaims,
+    pendingClaims,
+  } = params;
+
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const doc = new PDFDocument({ margin: 50, size: "A4" });
+
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    doc.fontSize(18).text("SITEWISE REPORT EXPORT", { align: "left" });
+    doc.moveDown(0.6);
+    doc.fontSize(11).text("Generated from live application context");
+    doc.moveDown(1.2);
+
+    doc.fontSize(13).text("Report Overview", { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11);
+    doc.text(`Report Type: ${reportType}`);
+    doc.text(`Requested Format: ${reportFormat}`);
+    doc.text(`Generated At: ${generatedAt}`);
+    doc.moveDown(1.0);
+
+    doc.fontSize(13).text("Project Context", { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11);
+    doc.text(`Project: ${projectName}`);
+    doc.text(`Project ID: ${projectId || "-"}`);
+    doc.moveDown(1.0);
+
+    doc.fontSize(13).text("Summary Metrics", { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11);
+    doc.text(`Total tasks: ${totalTasks}`);
+    doc.text(`Completed tasks: ${completedTasks}`);
+    doc.text(`Total progress claims: ${totalClaims}`);
+    doc.text(`Pending claims: ${pendingClaims}`);
+    doc.moveDown(1.0);
+    doc.fontSize(10).fillColor("#666666");
+    doc.text("Note: This export reflects data available at generation time.");
+
+    doc.end();
+  });
+}
+
+async function startServer() {
+  await dbInstance.init();
+  runConflictDetection();
+  const app = express();
+  const httpServer = http.createServer(app);
+  const PORT = Number(process.env.PORT) || 3001;
+
+  app.use(express.json());
+
+  // ─── API ENDPOINTS (v1) ──────────────────────────────────────────
+
+  // AUTH API — Superadmin / PM / Resource Role-based controls
+  app.post("/api/v1/auth/login", (req, res) => {
+    const { email } = req.body;
+    const name = email ? email.split("@")[0] : "Director";
+    res.json({
+      token: "mock-jwt-token-xyz123",
+      user: {
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        email: email || "director@interscale.com.au",
+        role: "PM",
+        state: "NSW"
+      }
+    });
+  });
+
+  // GET /api/v1/dashboard: portfolio statistics and top-level summaries
+  app.get("/api/v1/dashboard", (req, res) => {
+    const db = dbInstance;
+    const weather = getBOMForecast();
+
+    const conflictsCount = db.conflicts.length;
+    const activeProjects = db.projects.filter(p => p.status === "ACTIVE").length;
+
+    res.json({
+      activeProjectsCount: activeProjects,
+      onProgrammePct: 57,
+      resourceConflictsCount: conflictsCount,
+      whsLtiFreeDays: 142,
+      weatherAlert: {
+        severity: "warning",
+        title: "BOM Forecast Alert",
+        text: "Heavy rain / severe storm forecast Sydney (Wed 4 Jun – Thu 5 Jun). 2 tasks at Weather Risk.",
+        forecast: weather
+      }
+    });
+  });
+
+  // GET /api/v1/dashboard/tasks: filtered list of all scheduled tasks
+  app.get("/api/v1/dashboard/tasks", (req, res) => {
+    const db = dbInstance;
+    const { status, project } = req.query;
+
+    let filtered = db.tasks;
+    if (status && status !== "all") {
+      filtered = filtered.filter(t => t.status === status);
+    }
+    if (project && project !== "all") {
+      filtered = filtered.filter(t => {
+        const pObj = db.projects.find(p => p.id === t.projectId);
+        return pObj && pObj.name === project;
+      });
+    }
+
+    // Join Project Name and Assignee Name
+    const payload = filtered.map(t => {
+      const p = db.projects.find(proj => proj.id === t.projectId);
+      const r = db.resources.find(res => res.id === t.assigneeId);
+      const calculatedCost = calculateTaskCost(t, r);
+
+      let rateDisplay = r ? r.rate : "A$0/hr";
+      if (t.cost_override !== null && t.cost_override !== undefined) {
+        const type = t.cost_override_type || "hourly";
+        if (type === "hourly") rateDisplay = `A$${t.cost_override}/hr (Override)`;
+        else if (type === "daily") rateDisplay = `A$${t.cost_override}/day (Override)`;
+        else if (type === "lump_sum") rateDisplay = `A$${t.cost_override} Flat (Override)`;
+      } else if (r) {
+        let baseRate = r.hourlyRateVal || 75;
+        let suffix = "";
+        if (r.projectRateOverrides && r.projectRateOverrides[t.projectId] !== undefined) {
+          baseRate = r.projectRateOverrides[t.projectId];
+          suffix = " (Proj Override)";
+        }
+        rateDisplay = `A$${baseRate}/hr${suffix}`;
+      }
+
+      return {
+        ...t,
+        project: p ? p.name : "Unknown",
+        assignee: r ? r.name : "Unassigned",
+        trade: r ? r.trade : t.tradeRequired,
+        rate: rateDisplay,
+        calculatedCostVal: calculatedCost
+      };
+    });
+
+    res.json(payload);
+  });
+
+  // GET /api/v1/projects: details of general Tier 1/2 commercial programs
+  app.get("/api/v1/projects", (req, res) => {
+    const db = dbInstance;
+    res.json(db.projects);
+  });
+
+  // POST /api/v1/projects: create a new project contract
+  app.post("/api/v1/projects", (req, res) => {
+    const db = dbInstance;
+    const { name, type, location, contractor, state, originalContractSum, plannedCost, ldRatePerDay, pcEndDate, retentionPercent } = req.body;
+    if (!name || !contractor) {
+      return res.status(400).json({ error: "Missing required fields: name and contractor" });
+    }
+    const val = parseFloat(originalContractSum) || 5.0;
+    const parsedPlannedCost = plannedCost !== undefined && !isNaN(parseFloat(plannedCost)) ? parseFloat(plannedCost) : val * 0.85;
+    const parsedLdRate = ldRatePerDay !== undefined && !isNaN(parseFloat(ldRatePerDay)) ? parseFloat(ldRatePerDay) : val * 1000;
+    const parsedRetention = retentionPercent !== undefined && !isNaN(parseFloat(retentionPercent)) ? parseFloat(retentionPercent) : 5.0;
+
+    const newProject = {
+      id: `p${db.projects.length + 1}`,
+      name,
+      type: type || "Commercial construction",
+      location: location || "Sydney NSW",
+      contractor,
+      state: state || "NSW",
+      originalContractSum: val,
+      finalContractSum: val,
+      plannedCost: parsedPlannedCost,
+      actualCost: 0,
+      ldRatePerDay: parsedLdRate,
+      pcStartDate: new Date().toISOString().split("T")[0],
+      pcEndDate: pcEndDate || new Date(Date.now() + 180 * 24 * 3600 * 1000).toISOString().split("T")[0], // 6 months out
+      retentionPercent: parsedRetention,
+      status: "ACTIVE" as const,
+      progress: 0,
+      weatherRisk: false,
+      overBudget: false
+    };
+    db.projects.push(newProject);
+    db.save();
+    res.json(newProject);
+  });
+
+  // POST /api/v1/projects/:id/rates: set project rate overrides for resources
+  app.post("/api/v1/projects/:id/rates", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { resourceRates } = req.body;
+
+    if (!resourceRates) {
+      return res.status(400).json({ error: "Missing resource rates" });
+    }
+
+    db.resources.forEach(r => {
+      if (!r.projectRateOverrides) {
+        r.projectRateOverrides = {};
+      }
+      if (resourceRates[r.id] !== undefined) {
+        const rateVal = parseInt(resourceRates[r.id]);
+        if (isNaN(rateVal) || rateVal <= 0) {
+          delete r.projectRateOverrides[id];
+        } else {
+          r.projectRateOverrides[id] = rateVal;
+        }
+      }
+    });
+
+    db.save();
+    res.json({ success: true, resources: db.resources });
+  });
+
+  // GET /api/v1/tasks: full project timelines for Gantt grid
+  app.get("/api/v1/tasks", (req, res) => {
+    const db = dbInstance;
+    res.json(db.tasks);
+  });
+
+  // POST /api/v1/tasks/create: Add a brand new task
+  app.post("/api/v1/tasks/create", (req, res) => {
+    const db = dbInstance;
+    const {
+      project,
+      name,
+      start,
+      end,
+      dependencies,
+      lag_days,
+      dependency_type,
+      assigneeId,
+      trade,
+      cost_override,
+      cost_override_type
+    } = req.body;
+
+    if (!name || !project || !start || !end) {
+      return res.status(400).json({ error: "Missing required fields: project, name, start, and end" });
+    }
+
+    const proj = db.projects.find(p => p.name === project || p.id === project);
+    if (!proj) {
+      return res.status(400).json({ error: "Project not found" });
+    }
+
+    const newIdNum = db.tasks.length + 1;
+    const id = `TSK-${String(newIdNum).padStart(3, "0")}`;
+
+    let assigneeName = "Unassigned";
+    if (assigneeId) {
+      const resObj = db.resources.find(r => r.id === assigneeId);
+      assigneeName = resObj ? resObj.name : "Unassigned";
+    }
+
+    const d1 = new Date(start);
+    const d2 = new Date(end);
+    const diffTime = d2.getTime() - d1.getTime();
+    const durationDays = Math.max(1, Math.round(diffTime / (1000 * 3600 * 24)) + 1);
+
+    const newTask: any = {
+      id,
+      projectId: proj.id,
+      name,
+      start,
+      end,
+      durationDays,
+      assigneeId: assigneeId || null,
+      assignee: assigneeName,
+      trade: trade || "Labour",
+      dependencies: dependencies || "",
+      status: "scheduled",
+      lag_days: parseInt(lag_days) || 0,
+      dependency_type: dependency_type === "SS" ? "SS" : "FS",
+      cost_override: cost_override !== undefined && cost_override !== null ? parseFloat(cost_override) : null,
+      cost_override_type: cost_override_type || null,
+      percent_complete: 0
+    };
+
+    db.tasks.push(newTask);
+    runConflictDetection();
+    db.save();
+    res.json({ success: true, task: newTask, tasks: db.tasks });
+  });
+
+  // POST /api/v1/tasks/:id/update: reschedule a task, option to cascade dependencies
+  app.post("/api/v1/tasks/:id/update", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const {
+      start,
+      end,
+      cascade,
+      name,
+      dependencies,
+      lag_days,
+      dependency_type,
+      cost_override,
+      cost_override_type,
+      assigneeId,
+      trade,
+      percent_complete
+    } = req.body;
+
+    const task = db.tasks.find(t => t.id === id) as any;
+    if (!task) return res.status(404).json({ error: "Task not found" });
+
+    if (name !== undefined) task.name = name;
+    if (dependencies !== undefined) task.dependencies = dependencies;
+    if (lag_days !== undefined) task.lag_days = parseInt(lag_days) || 0;
+    if (dependency_type !== undefined) task.dependency_type = dependency_type === "SS" ? "SS" : "FS";
+    if (cost_override !== undefined) task.cost_override = cost_override !== null ? parseFloat(cost_override) : null;
+    if (cost_override_type !== undefined) task.cost_override_type = cost_override_type;
+    
+    if (assigneeId !== undefined) {
+      task.assigneeId = assigneeId;
+      if (assigneeId === null) {
+        task.assignee = "Unassigned";
+      } else {
+        const resObj = db.resources.find(r => r.id === assigneeId);
+        task.assignee = resObj ? resObj.name : "Unassigned";
+      }
+    }
+    if (trade !== undefined) task.trade = trade;
+    if (percent_complete !== undefined) task.percent_complete = parseInt(percent_complete) || 0;
+
+    const hasStartChange = start !== undefined && start !== task.start;
+    const hasEndChange = end !== undefined && end !== task.end;
+
+    if (start !== undefined) task.start = start;
+    if (end !== undefined) task.end = end;
+
+    if (start !== undefined || end !== undefined) {
+      const d1 = new Date(task.start);
+      const d2 = new Date(task.end);
+      const diffTime = d2.getTime() - d1.getTime();
+      task.durationDays = Math.max(1, Math.round(diffTime / (1000 * 3600 * 24)) + 1);
+    }
+
+    if (cascade && (hasStartChange || hasEndChange)) {
+      // Task already set to explicit user-picked dates above.
+      // Cascade only downstream dependents from this new anchor.
+      db.tasks = computeCascade(db.tasks, id, 0, "NSW");
+    }
+
+    runConflictDetection();
+    db.save();
+    res.json({ success: true, tasks: db.tasks });
+  });
+
+  // GET /api/v1/resources: lists resource personnel and utilization values
+  app.get("/api/v1/resources", (req, res) => {
+    const db = dbInstance;
+    res.json(db.resources);
+  });
+
+  // POST /api/v1/resources: register new resources
+  app.post("/api/v1/resources", (req, res) => {
+    const db = dbInstance;
+    const { name, trade, state, rate, email, company, overtimeRateVal, dailyAllowanceVal, projectRateOverrides } = req.body;
+    if (!name || !trade) {
+      return res.status(400).json({ error: "Missing required fields: name and trade" });
+    }
+    const initials = name.split(" ").map((n: string) => n.charAt(0)).join("").toUpperCase().slice(0, 3);
+    const rateVal = parseInt(rate) || 55;
+    const newResource = {
+      id: `r${db.resources.length + 1}`,
+      initials: initials || "SR",
+      name,
+      trade,
+      state: state || "NSW",
+      rate: `A$${rateVal}/hr`,
+      hourlyRateVal: rateVal,
+      util: 0,
+      status: "ok" as const,
+      email: email || `${name.toLowerCase().replace(/\s+/g, ".")}@builderportal.com.au`,
+      company: company || "Direct Hire",
+      overtimeRateVal: parseInt(overtimeRateVal) || Math.round(rateVal * 1.5),
+      dailyAllowanceVal: parseInt(dailyAllowanceVal) || 0,
+      projectRateOverrides: projectRateOverrides || {}
+    };
+    db.resources.push(newResource);
+    db.save();
+    res.json(newResource);
+  });
+
+  // POST /api/v1/resources/bulk: Import multiple professionals at once
+  app.post("/api/v1/resources/bulk", (req, res) => {
+    const db = dbInstance;
+    const { list } = req.body;
+    if (!Array.isArray(list)) {
+      return res.status(400).json({ error: "Invalid or empty roster list" });
+    }
+
+    const imported: any[] = [];
+    list.forEach(item => {
+      const { name, trade, rate, company, email, state, overtimeRateVal, dailyAllowanceVal } = item;
+      if (!name || !trade) return;
+
+      const rateVal = parseInt(rate) || 65;
+      const initials = name.split(" ").map((n: string) => n.charAt(0)).join("").toUpperCase().slice(0, 3) || "SR";
+      const newResource = {
+        id: `r${db.resources.length + 1}`,
+        name,
+        initials,
+        trade,
+        state: state || "NSW",
+        rate: `A$${rateVal}/hr`,
+        hourlyRateVal: rateVal,
+        util: 0,
+        status: "ok" as const,
+        email: email || `${name.toLowerCase().replace(/\s+/g, ".")}@builderportal.com.au`,
+        company: company || "Direct Hire",
+        overtimeRateVal: parseInt(overtimeRateVal) || Math.round(rateVal * 1.5),
+        dailyAllowanceVal: parseInt(dailyAllowanceVal) || 0,
+        projectRateOverrides: {}
+      };
+      db.resources.push(newResource);
+      imported.push(newResource);
+    });
+
+    db.save();
+    res.json({ success: true, count: imported.length, resources: db.resources });
+  });
+
+  // POST /api/v1/resources/:id/update: update rich resource information
+  app.post("/api/v1/resources/:id/update", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { name, trade, state, rate, email, company, overtimeRateVal, dailyAllowanceVal, projectRateOverrides } = req.body;
+
+    const resource = db.resources.find(r => r.id === id);
+    if (!resource) {
+      return res.status(404).json({ error: "Resource not found" });
+    }
+
+    if (name !== undefined) {
+      resource.name = name;
+      resource.initials = name.split(" ").map((n: string) => n.charAt(0)).join("").toUpperCase().slice(0, 3) || "SR";
+    }
+    if (trade !== undefined) resource.trade = trade;
+    if (state !== undefined) resource.state = state;
+    if (rate !== undefined) {
+      const rateVal = parseInt(rate) || 55;
+      resource.hourlyRateVal = rateVal;
+      resource.rate = `A$${rateVal}/hr`;
+    }
+    if (email !== undefined) resource.email = email;
+    if (company !== undefined) resource.company = company;
+    if (overtimeRateVal !== undefined) resource.overtimeRateVal = parseInt(overtimeRateVal) || 0;
+    if (dailyAllowanceVal !== undefined) resource.dailyAllowanceVal = parseInt(dailyAllowanceVal) || 0;
+    if (projectRateOverrides !== undefined) resource.projectRateOverrides = projectRateOverrides;
+
+    db.save();
+    res.json({ success: true, resource });
+  });
+
+  // GET /api/v1/conflicts: double-booking analysis + hub metrics
+  app.get("/api/v1/conflicts", (req, res) => {
+    res.json(getConflictHubPayload());
+  });
+
+  // POST /api/v1/conflicts/:id/resolve: reassign candidate
+  app.post("/api/v1/conflicts/:id/resolve", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params; // Conflict ID (format c-resourceId-timestamp)
+    const { targetResourceId } = req.body;
+
+    const resourceId = id.split("-")[1]; // extract resource ID
+    
+    // Find tasks assigned to this conflicted resource that are double booked
+    const conflictedTasks = db.tasks.filter(t => t.assigneeId === resourceId && t.status === "conflict");
+
+    if (conflictedTasks.length > 0) {
+      // Reassign first conflicting task to the selected replacement candidate
+      const targetTask = conflictedTasks[0];
+      const prevAssigneeId = targetTask.assigneeId;
+
+      targetTask.assigneeId = targetResourceId;
+      
+      // Save to undo log
+      db.undoStack.push({
+        targetId: targetTask.id,
+        prevAssigneeId
+      });
+
+      db.conflictResolutionLog.push({
+        resourceId,
+        resolvedAt: new Date().toISOString(),
+        undone: false,
+      });
+
+      // Recalculately analyze allocations
+      runConflictDetection();
+      db.save();
+
+      return res.json({
+        success: true,
+        message: "Resource reallocated, schedule conflict resolved",
+        hub: getConflictHubPayload(),
+      });
+    }
+
+    res.status(404).json({ error: "No active conflict found for resource" });
+  });
+
+  // POST /api/v1/conflicts/:id/undo: rollback last re-assignment
+  app.post("/api/v1/conflicts/:id/undo", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const resourceId = id.startsWith("c-") ? id.split("-")[1] : id;
+    const lastAction = db.undoStack.pop();
+
+    if (lastAction) {
+      const task = db.tasks.find(t => t.id === lastAction.targetId);
+      if (task) {
+        task.assigneeId = lastAction.prevAssigneeId;
+
+        const resolutionEntry = [...db.conflictResolutionLog]
+          .reverse()
+          .find(entry => entry.resourceId === resourceId && !entry.undone);
+        if (resolutionEntry) {
+          resolutionEntry.undone = true;
+        }
+
+        runConflictDetection();
+        db.save();
+        return res.json({
+          success: true,
+          message: "Rollback successful",
+          hub: getConflictHubPayload(),
+        });
+      }
+    }
+
+    res.status(400).json({ error: "Nothing to undo" });
+  });
+
+  // FINANCIAL APIs (AS 4000-1997 audit specifications)
+  app.get("/api/v1/financial/projects/:id", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const project = db.projects.find(p => p.id === id);
+
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    // Financial calculations per guidelines
+    const profit = project.finalContractSum - project.actualCost;
+    const rawMargin = (project.finalContractSum - project.actualCost) / project.finalContractSum;
+    const margin = Math.round(rawMargin * 1000) / 10; // decimal rounded margin
+
+    const costOverrun = project.actualCost - project.plannedCost;
+    const revenueVariance = project.finalContractSum - project.originalContractSum;
+
+    // Sum matching progress claims retention
+    const pClaims = db.claims.filter(cl => cl.projectId === id);
+    const totalRetention = pClaims.reduce((acc, curr) => acc + curr.retentionVal, 0);
+
+    const scheduledCostVal = sumProjectScheduledCost(db.tasks, db.resources, id);
+
+    res.json({
+      name: project.name,
+      contractSumVal: project.finalContractSum,
+      plannedCostVal: project.plannedCost,
+      actualCostVal: project.actualCost,
+      scheduledCostVal,
+      profitVal: Math.round(profit * 100) / 100,
+      marginVal: margin,
+      costOverrunVal: Math.round(costOverrun * 100) / 100,
+      revenueVarianceVal: Math.round(revenueVariance * 100) / 100,
+      retentionBalanceVal: totalRetention,
+      ldExposure: 68000 // A$68k standard penalty past schedule
+    });
+  });
+
+  // POST /api/v1/financial/variance: log custom building variations or costs
+  app.post("/api/v1/financial/variance", (req, res) => {
+    const db = dbInstance;
+    const { projectId, description, amountVal, type } = req.body;
+    const project = db.projects.find(p => p.id === projectId);
+    if (!project) return res.status(404).json({ error: "Project contract not found" });
+
+    const val = parseFloat(amountVal) || 0;
+    if (type === "contract_sum_addition") {
+      project.finalContractSum = Math.round((project.finalContractSum + val) * 10) / 10;
+    } else {
+      project.actualCost = Math.round((project.actualCost + val) * 10) / 10;
+      project.overBudget = project.actualCost > project.plannedCost;
+    }
+    db.save();
+    res.json({ success: true, project });
+  });
+
+  // GET /api/v1/claims: progress claim lists
+  app.get("/api/v1/claims", (req, res) => {
+    const db = dbInstance;
+    res.json(db.claims);
+  });
+
+  // POST /api/v1/claims: claim submission
+  app.post("/api/v1/claims", (req, res) => {
+    const db = dbInstance;
+    const { projectId, claimedAmountVal, dueDate, costCategoryId, taskIds, description } = req.body;
+
+    const proj = db.projects.find(p => p.id === projectId);
+    if (!proj) return res.status(404).json({ error: "Project not found" });
+
+    const category = costCategoryId
+      ? db.costCategories.find(c => c.id === costCategoryId && c.is_active !== false)
+      : db.costCategories.find(c => c.is_active !== false);
+    if (costCategoryId && !category) {
+      return res.status(400).json({ error: "Invalid or inactive cost category" });
+    }
+
+    const count = db.claims.filter(c => c.projectId === projectId).length + 3;
+    const claimNo = `PC-0${count}`;
+
+    const descText = typeof description === "string" ? description.trim().slice(0, 200) : "";
+
+    const newClaim = {
+      id: `cl-${Date.now()}`,
+      claimNumber: claimNo,
+      projectId,
+      project: proj.name,
+      period: "Current Period",
+      claimedAmount: `A$${claimedAmountVal}M`,
+      certifiedAmount: "A$0.0M",
+      claimedVal: claimedAmountVal * 1000000,
+      certifiedVal: 0,
+      retentionVal: 0,
+      dueDate: dueDate || "2026-06-30",
+      status: "pending" as const,
+      costCategoryId: category?.id || "cc1",
+      costCategoryName: category?.name || "Labour",
+      taskIds: typeof taskIds === "string" ? taskIds : "",
+      description: descText,
+    };
+
+    db.claims.unshift(newClaim);
+    db.save();
+    res.json(newClaim);
+  });
+
+  // POST /api/v1/claims/:id/certify: certify progress claim, holding 5% security values
+  app.post("/api/v1/claims/:id/certify", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { certifiedAmountVal } = req.body; // e.g., 3.1 for A$3.1M
+
+    const claim = db.claims.find(c => c.id === id);
+    if (!claim) return res.status(404).json({ error: "Progress claim not found" });
+
+    const numericCertified = parseFloat(certifiedAmountVal) * 1000000;
+    const project = db.projects.find(p => p.id === claim.projectId);
+    const retentionPct = project?.retentionPercent ?? 5.0;
+    const retention = Math.round(numericCertified * (retentionPct / 100));
+
+    claim.status = "certified";
+    claim.certifiedAmount = `A$${certifiedAmountVal}M`;
+    claim.certifiedVal = numericCertified;
+    claim.retentionVal = retention;
+
+    // Increment Project Actual Cost accordingly
+    if (project) {
+      project.actualCost = Math.round((project.actualCost + parseFloat(certifiedAmountVal)) * 10) / 10;
+    }
+
+    db.save();
+    res.json(claim);
+  });
+
+  // PUT /api/v1/claims/:id: update expense entry fields
+  app.put("/api/v1/claims/:id", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { claimedAmountVal, costCategoryId, description } = req.body;
+
+    const claim = db.claims.find(c => c.id === id);
+    if (!claim) return res.status(404).json({ error: "Expense not found" });
+
+    const parsedAmount = Number(claimedAmountVal);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: "Invalid expense amount" });
+    }
+
+    const category = db.costCategories.find(c => c.id === costCategoryId && c.is_active !== false);
+    if (!category) {
+      return res.status(400).json({ error: "Invalid or inactive cost category" });
+    }
+
+    claim.claimedVal = parsedAmount * 1000000;
+    claim.claimedAmount = `A$${parsedAmount}M`;
+    claim.costCategoryId = category.id;
+    claim.costCategoryName = category.name;
+    claim.description = typeof description === "string" ? description.trim().slice(0, 200) : "";
+
+    db.save();
+    res.json(claim);
+  });
+
+  // GET /api/v1/conflicts/:id/candidates
+  app.get("/api/v1/conflicts/:id/candidates", (req, res) => {
+    const db = dbInstance;
+    let { id } = req.params;
+    let resourceId = id;
+    if (id.startsWith("c-")) {
+      resourceId = id.split("-")[1];
+    }
+    const resource = db.resources.find(r => r.id === resourceId);
+    if (!resource) return res.status(404).json({ error: "Resource not found" });
+
+    const candidates = db.resources.filter(r => r.id !== resourceId && r.trade === resource.trade);
+    res.json(candidates);
+  });
+
+  // ─── MASTER DATA API ─────────────────────────────────────────────
+
+  app.get("/api/v1/masters", (req, res) => {
+    const activeOnly = req.query.activeOnly === "true";
+    res.json(getMastersBundle(activeOnly));
+  });
+
+  app.get("/api/v1/masters/:type", (req, res) => {
+    const { type } = req.params;
+    if (!isMasterType(type)) {
+      return res.status(400).json({ error: "Invalid master type" });
+    }
+    const activeOnly = req.query.activeOnly === "true";
+    res.json(getMasterList(type, activeOnly));
+  });
+
+  app.post("/api/v1/masters/:type", (req, res) => {
+    const { type } = req.params;
+    if (!isMasterType(type)) {
+      return res.status(400).json({ error: "Invalid master type" });
+    }
+    try {
+      const list = upsertMaster(type, req.body);
+      res.json(list);
+    } catch (e: any) {
+      res.status(400).json({ error: e.message || "Could not save master item" });
+    }
+  });
+
+  app.post("/api/v1/masters/:type/:id/toggle", (req, res) => {
+    const { type, id } = req.params;
+    if (!isMasterType(type)) {
+      return res.status(400).json({ error: "Invalid master type" });
+    }
+    try {
+      const list = toggleMaster(type, id);
+      res.json(list);
+    } catch (e: any) {
+      res.status(400).json({ error: e.message || "Could not toggle master item" });
+    }
+  });
+
+  // --- IMPROVEMENTS API ---
+
+  // Cost Categories (Improvement 7)
+  app.get("/api/v1/cost_categories", (req, res) => {
+    const db = dbInstance;
+    res.json(db.costCategories);
+  });
+
+  app.post("/api/v1/cost_categories", (req, res) => {
+    const db = dbInstance;
+    const { id, name } = req.body;
+    if (!name) return res.status(400).json({ error: "Name is required" });
+
+    if (id) {
+      // Edit
+      const existing = db.costCategories.find(c => c.id === id);
+      if (existing) {
+        existing.name = name;
+      }
+    } else {
+      // Add
+      const newCat = {
+        id: "cc-" + Math.random().toString(36).slice(2, 9),
+        name,
+        is_active: true,
+        sort_order: db.costCategories.length + 1
+      };
+      db.costCategories.push(newCat);
+    }
+    db.save();
+    res.json(db.costCategories);
+  });
+
+  app.post("/api/v1/cost_categories/:id/toggle", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const existing = db.costCategories.find(c => c.id === id);
+    if (existing) {
+      existing.is_active = !existing.is_active;
+      db.save();
+    }
+    res.json(db.costCategories);
+  });
+
+  // Team Member Work (Improvement 5 & 6)
+  app.get("/api/v1/my/assignments", (req, res) => {
+    const db = dbInstance;
+    const assigneeId = (req.query.assigneeId as string) || "r1";
+    const myTasks = db.tasks.filter(t => t.assigneeId === assigneeId);
+    const payload = myTasks.map(t => {
+      const p = db.projects.find(proj => proj.id === t.projectId);
+      const r = db.resources.find(res => res.id === t.assigneeId);
+      return {
+        ...t,
+        project: p ? p.name : "Unknown",
+        assignee: r ? r.name : "Unassigned",
+        trade: r ? r.trade : t.tradeRequired,
+      };
+    });
+    res.json(payload);
+  });
+
+  app.get("/api/v1/my/schedule", (req, res) => {
+    const db = dbInstance;
+    const assigneeId = (req.query.assigneeId as string) || "r1";
+    const myTasks = db.tasks.filter(t => t.assigneeId === assigneeId).sort((a, b) => a.start.localeCompare(b.start));
+    const payload = myTasks.map(t => {
+      const p = db.projects.find(proj => proj.id === t.projectId);
+      const r = db.resources.find(res => res.id === t.assigneeId);
+      return {
+        ...t,
+        project: p ? p.name : "Unknown",
+        assignee: r ? r.name : "Unassigned",
+        trade: r ? r.trade : t.tradeRequired,
+      };
+    });
+    res.json(payload);
+  });
+
+  app.get("/api/v1/my/notifications", (req, res) => {
+    const db = dbInstance;
+    res.json(db.alerts);
+  });
+
+  // Endpoints to get list of running alerts for PM overview
+  app.get("/api/v1/pm/alerts", (req, res) => {
+    const db = dbInstance;
+    res.json(db.alerts);
+  });
+
+  // Resolve / Dismiss PM Alert
+  app.post("/api/v1/pm/alerts/:id/resolve", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    db.alerts = db.alerts.filter(a => a.id !== id);
+    db.save();
+    res.json({ success: true, alerts: db.alerts });
+  });
+
+  // Report task progress/status
+  app.patch("/api/v1/tasks/:id/progress", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { status, percent_complete, reportBehind } = req.body;
+
+    const task = db.tasks.find(t => t.id === id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+
+    const reporterName = "Ben Nguyen"; // Simulated logged-in team member
+
+    if (reportBehind) {
+      // Rule 2 — Team member reports behind schedule:
+      // Does NOT auto-cascade, instead triggers a PM Alert.
+      const affected: string[] = [];
+      const queue = [task.id];
+      const visited = new Set<string>();
+      while (queue.length > 0) {
+        const curr = queue.shift()!;
+        if (visited.has(curr)) continue;
+        visited.add(curr);
+
+        const deps = db.tasks.filter(t => (t.dependencies || "").split(",").map(d => d.trim()).includes(curr));
+        for (const dep of deps) {
+          if (!affected.includes(`${dep.id} ${dep.name}`)) {
+            affected.push(`${dep.id} ${dep.name}`);
+            queue.push(dep.id);
+          }
+        }
+      }
+
+      const delayDays = 3; // Simulated projected delay days
+      const currentEnd = new Date(task.end);
+      const projEnd = new Date(currentEnd.getTime() + delayDays * 24 * 3600 * 1000);
+      const projEndDateStr = projEnd.toISOString().slice(0, 10);
+
+      const alertMsg = `${task.id} ${task.name} is running behind. Projected completion: ${projEndDateStr}. Potential delay: ${delayDays} days. Downstream tasks affected: ${affected.length > 0 ? affected.join(", ") : "None"}.`;
+
+      const newAlert = {
+        id: "alert-" + Date.now(),
+        taskId: task.id,
+        taskName: task.name,
+        reporterName,
+        message: alertMsg,
+        type: "delay",
+        timestamp: new Date().toISOString(),
+        projectedCompletion: projEndDateStr,
+        delayDays,
+        downstreamAffected: affected
+      };
+
+      db.alerts.unshift(newAlert);
+      task.status = "overdue";
+      task.percent_complete = percent_complete !== undefined ? percent_complete : 15;
+    } else {
+      // Normal progress updates
+      if (percent_complete !== undefined) {
+        task.percent_complete = percent_complete;
+      }
+      if (status) {
+        if (status === "completed") {
+          task.status = "completed";
+          task.percent_complete = 100;
+        } else if (status === "inprogress") {
+          task.status = "inprogress";
+          task.percent_complete = Math.max(10, task.percent_complete || 40);
+        } else {
+          task.status = status;
+        }
+      }
+
+      const normalMsg = `${task.id} reported as ${status || "active"} by ${reporterName} (Complete: ${task.percent_complete || 0}%) at ${new Date().toLocaleTimeString()}`;
+      const progressAlert = {
+        id: "alert-" + Date.now(),
+        taskId: task.id,
+        taskName: task.name,
+        reporterName,
+        message: normalMsg,
+        type: "progress",
+        timestamp: new Date().toISOString()
+      };
+      db.alerts.unshift(progressAlert);
+    }
+
+    db.save();
+    res.json({ success: true, task, alerts: db.alerts });
+  });
+
+  // Weather and forecast
+  app.get("/api/v1/weather/forecast", (req, res) => {
+    res.json(getBOMForecast());
+  });
+
+  // GET /api/v1/reports/export: PDF & spreadsheet generation
+  app.get("/api/v1/reports/export", async (req, res) => {
+    const db = dbInstance;
+    const { type, format, projectId } = req.query;
+    const selectedProjectId = typeof projectId === "string" ? projectId : "";
+    const reportType = typeof type === "string" ? decodeURIComponent(type) : "Report";
+    const reportFormat: "PDF" | "Excel" = format === "Excel" ? "Excel" : "PDF";
+    const project = selectedProjectId ? db.projects.find(p => p.id === selectedProjectId) : null;
+    const projectTasks = selectedProjectId ? db.tasks.filter(t => t.projectId === selectedProjectId) : db.tasks;
+    const projectClaims = selectedProjectId ? db.claims.filter(c => c.projectId === selectedProjectId) : db.claims;
+    const completedTasks = projectTasks.filter(t => t.status === "completed").length;
+    const pendingClaims = projectClaims.filter(c => c.status === "pending").length;
+    const projectName = project ? project.name : "All projects";
+    const generatedAt = new Date().toISOString();
+    const safeName = toSafeExportName(reportType);
+
+    try {
+      if (reportFormat === "Excel") {
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = "SiteWise";
+        workbook.created = new Date();
+
+        const summarySheet = workbook.addWorksheet("Summary");
+        summarySheet.columns = [
+          { header: "Field", key: "field", width: 28 },
+          { header: "Value", key: "value", width: 50 },
+        ];
+        summarySheet.addRows([
+          { field: "Report Type", value: reportType },
+          { field: "Requested Format", value: reportFormat },
+          { field: "Generated At", value: generatedAt },
+          { field: "Project", value: projectName },
+          { field: "Project ID", value: project ? project.id : "-" },
+          { field: "Total tasks", value: projectTasks.length },
+          { field: "Completed tasks", value: completedTasks },
+          { field: "Total progress claims", value: projectClaims.length },
+          { field: "Pending claims", value: pendingClaims },
+        ]);
+        summarySheet.getRow(1).font = { bold: true };
+
+        const tasksSheet = workbook.addWorksheet("Tasks");
+        tasksSheet.columns = [
+          { header: "Task ID", key: "id", width: 14 },
+          { header: "Task Name", key: "name", width: 38 },
+          { header: "Status", key: "status", width: 16 },
+          { header: "Project ID", key: "projectId", width: 16 },
+        ];
+        for (const task of projectTasks) {
+          tasksSheet.addRow({
+            id: task.id,
+            name: task.name,
+            status: task.status,
+            projectId: task.projectId,
+          });
+        }
+        tasksSheet.getRow(1).font = { bold: true };
+
+        const claimsSheet = workbook.addWorksheet("Claims");
+        claimsSheet.columns = [
+          { header: "Claim ID", key: "id", width: 14 },
+          { header: "Project ID", key: "projectId", width: 16 },
+          { header: "Status", key: "status", width: 16 },
+          { header: "Certified Amount", key: "certifiedVal", width: 20 },
+          { header: "Retention", key: "retentionVal", width: 16 },
+        ];
+        for (const claim of projectClaims) {
+          claimsSheet.addRow({
+            id: claim.id,
+            projectId: claim.projectId,
+            status: claim.status,
+            certifiedVal: claim.certifiedVal ?? 0,
+            retentionVal: claim.retentionVal ?? 0,
+          });
+        }
+        claimsSheet.getRow(1).font = { bold: true };
+
+        const xlsx = await workbook.xlsx.writeBuffer();
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="${safeName}-export.xlsx"`);
+        res.send(Buffer.from(xlsx));
+        return;
+      }
+
+      const pdf = await buildPdfBuffer({
+        reportType,
+        reportFormat,
+        projectName,
+        projectId: project ? project.id : "",
+        generatedAt,
+        totalTasks: projectTasks.length,
+        completedTasks,
+        totalClaims: projectClaims.length,
+        pendingClaims,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${safeName}-export.pdf"`);
+      res.send(pdf);
+    } catch (error) {
+      console.error("Report export failed", error);
+      res.status(500).json({ error: "Failed to generate report export" });
+    }
+  });
+
+  // ─── VITE DEV SERVER / PRODUCTION CONFIG ─────────────────────────────
+
+  if (process.env.DISABLE_HMR === "true" || process.env.NODE_ENV === "production") {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  } else {
+    const vite = await createViteServer({
+      server: {
+        middlewareMode: true,
+        hmr: { server: httpServer },
+      },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  }
+
+  httpServer.listen({ port: PORT, host: "::", ipv6Only: false }, () => {
+    console.log(`SiteWize server ready:`);
+    console.log(`  → http://127.0.0.1:${PORT}`);
+    console.log(`  → http://localhost:${PORT}`);
+  });
+}
+
+startServer();

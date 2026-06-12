@@ -1,0 +1,153 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Project {
+  id                  String   @id
+  name                String
+  type                String
+  location            String
+  contractor          String
+  state               String
+  originalContractSum Float
+  finalContractSum    Float
+  plannedCost         Float
+  actualCost          Float
+  ldRatePerDay        Float
+  pcStartDate         String
+  pcEndDate           String
+  retentionPercent    Float    @default(5.0)
+  status              String   @default("ACTIVE")
+  progress            Int      @default(0)
+  weatherRisk         Boolean  @default(false)
+  overBudget          Boolean  @default(false)
+
+  tasks         Task[]
+  claims        ProgressClaim[]
+  rateOverrides ProjectRateOverride[]
+}
+
+model Resource {
+  id                String  @id
+  initials          String
+  name              String
+  trade             String
+  state             String
+  rate              String
+  hourlyRateVal     Float
+  util              Int     @default(0)
+  status            String  @default("ok")
+  rateType          String  @default("hourly")
+  email             String?
+  company           String?
+  overtimeRateVal   Float?
+  dailyAllowanceVal Float?
+
+  tasks         Task[]
+  rateOverrides ProjectRateOverride[]
+}
+
+model ProjectRateOverride {
+  id         String   @id @default(cuid())
+  projectId  String
+  resourceId String
+  hourlyRate Float
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, resourceId])
+}
+
+model Task {
+  id               String  @id
+  projectId        String
+  name             String
+  assigneeId       String?
+  tradeRequired    String
+  start            String
+  end              String
+  durationDays     Int
+  dependencies     String  @default("")
+  status           String  @default("scheduled")
+  lagDays          Int     @default(0)
+  dependencyType   String  @default("FS")
+  costOverride     Float?
+  costOverrideType String?
+  percentComplete  Int     @default(0)
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee Resource? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+}
+
+model CostCategory {
+  id        String  @id
+  name      String
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+  claims    ProgressClaim[]
+}
+
+model ProgressClaim {
+  id               String  @id
+  claimNumber      String
+  projectId        String
+  projectName      String
+  period           String
+  claimedAmount    String
+  certifiedAmount  String
+  claimedVal       Float
+  certifiedVal     Float
+  retentionVal     Float
+  dueDate          String
+  status           String  @default("pending")
+  costCategoryId   String?
+  costCategoryName String?
+  taskIds          String  @default("")
+  description      String  @default("")
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  costCategory CostCategory? @relation(fields: [costCategoryId], references: [id])
+}
+
+model ConflictRecord {
+  id         String @id
+  resourceId String
+  resource   String
+  trade      String
+  rate       String
+  desc       String
+  candidates String
+}
+
+model MasterItem {
+  id        String  @id
+  type      String
+  label     String
+  code      String?
+  value     String?
+  isActive  Boolean @default(true)
+  isSystem  Boolean @default(false)
+  sortOrder Int     @default(0)
+}
+
+model Alert {
+  id           String  @id
+  taskId       String?
+  taskName     String?
+  reporterName String?
+  message      String
+  type         String
+  timestamp    String
+  payload      String?
+}
+
+model UndoEntry {
+  id             String @id @default(cuid())
+  targetId       String
+  prevAssigneeId String?
+}
