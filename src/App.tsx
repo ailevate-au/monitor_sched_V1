@@ -10,8 +10,21 @@ import ScreenClaims from "./components/Claims";
 import ScreenReports from "./components/Reports";
 import ScreenMasterData from "./components/MasterData";
 import ScreenMyWork from "./components/MyWork";
+import ScreenPermissions from "./components/Permissions";
+import Login from "./components/Login";
+import { useAuth } from "./lib/auth";
 import { AppNavigate, MasterTabId } from "./types/masters";
 import { parseConflictHubResponse } from "./types";
+
+/** Roles that land on the mobile-first worker view; everyone else gets the full console. */
+const WORKER_ROLES = new Set(["Worker", "Resource"]);
+
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "SW";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 const C = {
   navy:       "#0F1F3D",
@@ -44,6 +57,7 @@ const SCREEN_TO_PATH: Record<string, string> = {
   claims: "/claims",
   reports: "/reports",
   masterdata: "/masterdata",
+  permissions: "/permissions",
 };
 
 const PATH_TO_SCREEN: Record<string, string> = {
@@ -62,12 +76,16 @@ function getScreenFromPath(pathname: string) {
 }
 
 export default function SiteWizeApp() {
+  const { user, isAuthenticated, logout } = useAuth();
   const [screen, setScreen] = useState(() => {
     if (typeof window === "undefined") return "dashboard";
     return getScreenFromPath(window.location.pathname);
   });
   const [masterTab, setMasterTab] = useState<MasterTabId>("cost_categories");
-  const [role, setRole] = useState<"PM" | "Resource">("PM"); // Tester persona selector state
+  // Seed the active view from the signed-in user's role; workers land on My Work.
+  const [role, setRole] = useState<"PM" | "Resource">(() =>
+    user && WORKER_ROLES.has(user.role) ? "Resource" : "PM"
+  );
 
   const navigate: AppNavigate = (nextScreen, tab) => {
     if (tab) setMasterTab(tab);
@@ -129,6 +147,10 @@ export default function SiteWizeApp() {
     { id:"claims",    label:"Project Expenses",   icon:"📋", group:"Finance",    badge: expensesCount, badgeColor: C.amber },
     { id:"reports",   label:"Reports",            icon:"📄", group:"Finance"     },
     { id:"masterdata", label:"Settings",          icon:"📚", group:"Administration" },
+    // Owner-only: configure the role permission matrix (Hak Akses)
+    ...(user?.role === "Owner"
+      ? [{ id:"permissions", label:"Hak Akses", icon:"🔐", group:"Administration" }]
+      : []),
   ];
 
   const groups = ["Overview", "Scheduling", "Finance", "Administration"];
@@ -144,6 +166,7 @@ export default function SiteWizeApp() {
     claims:    <ScreenClaims />,
     reports:   <ScreenReports />,
     masterdata: <ScreenMasterData initialTab={masterTab} />,
+    permissions: <ScreenPermissions />,
   };
 
   const titles: { [key: string]: string } = {
@@ -157,7 +180,13 @@ export default function SiteWizeApp() {
     claims: "Project Expenses",
     reports: "Reports",
     masterdata: "Settings",
+    permissions: "Hak Akses — Role Permissions",
   };
+
+  // Unauthenticated users see only the login screen (entry point to the app).
+  if (!isAuthenticated) {
+    return <Login />;
+  }
 
   // If role is Resource, render only the standalone mobile-first My Work screen (no sidebar, simple and clean)
   if (role === "Resource") {
@@ -219,16 +248,43 @@ export default function SiteWizeApp() {
           </div>
         ))}
 
-        {/* User Card & Dynamic Role Switcher */}
+        {/* User Card & Sign-out */}
         <div style={{ marginTop:"auto", padding:"10px 8px", borderTop:`0.5px solid ${C.grayLight}`, display:"flex", flexDirection:"column", gap:8, background: "#F8FAFC" }}>
           <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px" }}>
-            <div style={{ width:30, height:30, borderRadius:"50%", background:"#B5D4F4", color:"#0C447C", fontSize:11, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>SH</div>
+            <div style={{ width:30, height:30, borderRadius:"50%", background:"#B5D4F4", color:"#0C447C", fontSize:11, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              {user ? initialsFromName(user.name) : "SW"}
+            </div>
             <div style={{ overflow: "hidden" }}>
-              <div style={{ fontSize:11.5, fontWeight:600, color:C.text, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>Sarah Hughes</div>
-              <div style={{ fontSize:9.5, color:C.gray, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>Project Director · NSW</div>
+              <div style={{ fontSize:11.5, fontWeight:600, color:C.text, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+                {user?.name || "Signed in"}
+              </div>
+              <div style={{ fontSize:9.5, color:C.gray, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+                {user?.role || "—"}{user?.state ? ` · ${user.state}` : ""}
+              </div>
             </div>
           </div>
-          
+          <button
+            type="button"
+            onClick={logout}
+            style={{
+              margin: "0 6px 2px",
+              padding: "7px 10px",
+              fontSize: 11.5,
+              fontWeight: 600,
+              color: C.redDark,
+              background: C.white,
+              border: `0.5px solid ${C.grayLight}`,
+              borderRadius: 8,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+            title="Sign out of SiteWize"
+          >
+            ⏻ Sign out
+          </button>
         </div>
       </nav>
 

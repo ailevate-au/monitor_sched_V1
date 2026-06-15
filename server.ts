@@ -102,7 +102,17 @@ async function startServer() {
 
   // ─── API ENDPOINTS (v1) ──────────────────────────────────────────
 
-  // AUTH API — Superadmin / PM / Resource Role-based controls
+  // AUTH API — Owner / Admin / PM / Worker role-based controls (mock JWT)
+  // Role is inferred from the email prefix so role-gated screens can be tested
+  // (owner@… → Owner, admin@… → Admin, worker@… → Worker, otherwise PM).
+  function roleFromEmail(email: string): "Owner" | "Admin" | "PM" | "Worker" {
+    const e = (email || "").toLowerCase();
+    if (e.startsWith("owner")) return "Owner";
+    if (e.startsWith("admin")) return "Admin";
+    if (e.startsWith("worker")) return "Worker";
+    return "PM";
+  }
+
   app.post("/api/v1/auth/login", (req, res) => {
     const { email } = req.body;
     const name = email ? email.split("@")[0] : "Director";
@@ -111,10 +121,79 @@ async function startServer() {
       user: {
         name: name.charAt(0).toUpperCase() + name.slice(1),
         email: email || "director@interscale.com.au",
-        role: "PM",
+        role: roleFromEmail(email),
         state: "NSW"
       }
     });
+  });
+
+  // ── PERMISSION MATRIX (Hak Akses) — mock, in-memory ────────────────────────
+  // Owner is implicitly full-access and never stored. Only Admin / PM / Worker
+  // are configurable. always_on rows are locked ON; owner_only rows locked OFF.
+  type PermRole = "Admin" | "PM" | "Worker";
+  type PermType = "always_on" | "owner_only" | "configurable";
+  const PERM_ROLES: PermRole[] = ["Admin", "PM", "Worker"];
+  const PERM_FEATURES: { key: string; label: string; group: string; type: PermType }[] = [
+    { key: "dashboard",   label: "Dashboard / Overview",     group: "Overview",       type: "always_on" },
+    { key: "projects",    label: "Projects",                 group: "Overview",       type: "configurable" },
+    { key: "conflicts",   label: "Conflicts",                group: "Overview",       type: "configurable" },
+    { key: "weather",     label: "Weather",                  group: "Overview",       type: "configurable" },
+    { key: "gantt",       label: "Timeline (Gantt)",         group: "Scheduling",     type: "configurable" },
+    { key: "resources",   label: "Resources",                group: "Scheduling",     type: "configurable" },
+    { key: "financial",   label: "Financial Dashboard",      group: "Finance",        type: "owner_only" },
+    { key: "pricing",     label: "Pricing & Rates",          group: "Finance",        type: "owner_only" },
+    { key: "claims",      label: "Project Expenses",         group: "Finance",        type: "configurable" },
+    { key: "reports",     label: "Reports",                  group: "Finance",        type: "configurable" },
+    { key: "masterdata",  label: "Settings / Master Data",   group: "Administration", type: "configurable" },
+    { key: "users",       label: "User Management",          group: "Administration", type: "owner_only" },
+    { key: "permissions", label: "Permissions (Hak Akses)",  group: "Administration", type: "owner_only" },
+  ];
+  const PERM_DEFAULTS: Record<string, Record<PermRole, boolean>> = {
+    projects:   { Admin: true,  PM: true,  Worker: false },
+    conflicts:  { Admin: true,  PM: true,  Worker: false },
+    weather:    { Admin: true,  PM: true,  Worker: true  },
+    gantt:      { Admin: true,  PM: true,  Worker: true  },
+    resources:  { Admin: true,  PM: true,  Worker: false },
+    claims:     { Admin: true,  PM: true,  Worker: false },
+    reports:    { Admin: true,  PM: true,  Worker: false },
+    masterdata: { Admin: true,  PM: false, Worker: false },
+  };
+  function buildDefaultMatrix(): Record<PermRole, Record<string, boolean>> {
+    const matrix = {} as Record<PermRole, Record<string, boolean>>;
+    for (const role of PERM_ROLES) {
+      matrix[role] = {};
+      for (const f of PERM_FEATURES) {
+        if (f.type === "always_on") matrix[role][f.key] = true;
+        else if (f.type === "owner_only") matrix[role][f.key] = false;
+        else matrix[role][f.key] = PERM_DEFAULTS[f.key]?.[role] ?? false;
+      }
+    }
+    return matrix;
+  }
+  let permissionMatrix = buildDefaultMatrix();
+
+  app.get("/api/v1/permissions", (_req, res) => {
+    res.json({ features: PERM_FEATURES, roles: PERM_ROLES, matrix: permissionMatrix });
+  });
+
+  app.put("/api/v1/permissions/:role", (req, res) => {
+    const role = req.params.role as PermRole;
+    if (!PERM_ROLES.includes(role)) {
+      return res.status(404).json({ success: false, error: `Unknown role: ${req.params.role}` });
+    }
+    const incoming = (req.body && req.body.permissions) || {};
+    for (const f of PERM_FEATURES) {
+      if (f.type !== "configurable") continue; // locked rows can't be toggled
+      if (Object.prototype.hasOwnProperty.call(incoming, f.key)) {
+        permissionMatrix[role][f.key] = !!incoming[f.key];
+      }
+    }
+    res.json({ success: true, role, permissions: permissionMatrix[role], matrix: permissionMatrix });
+  });
+
+  app.post("/api/v1/permissions/reset", (_req, res) => {
+    permissionMatrix = buildDefaultMatrix();
+    res.json({ success: true, features: PERM_FEATURES, roles: PERM_ROLES, matrix: permissionMatrix });
   });
 
   // GET /api/v1/dashboard: portfolio statistics and top-level summaries
