@@ -204,7 +204,7 @@ export default function ScreenPermissions() {
           Owner access required
         </div>
         <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.5 }}>
-          The permission matrix (Hak Akses) can only be configured by an Owner. You are signed in as{" "}
+          The permission matrix (Access) can only be configured by an Owner. You are signed in as{" "}
           <strong>{user?.role || "an unknown role"}</strong>.
         </div>
       </div>
@@ -249,7 +249,7 @@ export default function ScreenPermissions() {
       >
         <div>
           <div style={{ fontSize: 17, fontWeight: 700, color: C.navy, display: "flex", alignItems: "center", gap: 8 }}>
-            🔐 Hak Akses — Role Permissions
+            🔐 Access — Role Permissions
           </div>
           <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3, maxWidth: 620, lineHeight: 1.5 }}>
             Choose which sidebar features each role can access. Owner always has full access and

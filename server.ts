@@ -127,7 +127,7 @@ async function startServer() {
     });
   });
 
-  // ── PERMISSION MATRIX (Hak Akses) — mock, in-memory ────────────────────────
+  // ── PERMISSION MATRIX (Access) — mock, in-memory ───────────────────────────
   // Owner is implicitly full-access and never stored. Only Admin / PM / Worker
   // are configurable. always_on rows are locked ON; owner_only rows locked OFF.
   type PermRole = "Admin" | "PM" | "Worker";
@@ -146,7 +146,7 @@ async function startServer() {
     { key: "reports",     label: "Reports",                  group: "Finance",        type: "configurable" },
     { key: "masterdata",  label: "Settings / Master Data",   group: "Administration", type: "configurable" },
     { key: "users",       label: "User Management",          group: "Administration", type: "owner_only" },
-    { key: "permissions", label: "Permissions (Hak Akses)",  group: "Administration", type: "owner_only" },
+    { key: "permissions", label: "Access (Permissions)",     group: "Administration", type: "owner_only" },
   ];
   const PERM_DEFAULTS: Record<string, Record<PermRole, boolean>> = {
     projects:   { Admin: true,  PM: true,  Worker: false },

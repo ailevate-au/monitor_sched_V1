@@ -1122,6 +1122,17 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
     projectsGroup[projName].tasks.push(t);
   }
 
+  // Order each project's tasks by schedule: earliest start first, then earliest
+  // finish, then task id as a stable tiebreaker. ISO date strings compare
+  // chronologically. This drives the row order in the "By Project" view.
+  for (const projName in projectsGroup) {
+    projectsGroup[projName].tasks.sort((a, b) => {
+      if (a.start !== b.start) return a.start < b.start ? -1 : 1;
+      if (a.end !== b.end) return a.end < b.end ? -1 : 1;
+      return a.id.localeCompare(b.id);
+    });
+  }
+
   const hasActiveFilters =
     filterProjects.length > 0 ||
     filterResources.length > 0 ||

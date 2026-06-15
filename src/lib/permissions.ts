@@ -1,5 +1,5 @@
 /**
- * Permission matrix (Hak Akses) client layer.
+ * Permission matrix (Access) client layer.
  *
  * Talks to the mock endpoints in server.ts:
  *   GET  /api/v1/permissions            → { features, roles, matrix }

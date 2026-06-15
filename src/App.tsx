@@ -147,9 +147,9 @@ export default function SiteWizeApp() {
     { id:"claims",    label:"Project Expenses",   icon:"📋", group:"Finance",    badge: expensesCount, badgeColor: C.amber },
     { id:"reports",   label:"Reports",            icon:"📄", group:"Finance"     },
     { id:"masterdata", label:"Settings",          icon:"📚", group:"Administration" },
-    // Owner-only: configure the role permission matrix (Hak Akses)
+    // Owner-only: configure the role permission matrix (Access)
     ...(user?.role === "Owner"
-      ? [{ id:"permissions", label:"Hak Akses", icon:"🔐", group:"Administration" }]
+      ? [{ id:"permissions", label:"Access", icon:"🔐", group:"Administration" }]
       : []),
   ];
 
@@ -180,7 +180,7 @@ export default function SiteWizeApp() {
     claims: "Project Expenses",
     reports: "Reports",
     masterdata: "Settings",
-    permissions: "Hak Akses — Role Permissions",
+    permissions: "Access — Role Permissions",
   };
 
   // Unauthenticated users see only the login screen (entry point to the app).
