@@ -295,12 +295,29 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterTrade, setFilterTrade] = useState("all");
 
-  const CW = 40; // Column width pixels — wider for demo readability
+  // Column (day) width in px — stateful so the timeline can be zoomed with the
+  // wheel (hold left-drag + scroll, or Ctrl/Cmd + scroll). 40px is the default.
+  const DEFAULT_CW = 40;
+  const MIN_CW = 14;
+  const MAX_CW = 96;
+  const [CW, setCW] = useState(DEFAULT_CW);
   const MIN_LEFT_COL_WIDTH = 240;
   const MAX_LEFT_COL_WIDTH = 560;
   const LW = leftColWidth; // Left label column width pixels (resizable)
   const ROW_HEIGHT = 44;
   const BAR_HEIGHT = 26;
+
+  // Live refs so the imperative pan/zoom listeners read current values without re-binding.
+  const cwRef = useRef(CW);
+  cwRef.current = CW;
+  const lwRef = useRef(LW);
+  lwRef.current = LW;
+
+  const zoomBy = useCallback(
+    (factor: number) => setCW((prev) => Math.round(Math.min(MAX_CW, Math.max(MIN_CW, prev * factor)))),
+    []
+  );
+  const resetZoom = useCallback(() => setCW(DEFAULT_CW), []);
 
   const GANTT_SCROLL_MAX_HEIGHT = "min(85vh, calc(100vh - 220px))";
 
@@ -991,6 +1008,107 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
     });
   }, [loading, scheduleViewMode, TODAY_COL, COLS]);
 
+  // Pan (hold left-drag on empty timeline) + zoom (while holding, or Ctrl/Cmd, +
+  // wheel). All three timeline views share `timelineScrollRef`, so this binds once
+  // per active view. Bars carry data-no-pan so a press there still drags the task.
+  useEffect(() => {
+    if (loading || scheduleViewMode === "kanban" || scheduleViewMode === "history") return;
+    const el = timelineScrollRef.current;
+    if (!el) return;
+
+    let panning = false;
+    let startX = 0;
+    let startY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+
+    const onInteractive = (target: EventTarget | null) =>
+      target instanceof Element &&
+      !!target.closest('[data-no-pan], button, a, input, select, textarea, [role="switch"], [role="separator"]');
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      // Don't pan from the sticky label gutter or from any interactive element.
+      if (e.clientX - el.getBoundingClientRect().left < lwRef.current) return;
+      if (onInteractive(e.target)) return;
+      panning = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startLeft = el.scrollLeft;
+      startTop = el.scrollTop;
+      el.style.cursor = "grabbing";
+      e.preventDefault();
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!panning) return;
+      el.scrollLeft = startLeft - (e.clientX - startX);
+      el.scrollTop = startTop - (e.clientY - startY);
+    };
+
+    const endPan = () => {
+      if (!panning) return;
+      panning = false;
+      el.style.cursor = "grab";
+    };
+
+    // Zoom is coalesced into one state update per animation frame. Wheel/trackpad
+    // pinch can fire dozens of events per gesture; applying setCW to each would
+    // trigger dozens of synchronous re-renders of the whole timeline and lock the
+    // tab. Instead we accumulate a target width and commit it once per frame.
+    let zoomRAF = 0;
+    let pendingTargetCW = 0;
+    let pendingCursorX = 0;
+
+    const commitZoom = () => {
+      zoomRAF = 0;
+      const appliedCW = cwRef.current;
+      const targetCW = pendingTargetCW;
+      const cursorX = pendingCursorX;
+      if (!targetCW || targetCW === appliedCW) return;
+
+      // Keep the day under the cursor anchored across the (coalesced) zoom step.
+      const col = (el.scrollLeft + cursorX - lwRef.current) / appliedCW;
+      const newScrollLeft = Math.max(0, col * targetCW + lwRef.current - cursorX);
+
+      cwRef.current = targetCW;
+      setCW(targetCW);
+      requestAnimationFrame(() => {
+        el.scrollLeft = newScrollLeft;
+        if (panning) {
+          startLeft = el.scrollLeft;
+          startX = cursorX + el.getBoundingClientRect().left;
+        }
+      });
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (!panning && !e.ctrlKey && !e.metaKey) return; // leave normal scrolling alone
+      e.preventDefault();
+      const base = zoomRAF ? pendingTargetCW : cwRef.current;
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const target = Math.round(Math.min(MAX_CW, Math.max(MIN_CW, base * factor)));
+      if (target === base) return;
+      pendingTargetCW = target;
+      pendingCursorX = e.clientX - el.getBoundingClientRect().left;
+      if (!zoomRAF) zoomRAF = requestAnimationFrame(commitZoom);
+    };
+
+    el.style.cursor = "grab";
+    el.addEventListener("mousedown", onMouseDown);
+    el.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", endPan);
+    return () => {
+      el.style.cursor = "";
+      if (zoomRAF) cancelAnimationFrame(zoomRAF);
+      el.removeEventListener("mousedown", onMouseDown);
+      el.removeEventListener("wheel", onWheel);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", endPan);
+    };
+  }, [loading, scheduleViewMode]);
+
   // Global drag tracking — snapshot drag at effect mount; compute delta from mouse on up (avoids stale state).
   useEffect(() => {
     if (!activeDrag) return;
@@ -1490,6 +1608,16 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
         </div>
 
         <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          {(scheduleViewMode === "projectteam" || scheduleViewMode === "overall" || scheduleViewMode === "resource") && (
+            <div
+              style={{ display:"flex", alignItems:"center", gap:0, border:`0.5px solid ${C.grayLight}`, borderRadius:8, background:C.white, overflow:"hidden" }}
+              title="Zoom timeline — or hold left-drag on the chart and scroll the wheel"
+            >
+              <button type="button" onClick={() => zoomBy(1 / 1.2)} disabled={CW <= MIN_CW} style={{ padding:"6px 10px", border:"none", background:"transparent", cursor: CW <= MIN_CW ? "not-allowed" : "pointer", fontSize:14, fontWeight:700, color: CW <= MIN_CW ? C.grayLight : C.textMuted }} title="Zoom out">−</button>
+              <button type="button" onClick={resetZoom} style={{ padding:"6px 4px", border:"none", borderLeft:`0.5px solid ${C.grayLight}`, borderRight:`0.5px solid ${C.grayLight}`, background:"transparent", cursor:"pointer", fontSize:11, fontWeight:600, color:C.textMuted, minWidth:46, fontVariantNumeric:"tabular-nums" }} title="Reset zoom to 100%">{Math.round((CW / DEFAULT_CW) * 100)}%</button>
+              <button type="button" onClick={() => zoomBy(1.2)} disabled={CW >= MAX_CW} style={{ padding:"6px 10px", border:"none", background:"transparent", cursor: CW >= MAX_CW ? "not-allowed" : "pointer", fontSize:14, fontWeight:700, color: CW >= MAX_CW ? C.grayLight : C.textMuted }} title="Zoom in">+</button>
+            </div>
+          )}
           <button style={{ padding: "8px 14px", background: C.blue, color: C.white, border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600 }} onClick={handleOpenCreate}>+ Add Task</button>
           <button
             style={{ padding: "8px 14px", background: adjustActive ? C.purple : "#F3F2FF", color: adjustActive ? C.white : C.purple, border: `0.5px solid ${C.purple}`, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600 }}
@@ -1890,6 +2018,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                               <React.Fragment key={task.id}>
                               {adjMove && <AdjustmentGhost move={adjMove} rowHeight={ROW_HEIGHT + 4} />}
                               <div
+                                data-no-pan="1"
                                 style={{
                                   position:"absolute",
                                   left: LW + renderedStartCol * CW,
@@ -1955,7 +2084,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                           const sCol = getColFromDate(task.start);
                           const lCol = getColDuration(task.start, task.end);
                           return (
-                            <div key={task.id} onClick={() => handleOpenEdit(task)} title={`Unassigned: ${task.name}`}
+                            <div key={task.id} data-no-pan="1" onClick={() => handleOpenEdit(task)} title={`Unassigned: ${task.name}`}
                               style={{ position:"absolute", left: LW + sCol * CW, width: Math.max(26, lCol * CW), top:(ROW_HEIGHT - BAR_HEIGHT)/2, height:BAR_HEIGHT, background:"#94A3B8", border:"1px dashed #64748B", borderRadius:6, display:"flex", alignItems:"center", padding:"0 8px", fontSize:11, fontWeight:600, color:C.white, overflow:"hidden", whiteSpace:"nowrap", zIndex:2, cursor:"pointer" }}>
                               {task.name}
                             </div>
@@ -1971,7 +2100,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
 
           {/* Footer */}
           <div style={{ background:C.bgSecond, padding:"8px 14px", display:"flex", justifyContent:"space-between", fontSize:12, color:C.textMuted, flexShrink:0, borderTop:`0.5px solid ${C.grayLight}` }}>
-            <span>Who is on which project · click any bar to edit · red row = scheduling conflict</span>
+            <span>Who is on which project · click a bar to edit · drag empty space to pan · hold-drag + scroll to zoom</span>
             <span style={{ background:C.redBg, color:C.red, padding:"2px 8px", borderRadius:4, fontWeight:600 }}>● Today: {todayLabel}</span>
           </div>
         </div>
@@ -2195,7 +2324,9 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                         )}
 
                         {/* Task visualization rendering */}
-                          <div style={{
+                          <div
+                            data-no-pan="1"
+                            style={{
                             position:"absolute",
                             left: LW + renderedStartCol * CW,
                             width: Math.max(26, renderedDurationCol * CW),
@@ -2304,8 +2435,9 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                         const lCol = getColDuration(task.start, task.end);
 
                         return (
-                          <div 
+                          <div
                             key={task.id}
+                            data-no-pan="1"
                             onClick={() => handleOpenEdit(task)}
                             style={{
                               position:"absolute",
@@ -2341,7 +2473,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
 
             {/* Table Footer — stays below the scroll area */}
             <div style={{ background:C.bgSecond, padding:"8px 14px", display:"flex", justifyContent:"space-between", fontSize:12, color: C.textMuted, flexShrink: 0, borderTop:`0.5px solid ${C.grayLight}` }}>
-              <span>Drag bars to reschedule · scroll timeline ↔ and task list stays fixed</span>
+              <span>Drag a bar to reschedule · drag empty space to pan · hold-drag + scroll (or Ctrl+scroll) to zoom</span>
               <span
                 style={{ background:C.redBg, color:C.red, padding:"2px 8px", borderRadius:4, fontWeight:600 }}
                 title="Red line marks today's date on your device calendar."
@@ -2478,6 +2610,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                       <React.Fragment key={task.id}>
                       {adjMove && <AdjustmentGhost move={adjMove} rowHeight={ROW_HEIGHT + 8} />}
                       <div
+                        data-no-pan="1"
                         style={{
                           position:"absolute",
                           left: LW + renderedStartCol * CW,
@@ -2577,8 +2710,9 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                     const lCol = getColDuration(task.start, task.end);
 
                     return (
-                      <div 
+                      <div
                         key={task.id}
+                        data-no-pan="1"
                         onClick={() => handleOpenEdit(task)}
                         style={{
                           position:"absolute",
@@ -2610,7 +2744,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
 
           {/* Table Footer — stays below the scroll area */}
           <div style={{ background:C.bgSecond, padding:"8px 14px", display:"flex", justifyContent:"space-between", fontSize:12, color: C.textMuted, flexShrink: 0, borderTop:`0.5px solid ${C.grayLight}` }}>
-            <span>Manpower view — drag bars to reschedule</span>
+            <span>Manpower view — drag a bar to reschedule · drag empty space to pan · hold-drag + scroll to zoom</span>
             <span
               style={{ background:C.redBg, color:C.red, padding:"2px 8px", borderRadius:4, fontWeight:600 }}
               title="Red line marks today's date on your device calendar."
