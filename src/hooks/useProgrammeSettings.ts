@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-const AUTO_CASCADE_KEY = "sitewize.programme.autoCascade";
+const AUTO_CASCADE_KEY = "flowiq.programme.autoCascade";
 
 function readAutoCascade(): boolean {
   if (typeof window === "undefined") return true;

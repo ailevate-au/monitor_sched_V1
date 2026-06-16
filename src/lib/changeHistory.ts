@@ -32,7 +32,7 @@ export interface ChangeHistoryStore {
   update(id: string, patch: Partial<ChangeSet>): void;
 }
 
-const STORAGE_KEY = "sitewize.timeline.changeHistory";
+const STORAGE_KEY = "flowiq.timeline.changeHistory";
 
 function readAll(): ChangeSet[] {
   if (typeof window === "undefined") return [];

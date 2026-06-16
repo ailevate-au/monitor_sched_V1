@@ -1,4 +1,4 @@
-# SiteWize
+# FlowIQ
 ## Client Guide (Demo Edition)
 ### Project Monitoring Platform — Australian Edition
 
@@ -6,9 +6,9 @@ Built for Australian construction companies that need earlier warnings, faster d
 
 ---
 
-## 1) What SiteWize Does
+## 1) What FlowIQ Does
 
-SiteWize is a web-based construction monitoring platform that combines:
+FlowIQ is a web-based construction monitoring platform that combines:
 
 - Portfolio visibility (projects, tasks, risks)
 - Shared scheduling (Gantt + dependency cascade)

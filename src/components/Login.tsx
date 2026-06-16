@@ -67,9 +67,9 @@ export default function Login() {
               fontWeight: 700,
             }}
           >
-            SW
+            FQ
           </div>
-          <div style={{ fontSize: 19, fontWeight: 700, color: C.navy }}>SiteWize</div>
+          <div style={{ fontSize: 19, fontWeight: 700, color: C.navy }}>FlowIQ</div>
           <div style={{ fontSize: 12.5, color: C.gray, marginTop: 3 }}>
             Sign in to your construction control workspace
           </div>

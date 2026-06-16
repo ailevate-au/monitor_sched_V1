@@ -1,15 +1,15 @@
 services:
-  sitewize:
+  flowiq:
     build:
       context: .
       dockerfile: Dockerfile
-    image: sitewize:latest
-    container_name: sitewize
+    image: flowiq:latest
+    container_name: flowiq
     restart: unless-stopped
     mem_limit: 512m
     cpus: 0.50
     env_file:
-      - ./env/sitewize.traefik.env
+      - ./env/flowiq.traefik.env
     environment:
       - NODE_ENV=production
       - DISABLE_HMR=true
@@ -31,11 +31,11 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.sitewize.rule=Host(`sitewize.ailevate.com.au`)"
-      - "traefik.http.routers.sitewize.entrypoints=websecure"
-      - "traefik.http.routers.sitewize.tls=true"
-      - "traefik.http.routers.sitewize.tls.certresolver=letsencrypt"
-      - "traefik.http.services.sitewize.loadbalancer.server.port=3001"
+      - "traefik.http.routers.flowiq.rule=Host(`flowiq.ailevate.com.au`)"
+      - "traefik.http.routers.flowiq.entrypoints=websecure"
+      - "traefik.http.routers.flowiq.tls=true"
+      - "traefik.http.routers.flowiq.tls.certresolver=letsencrypt"
+      - "traefik.http.services.flowiq.loadbalancer.server.port=3001"
       - "traefik.docker.network=traefik_network"
 
 networks:

@@ -243,7 +243,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
               {stats.resourceConflictsCount} Resource Conflict{stats.resourceConflictsCount > 1 ? "s" : ""} Require Your Attention
             </div>
             <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>
-              One or more team members are double-booked across projects. SiteWize has identified replacements — resolve now to keep your programme on track.
+              One or more team members are double-booked across projects. FlowIQ has identified replacements — resolve now to keep your programme on track.
             </div>
           </div>
           <Btn primary onClick={() => onNav("conflicts")} style={{ flexShrink: 0, padding: "9px 18px", fontSize: 12.5, fontWeight: 700 }}>

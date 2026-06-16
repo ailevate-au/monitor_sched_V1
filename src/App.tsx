@@ -89,7 +89,7 @@ function getScreenFromPath(pathname: string) {
   return PATH_TO_SCREEN[pathname] || "dashboard";
 }
 
-export default function SiteWizeApp() {
+export default function FlowIQApp() {
   const { user, isAuthenticated, logout } = useAuth();
   const [screen, setScreen] = useState(() => {
     if (typeof window === "undefined") return "dashboard";
@@ -221,9 +221,9 @@ export default function SiteWizeApp() {
       <nav style={{ width:235, background:C.white, borderRight:`0.5px solid ${C.grayLight}`, display:"flex", flexDirection:"column", flexShrink:0, overflowY:"auto" }}>
         {/* Logo */}
         <div style={{ padding:"14px 16px", display:"flex", alignItems:"center", gap:10, borderBottom:`0.5px solid ${C.grayLight}` }}>
-          <div style={{ width:30, height:30, background:C.blue, borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center", color:C.white, fontSize:11, fontWeight:600, flexShrink:0 }}>SW</div>
+          <div style={{ width:30, height:30, background:C.blue, borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center", color:C.white, fontSize:11, fontWeight:600, flexShrink:0 }}>FQ</div>
           <div>
-            <div style={{ fontSize:13, fontWeight:600, color:C.text }}>SiteWize</div>
+            <div style={{ fontSize:13, fontWeight:600, color:C.text }}>FlowIQ</div>
             <div style={{ fontSize:10, color:C.gray }}>Construction project control</div>
           </div>
         </div>
@@ -296,7 +296,7 @@ export default function SiteWizeApp() {
               justifyContent: "center",
               gap: 6,
             }}
-            title="Sign out of SiteWize"
+            title="Sign out of FlowIQ"
           >
             <LogOut size={14} /> Sign out
           </button>

@@ -1199,7 +1199,7 @@ async function startServer() {
   }
 
   httpServer.listen({ port: PORT, host: "::", ipv6Only: false }, () => {
-    console.log(`SiteWize server ready:`);
+    console.log(`FlowIQ server ready:`);
     console.log(`  → http://127.0.0.1:${PORT}`);
     console.log(`  → http://localhost:${PORT}`);
   });

@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useState } from "react";
 
 /**
- * Front-end auth layer for SiteWize.
+ * Front-end auth layer for FlowIQ.
  *
  * Task 1 (Login) scope: hold the authenticated session in app state + storage and
  * make every API call carry the token. Backend JWT/RBAC enforcement is out of
@@ -29,8 +29,8 @@ interface AuthContextValue {
   clearError: () => void;
 }
 
-const TOKEN_KEY = "sitewize.auth.token";
-const USER_KEY = "sitewize.auth.user";
+const TOKEN_KEY = "flowiq.auth.token";
+const USER_KEY = "flowiq.auth.user";
 const LOGIN_ENDPOINT = "/api/v1/auth/login";
 
 // ── Storage helpers ──────────────────────────────────────────────────────────
@@ -79,9 +79,9 @@ function clearSession(): void {
  */
 function installAuthFetch(): void {
   if (typeof window === "undefined") return;
-  const w = window as unknown as { __sitewizeAuthFetch?: boolean };
-  if (w.__sitewizeAuthFetch) return;
-  w.__sitewizeAuthFetch = true;
+  const w = window as unknown as { __flowiqAuthFetch?: boolean };
+  if (w.__flowiqAuthFetch) return;
+  w.__flowiqAuthFetch = true;
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {

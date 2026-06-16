@@ -1,4 +1,4 @@
-# SiteWize
+# FlowIQ
 
 Construction project control for Australian Tier 1–2 builders — scheduling, resources, finance, progress claims, and reference data in one workspace.
 
@@ -41,13 +41,13 @@ Based on Traefik patterns used in other projects in this machine, this repo now 
 
 - `Dockerfile`
 - `docker-compose.yml` (Traefik labels + external `traefik_network`)
-- `env/sitewize.traefik.env.example`
+- `env/flowiq.traefik.env.example`
 
 Setup:
 
 ```bash
 mkdir -p env
-cp env/sitewize.traefik.env.example env/sitewize.traefik.env
+cp env/flowiq.traefik.env.example env/flowiq.traefik.env
 docker compose up -d --build
 ```
 
@@ -55,7 +55,7 @@ Notes:
 
 - Compose uses external network `traefik_network` (must already exist on the host).
 - `DATABASE_URL=file:./dev.db` is resolved next to `prisma/schema.prisma` → `prisma/dev.db`.
-- Live URL: **https://sitewize.ailevate.com.au**
+- Live URL: **https://flowiq.ailevate.com.au**
 
 ## Database (Prisma + SQLite)
 
