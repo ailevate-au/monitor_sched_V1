@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { History, Undo2, TriangleAlert } from "lucide-react";
 import { Task } from "../types";
 import { ChangeSet } from "../lib/changeHistory";
 
@@ -87,7 +88,9 @@ export default function ChangeHistoryTab({
           color: C.gray,
         }}
       >
-        <div style={{ fontSize: 30, marginBottom: 8 }}>🕒</div>
+        <div style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}>
+          <History size={32} color={C.gray} />
+        </div>
         <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
           No confirmed adjustments yet
         </div>
@@ -161,9 +164,12 @@ export default function ChangeHistoryTab({
                         borderRadius: 20,
                         background: C.grayLight,
                         color: C.gray,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
                       }}
                     >
-                      ↩ Reverted
+                      <Undo2 size={10} /> Reverted
                     </span>
                   )}
                   {!cs.reverted && cs.warningsAtConfirm.length > 0 && (
@@ -175,9 +181,12 @@ export default function ChangeHistoryTab({
                         borderRadius: 20,
                         background: C.amberBg,
                         color: C.amber,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
                       }}
                     >
-                      ⚠ confirmed with {cs.warningsAtConfirm.length}
+                      <TriangleAlert size={10} /> confirmed with {cs.warningsAtConfirm.length}
                     </span>
                   )}
                 </div>
@@ -218,7 +227,9 @@ export default function ChangeHistoryTab({
                     cursor: "pointer",
                   }}
                 >
-                  ↩ Revert
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <Undo2 size={12} /> Revert
+                  </span>
                 </button>
               )}
             </div>
@@ -271,7 +282,8 @@ export default function ChangeHistoryTab({
                     }}
                   >
                     <div style={{ fontSize: 11.5, fontWeight: 700, color: C.amber, marginBottom: 4 }}>
-                      ⚠ {stale.length} task{stale.length === 1 ? " was" : "s were"} changed after this
+                      <TriangleAlert size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                      {stale.length} task{stale.length === 1 ? " was" : "s were"} changed after this
                       adjustment
                     </div>
                     {stale.map((s, i) => (

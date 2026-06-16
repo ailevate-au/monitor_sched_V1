@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { ShieldCheck, Check, Lock, RotateCcw, RefreshCw, TriangleAlert } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
   PermMatrix,
@@ -83,7 +84,7 @@ function Toggle({
           fontSize: 8.5,
         }}
       >
-        {disabled ? "🔒" : ""}
+        {disabled ? <Lock size={9} strokeWidth={2.5} /> : null}
       </span>
     </button>
   );
@@ -106,7 +107,7 @@ function OwnerCell() {
         padding: "3px 9px",
       }}
     >
-      ✓ Full
+      <Check size={12} strokeWidth={3} /> Full
     </span>
   );
 }
@@ -199,7 +200,9 @@ export default function ScreenPermissions() {
           textAlign: "center",
         }}
       >
-        <div style={{ fontSize: 30, marginBottom: 8 }}>🔐</div>
+        <div style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}>
+          <ShieldCheck size={34} color={C.gray} />
+        </div>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>
           Owner access required
         </div>
@@ -218,9 +221,11 @@ export default function ScreenPermissions() {
   if (error && !payload) {
     return (
       <div style={{ padding: 24 }}>
-        <div style={{ color: C.redDark, fontSize: 13, marginBottom: 10 }}>⚠️ {error}</div>
-        <button type="button" onClick={load} style={btnSecondary}>
-          ↻ Retry
+        <div style={{ color: C.redDark, fontSize: 13, marginBottom: 10, display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <TriangleAlert size={15} /> {error}
+        </div>
+        <button type="button" onClick={load} style={{ ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <RefreshCw size={14} /> Retry
         </button>
       </div>
     );
@@ -249,7 +254,7 @@ export default function ScreenPermissions() {
       >
         <div>
           <div style={{ fontSize: 17, fontWeight: 700, color: C.navy, display: "flex", alignItems: "center", gap: 8 }}>
-            🔐 Access — Role Permissions
+            <ShieldCheck size={20} /> Access — Role Permissions
           </div>
           <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3, maxWidth: 620, lineHeight: 1.5 }}>
             Choose which sidebar features each role can access. Owner always has full access and
@@ -257,11 +262,17 @@ export default function ScreenPermissions() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 11.5, fontWeight: 600, minHeight: 16, color: error ? C.redDark : savingRole ? C.amber : C.greenDark }}>
-            {error ? `⚠️ ${error}` : savingRole ? `Saving ${savingRole}…` : statusMsg ? `✓ ${statusMsg}` : ""}
+          <span style={{ fontSize: 11.5, fontWeight: 600, minHeight: 16, display: "inline-flex", alignItems: "center", gap: 4, color: error ? C.redDark : savingRole ? C.amber : C.greenDark }}>
+            {error ? (
+              <><TriangleAlert size={13} /> {error}</>
+            ) : savingRole ? (
+              `Saving ${savingRole}…`
+            ) : statusMsg ? (
+              <><Check size={13} /> {statusMsg}</>
+            ) : null}
           </span>
-          <button type="button" onClick={handleReset} style={btnSecondary} title="Restore the default permission matrix">
-            ↺ Reset to Default
+          <button type="button" onClick={handleReset} style={{ ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6 }} title="Restore the default permission matrix">
+            <RotateCcw size={14} /> Reset to Default
           </button>
         </div>
       </div>
@@ -403,9 +414,12 @@ function LockTag({ tone, children }: { tone: "on" | "off"; children: React.React
         padding: "1px 6px",
         borderRadius: 10,
         verticalAlign: "middle",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
       }}
     >
-      🔒 {children}
+      <Lock size={9} strokeWidth={2.5} /> {children}
     </span>
   );
 }

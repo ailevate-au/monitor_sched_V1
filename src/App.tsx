@@ -13,6 +13,20 @@ import ScreenMyWork from "./components/MyWork";
 import ScreenPermissions from "./components/Permissions";
 import Login from "./components/Login";
 import { useAuth } from "./lib/auth";
+import {
+  Home,
+  Folder,
+  TriangleAlert,
+  CloudRain,
+  CalendarDays,
+  HardHat,
+  Wallet,
+  ReceiptText,
+  FileText,
+  Settings,
+  ShieldCheck,
+  LogOut,
+} from "lucide-react";
 import { AppNavigate, MasterTabId } from "./types/masters";
 import { parseConflictHubResponse } from "./types";
 
@@ -136,20 +150,21 @@ export default function SiteWizeApp() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  const ICON_SIZE = 16;
   const navItems = [
-    { id:"dashboard", label:"Overview",           icon:"🏠", group:"Overview"    },
-    { id:"projects",  label:"Projects",           icon:"📁", group:"Overview"    },
-    { id:"conflicts", label:"Conflicts",          icon:"⚠️", group:"Overview",   badge: conflictsCount },
-    { id:"weather",   label:"Weather",            icon:"🌧", group:"Overview"    },
-    { id:"gantt",     label:"Timeline",           icon:"📅", group:"Scheduling"  },
-    { id:"resources", label:"Resources",          icon:"👷", group:"Scheduling"  },
-    { id:"financial", label:"Finance",            icon:"💰", group:"Finance"     },
-    { id:"claims",    label:"Project Expenses",   icon:"📋", group:"Finance",    badge: expensesCount, badgeColor: C.amber },
-    { id:"reports",   label:"Reports",            icon:"📄", group:"Finance"     },
-    { id:"masterdata", label:"Settings",          icon:"📚", group:"Administration" },
+    { id:"dashboard", label:"Overview",           icon:<Home size={ICON_SIZE} />,         group:"Overview"    },
+    { id:"projects",  label:"Projects",           icon:<Folder size={ICON_SIZE} />,       group:"Overview"    },
+    { id:"conflicts", label:"Conflicts",          icon:<TriangleAlert size={ICON_SIZE} />, group:"Overview",   badge: conflictsCount },
+    { id:"weather",   label:"Weather",            icon:<CloudRain size={ICON_SIZE} />,    group:"Overview"    },
+    { id:"gantt",     label:"Timeline",           icon:<CalendarDays size={ICON_SIZE} />, group:"Scheduling"  },
+    { id:"resources", label:"Resources",          icon:<HardHat size={ICON_SIZE} />,      group:"Scheduling"  },
+    { id:"financial", label:"Finance",            icon:<Wallet size={ICON_SIZE} />,       group:"Finance"     },
+    { id:"claims",    label:"Project Expenses",   icon:<ReceiptText size={ICON_SIZE} />,  group:"Finance",    badge: expensesCount, badgeColor: C.amber },
+    { id:"reports",   label:"Reports",            icon:<FileText size={ICON_SIZE} />,     group:"Finance"     },
+    { id:"masterdata", label:"Settings",          icon:<Settings size={ICON_SIZE} />,     group:"Administration" },
     // Owner-only: configure the role permission matrix (Access)
     ...(user?.role === "Owner"
-      ? [{ id:"permissions", label:"Access", icon:"🔐", group:"Administration" }]
+      ? [{ id:"permissions", label:"Access", icon:<ShieldCheck size={ICON_SIZE} />, group:"Administration" }]
       : []),
   ];
 
@@ -236,7 +251,7 @@ export default function SiteWizeApp() {
                 userSelect:"none",
                 border: isConflictAlert ? `1px solid #FECACA` : "1px solid transparent",
               }}>
-                <span style={{ fontSize:13, flexShrink:0 }}>{n.icon}</span>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}>{n.icon}</span>
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.label}</span>
                 {!!n.badge && n.badge > 0 && (
                   <span style={{ background: n.badgeColor || C.red, color:C.white, fontSize:9.5, fontWeight:600, padding:"1px 5px", borderRadius:8, lineHeight:1.3 }}>
@@ -283,7 +298,7 @@ export default function SiteWizeApp() {
             }}
             title="Sign out of SiteWize"
           >
-            ⏻ Sign out
+            <LogOut size={14} /> Sign out
           </button>
         </div>
       </nav>

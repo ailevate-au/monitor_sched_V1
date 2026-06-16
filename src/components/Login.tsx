@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
 const C = {
@@ -91,7 +92,7 @@ export default function Login() {
                 gap: 8,
               }}
             >
-              <span style={{ flexShrink: 0 }}>⚠️</span>
+              <TriangleAlert size={15} style={{ flexShrink: 0 }} />
               <span>{error}</span>
             </div>
           )}

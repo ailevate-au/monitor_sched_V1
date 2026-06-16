@@ -1,4 +1,5 @@
 import React from "react";
+import { Timer, X, ArrowRight, TriangleAlert, Check } from "lucide-react";
 import { Task } from "../types";
 import {
   AdjustmentSummary,
@@ -92,7 +93,7 @@ export default function TimelineAdjustPanel({
           color: C.white,
         }}
       >
-        <span style={{ fontSize: 16 }}>⏱</span>
+        <Timer size={17} />
         <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>Stage timeline adjustment</span>
         <button
           type="button"
@@ -106,7 +107,7 @@ export default function TimelineAdjustPanel({
           }}
           title="Discard staged adjustment"
         >
-          ✕
+          <X size={16} />
         </button>
       </div>
 
@@ -144,7 +145,7 @@ export default function TimelineAdjustPanel({
                 <span style={{ textDecoration: "line-through", color: C.gray }}>
                   {anchorMove.fromStart} → {anchorMove.fromEnd}
                 </span>
-                <span style={{ margin: "0 6px", color: C.purple, fontWeight: 700 }}>⇒</span>
+                <ArrowRight size={13} style={{ margin: "0 5px", color: C.purple, verticalAlign: "-2px" }} />
                 <span style={{ color: C.text, fontWeight: 700 }}>
                   {anchorMove.toStart} → {anchorMove.toEnd}
                 </span>
@@ -243,7 +244,8 @@ export default function TimelineAdjustPanel({
                 marginBottom: 4,
               }}
             >
-              ⚠ {warnings.length} warning{warnings.length === 1 ? "" : "s"} — you can still confirm
+              <TriangleAlert size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+              {warnings.length} warning{warnings.length === 1 ? "" : "s"} — you can still confirm
             </div>
             {warnings.slice(0, 6).map((w, i) => (
               <div
@@ -261,7 +263,8 @@ export default function TimelineAdjustPanel({
 
         {staged && warnings.length === 0 && (
           <div style={{ fontSize: 11.5, color: C.greenDark, fontWeight: 600 }}>
-            ✓ No conflicts created by this adjustment.
+            <Check size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+            No conflicts created by this adjustment.
           </div>
         )}
 

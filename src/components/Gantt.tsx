@@ -29,6 +29,7 @@ import {
 import { changeHistory, makeChangeSetId, type ChangeSet } from "../lib/changeHistory";
 import TimelineAdjustPanel from "./TimelineAdjustPanel";
 import ChangeHistoryTab from "./ChangeHistoryTab";
+import { Timer, Users, FolderKanban, HardHat, Columns3, History } from "lucide-react";
 
 const C = {
   navy:       "#0F1F3D",
@@ -1584,11 +1585,11 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
         {/* Toggle Switcher */}
         <div style={{ display:"flex", background:"#E2E8F0", padding:3, borderRadius:10, width:"fit-content" }}>
           {([
-            { id: "projectteam", label: "🏗 Team Allocation" },
-            { id: "overall",     label: "📁 By Project" },
-            { id: "resource",    label: "👷 By Resource" },
-            { id: "kanban",      label: "📋 Kanban" },
-            { id: "history",     label: "🕒 Change History" },
+            { id: "projectteam", label: "Team Allocation", icon: <Users size={14} /> },
+            { id: "overall",     label: "By Project",      icon: <FolderKanban size={14} /> },
+            { id: "resource",    label: "By Resource",     icon: <HardHat size={14} /> },
+            { id: "kanban",      label: "Kanban",          icon: <Columns3 size={14} /> },
+            { id: "history",     label: "Change History",  icon: <History size={14} /> },
           ] as const).map(tab => (
             <button
               key={tab.id}
@@ -1596,12 +1597,14 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
               onClick={() => setScheduleViewMode(tab.id)}
               style={{
                 padding:"7px 14px", border:"none", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer",
+                display:"inline-flex", alignItems:"center", gap:6,
                 background: scheduleViewMode === tab.id ? C.white : "transparent",
                 color: scheduleViewMode === tab.id ? C.navy : C.textMuted,
                 boxShadow: scheduleViewMode === tab.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
                 transition: "all 0.15s ease",
               }}
             >
+              {tab.icon}
               {tab.label}
             </button>
           ))}
@@ -1620,11 +1623,11 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
           )}
           <button style={{ padding: "8px 14px", background: C.blue, color: C.white, border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600 }} onClick={handleOpenCreate}>+ Add Task</button>
           <button
-            style={{ padding: "8px 14px", background: adjustActive ? C.purple : "#F3F2FF", color: adjustActive ? C.white : C.purple, border: `0.5px solid ${C.purple}`, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600 }}
+            style={{ padding: "8px 14px", background: adjustActive ? C.purple : "#F3F2FF", color: adjustActive ? C.white : C.purple, border: `0.5px solid ${C.purple}`, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}
             onClick={() => (adjustActive ? closeAdjust() : openAdjust())}
             title="Stage a working-day delay with full / partial / no cascade"
           >
-            ⏱ {adjustActive ? "Close Adjuster" : "Adjust Timeline"}
+            <Timer size={14} /> {adjustActive ? "Close Adjuster" : "Adjust Timeline"}
           </button>
           <button style={{ padding: "8px 14px", background: C.bgSecond, color: C.text, border: `0.5px solid ${C.grayLight}`, borderRadius: 8, fontSize: 12, cursor: "pointer" }} onClick={loadAllData} title="Reload tasks">↻ Refresh</button>
         </div>
