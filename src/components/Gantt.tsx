@@ -1334,7 +1334,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       lag_days: Number(formLagDays) || 0,
       dependency_type: formDepType as "FS" | "SS",
       cost_override: payload.cost_override,
-      cost_override_type: payload.cost_override_type,
+      cost_override_type: payload.cost_override_type as Task["cost_override_type"],
       percent_complete: 0,
     };
 
@@ -2692,7 +2692,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
 
       {/* VIEW RENDER: KANBAN TASK STATUS BOARD */}
       {scheduleViewMode === "kanban" && (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))", gap:14, marginVertical: 8 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))", gap:14, marginTop: 8, marginBottom: 8 }}>
           
           {/* COLUMN 1: WORK BACKLOG / UNASSIGNED */}
           <div style={{ background: "#F1F5F9", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 10, alignSelf: "start" }}>

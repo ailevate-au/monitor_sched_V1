@@ -110,7 +110,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
         </div>
         <button 
           onClick={onToggleRole}
-          style={{ background: "#2563EB", hoverBg: "#1D4ED8", border: "none", color: C.white, padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.1s" }}
+          style={{ background: "#2563EB", border: "none", color: C.white, padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.1s" }}
         >
           🔄 Back to PM View
         </button>
@@ -127,7 +127,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <h2 style={{ fontSize: 13, fontWeight: 700, color: C.navy, margin: 0, textTransform: "uppercase", letterSpacing: "0.03em" }}>📍 My Shifts This Week</h2>
-          <span style={{ background: C.blueLight, color: C.blue, fontSize: 10, px: 2, padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>June Week 1</span>
+          <span style={{ background: C.blueLight, color: C.blue, fontSize: 10, padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>June Week 1</span>
         </div>
 
         {loading ? (
@@ -216,7 +216,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
             <div style={{ textAlign: "center", padding: 16, fontSize: 11.5, color: C.gray }}>No notification logs registered.</div>
           ) : (
             notifications.map(n => (
-              <div key={n.id} style={{ display: "flex", flexDirection: "column", gap: 2, paddingBottom: 6, borderBottom: `0.5px solid ${C.grayLight}`, lastBorder: "none" }}>
+              <div key={n.id} style={{ display: "flex", flexDirection: "column", gap: 2, paddingBottom: 6, borderBottom: `0.5px solid ${C.grayLight}` }}>
                 <span style={{ fontSize: 11, color: C.text, fontWeight: 500 }}>
                   {n.type === "delay" ? "🚨 DELAY FILED " : "📝 STATEUPDATE "} 
                   - {n.message}

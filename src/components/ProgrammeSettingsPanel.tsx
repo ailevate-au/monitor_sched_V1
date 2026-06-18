@@ -53,6 +53,7 @@ export default function ProgrammeSettingsPanel() {
           <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: C.navy }}>
             <LabelWithInfo
               label="Auto-shift dependent tasks"
+              title="Auto-Shift Dependent Tasks"
               body={
                 "When enabled, moving or extending a task automatically pushes successor tasks that are linked by dependencies (Finish-to-Start or Start-to-Start, including lag days).\n\nWhen disabled, only the task you edit moves. On drag-reschedule, you may be asked once whether to include dependents."
               }

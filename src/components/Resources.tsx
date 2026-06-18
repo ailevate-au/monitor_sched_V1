@@ -325,7 +325,7 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14, flexWrap: "wrap", gap: 12 }}>
           <span style={{ fontSize:13, fontWeight:600, color:C.text }}>Licensed Site Team & Subcontractors Register</span>
           
-          <div style={{ display:"flex", gap:8, alignItems: "center", flexWrap: "wrap", width: "100%", md: "auto", justifyContent: "flex-end" }}>
+          <div style={{ display:"flex", gap:8, alignItems: "center", flexWrap: "wrap", width: "100%", justifyContent: "flex-end" }}>
             {/* Search Input Filter */}
             <div style={{ position: "relative", minWidth: 220 }}>
               <input 
