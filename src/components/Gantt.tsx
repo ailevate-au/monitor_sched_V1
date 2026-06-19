@@ -1477,15 +1477,15 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
 
                       {constraintInsight && (
                         <div style={{ fontSize: 11.5, color: C.text, background: C.white, borderRadius: 8, border: `1px solid ${C.amber}55`, padding: "8px 10px", marginBottom: 10, lineHeight: 1.45 }}>
-                          <div style={{ fontWeight: 700, color: C.amber, marginBottom: 6 }}>Which task should stay fixed?</div>
+                          <div style={{ fontWeight: 700, color: C.amber, marginBottom: 6 }}>Which task can't move?</div>
                           <div style={{ marginBottom: 4 }}>
                             <strong>{constraintInsight.taskA.name}</strong>
-                            <span style={{ color: constraintInsight.suggestedAnchorTaskId === primary.taskAId ? C.greenDark : C.blue, fontWeight: 600 }}>{constraintInsight.suggestedAnchorTaskId === primary.taskAId ? " · likely fixed" : " · can adjust"}</span>
+                            <span style={{ color: constraintInsight.suggestedAnchorTaskId === primary.taskAId ? C.greenDark : C.blue, fontWeight: 600 }}>{constraintInsight.suggestedAnchorTaskId === primary.taskAId ? " · keep as-is" : " · can be moved"}</span>
                             {constraintInsight.taskA.reasons.length > 0 && <span style={{ color: C.textMuted }}> — {constraintInsight.taskA.reasons.join("; ")}</span>}
                           </div>
                           <div>
                             <strong>{constraintInsight.taskB.name}</strong>
-                            <span style={{ color: constraintInsight.suggestedAnchorTaskId === primary.taskBId ? C.greenDark : C.blue, fontWeight: 600 }}>{constraintInsight.suggestedAnchorTaskId === primary.taskBId ? " · likely fixed" : " · can adjust"}</span>
+                            <span style={{ color: constraintInsight.suggestedAnchorTaskId === primary.taskBId ? C.greenDark : C.blue, fontWeight: 600 }}>{constraintInsight.suggestedAnchorTaskId === primary.taskBId ? " · keep as-is" : " · can be moved"}</span>
                             {constraintInsight.taskB.reasons.length > 0 && <span style={{ color: C.textMuted }}> — {constraintInsight.taskB.reasons.join("; ")}</span>}
                           </div>
                         </div>
@@ -1496,7 +1496,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                           {recommendations.map((rec, idx) => (
                             <div key={rec.id} style={{ padding: "10px 12px", borderRadius: 8, border: `1px solid ${idx === 0 ? C.green : C.grayLight}`, background: idx === 0 ? C.greenBg : C.white }}>
                               <div style={{ fontSize: 10.5, fontWeight: 700, color: idx === 0 ? C.greenDark : C.gray, marginBottom: 4 }}>
-                                {idx === 0 ? "Best option" : `Option ${idx + 1}`} · {rec.kind === "reschedule" ? "Reschedule" : "Reallocate"} · keep "{rec.anchorTaskName}" fixed
+                                {idx === 0 ? "Best fix" : `Option ${idx + 1}`} · {rec.kind === "reschedule" ? "Reschedule dates" : "Swap person"}
                               </div>
                               <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text, marginBottom: 2 }}>{rec.headline}</div>
                               <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.45, marginBottom: 8 }}>{rec.detail}</div>
