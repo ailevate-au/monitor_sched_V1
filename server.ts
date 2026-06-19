@@ -731,7 +731,7 @@ async function startServer() {
           id: `shift:${reassignTask.id}:14`,
           kind: "accept_delay",
           label: "Accept a 14-day delay instead",
-          detail: `Keep ${c.resource} and push "${reassignTask.name}" out 14 working days. Dependent tasks reschedule automatically.`,
+          detail: `Keep ${c.resource} on both jobs — push the conflicting task out 14 working days. Downstream tasks cascade automatically.`,
           delayDays: 14,
         });
       }
@@ -768,7 +768,7 @@ async function startServer() {
         id: `shift:${worst.id}:10`,
         kind: "extend_deadline",
         label: "Re-baseline & approve a 2-week extension",
-        detail: `Move "${worst.name}" to a realistic finish and cascade the dependent tasks. Removes the overdue flag.`,
+        detail: `Shift the overdue task forward 10 working days. Dependent tasks cascade. Clears the overdue flag.`,
         delayDays: 10,
         recommended: true,
       }];
@@ -792,7 +792,7 @@ async function startServer() {
         severity: "high",
         title: `${projectNameFor(pid)} is running late`,
         projectName: projectNameFor(pid),
-        what: `"${worst.name}" was due ${worst.end} and is ${daysLate} day(s) overdue${assignee ? ` (${assignee.name})` : ""}.`,
+        what: `${worst.name} was due ${worst.end} — now ${daysLate} day${daysLate !== 1 ? "s" : ""} overdue${assignee ? ` (assigned: ${assignee.name})` : ""}.`,
         impact: project ? `Every day past plan adds LD exposure of about A$${(project.ldRatePerDay || 0).toLocaleString()}.` : "Downstream tasks are blocked until this finishes.",
         suggestedActions: actions,
       });
@@ -811,7 +811,7 @@ async function startServer() {
           id: `shift:${child.id}:3`,
           kind: "extend_deadline",
           label: "Add a 3-day buffer before the handover",
-          detail: `Push "${child.name}" back 3 working days so it no longer starts the moment "${f.name}" ends.`,
+          detail: `Delays the next task 3 working days so there's breathing room after the handover. Removes the tight-schedule risk.`,
           delayDays: 3,
           recommended: true,
         });
@@ -820,7 +820,7 @@ async function startServer() {
         id: `shift:${f.id}:-2`,
         kind: "extend_deadline",
         label: "Start the earlier task sooner",
-        detail: `Bring "${f.name}" forward 2 working days to open up the gap.`,
+        detail: `Pulls the earlier task forward 2 working days to open up a safety gap before the handover.`,
         delayDays: -2,
       });
       problems.push({

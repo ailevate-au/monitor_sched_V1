@@ -296,6 +296,11 @@ function ActionRow({ action, onPick }: { action: ProblemAction; onPick: () => vo
           {action.label}
           {recommended && <span style={{ fontSize: 9.5, background: C.green, color: C.white, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>RECOMMENDED</span>}
           {r && r.same_state === false && <span style={{ fontSize: 9.5, background: C.amberBg, color: C.amber, padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>Interstate · {r.state}</span>}
+          {action.delayDays != null && action.delayDays !== 0 && (
+            <span style={{ fontSize: 9.5, background: "#F1F5F9", color: C.gray, padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
+              {action.delayDays > 0 ? `+${action.delayDays}d` : `${action.delayDays}d`} shift
+            </span>
+          )}
         </div>
         <div style={{ fontSize: 11, color: C.gray, marginTop: 2, lineHeight: 1.45 }}>{action.detail}</div>
         {r && r.skills && r.skills.length > 0 && (
