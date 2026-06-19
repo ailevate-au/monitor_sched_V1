@@ -276,6 +276,12 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   const autoCascadeRef = useRef(autoCascadeDependents);
   autoCascadeRef.current = autoCascadeDependents;
   const [scheduleViewMode, setScheduleViewMode] = useState<"projectteam" | "overall" | "resource" | "history">("projectteam");
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
+  const toggleProjectCollapse = (projName: string) => setCollapsedProjects(prev => {
+    const next = new Set(prev);
+    next.has(projName) ? next.delete(projName) : next.add(projName);
+    return next;
+  });
 
   // Timeline adjustment (staged delay) state
   const MAX_DELAY_DAYS = 30;
@@ -1883,14 +1889,22 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                 });
                 const unassigned = group.tasks.filter(t => !t.assigneeId || t.assignee === "Unassigned");
 
+                const isCollapsed = collapsedProjects.has(projName);
+
                 return (
                   <div key={projName}>
-                    {/* Project section header */}
+                    {/* Project section header — click to collapse/expand */}
                     <div style={{ display:"flex", background:"#F8FAFC", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, minHeight:30, alignItems:"center" }}>
-                      <div style={{ ...stickyLeft("#F8FAFC"), padding:"5px 14px", fontSize:11, fontWeight:700, color:C.blue, display:"flex", alignItems:"center", gap:6 }}>
+                      <div
+                        onClick={() => toggleProjectCollapse(projName)}
+                        style={{ ...stickyLeft("#F8FAFC"), padding:"5px 14px", fontSize:11, fontWeight:700, color:C.blue, display:"flex", alignItems:"center", gap:6, cursor:"pointer", userSelect:"none" }}
+                        title={isCollapsed ? "Expand project" : "Collapse project"}
+                      >
+                        <span style={{ fontSize:9, color:C.gray, marginRight:2, transition:"transform 0.15s", display:"inline-block", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>
                         <span style={{ width:9, height:9, background:group.color, borderRadius:"50%", display:"inline-block", flexShrink:0 }} />
                         {projName.split(" —")[0]}
                         {projectData?.pcEndDate && <span style={{ fontSize:9.5, fontWeight:500, color:C.gray, marginLeft:4 }}>PC: {projectData.pcEndDate}</span>}
+                        {isCollapsed && <span style={{ fontSize:9, color:C.gray, fontWeight:400, marginLeft:2 }}>({group.tasks.length} task{group.tasks.length !== 1 ? "s" : ""})</span>}
                       </div>
                       {Array.from({length:COLS}).map((_, i) => (
                         <div key={i} style={{ width:CW, flexShrink:0, height:30, borderLeft:`0.5px solid ${C.grayLight}`, background:getWeatherStyleForCol(i), position:"relative" }}>
@@ -1905,7 +1919,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                     </div>
 
                     {/* One row per assigned resource in this project */}
-                    {Array.from(resMap.entries()).map(([assigneeId, { res, tasks: resTasks }]) => {
+                    {!isCollapsed && Array.from(resMap.entries()).map(([assigneeId, { res, tasks: resTasks }]) => {
                       const isConflicted = conflictedResourceIds.has(assigneeId);
                       const rowBg = isConflicted ? "#FFF8F8" : C.white;
 
@@ -2006,7 +2020,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                     })}
 
                     {/* Unassigned row for this project */}
-                    {unassigned.length > 0 && (
+                    {!isCollapsed && unassigned.length > 0 && (
                       <div style={{ display:"flex", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, minHeight:ROW_HEIGHT, alignItems:"center", position:"relative", background:"#FAFBFD" }}>
                         <div style={{ ...stickyLeft("#FAFBFD"), padding:"6px 12px 6px 16px", fontSize:11.5, color:C.gray, fontStyle:"italic" }}>
                           <span>📋 Unassigned ({unassigned.length})</span>
@@ -2046,8 +2060,9 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
         const taskCoordinates: { [id: string]: { xStart: number, xEnd: number, y: number } } = {};
         let bodyHeight = 0;
 
-        Object.entries(projectsGroup).forEach(([, group]) => {
+        Object.entries(projectsGroup).forEach(([projName, group]) => {
           bodyHeight += 30;
+          if (collapsedProjects.has(projName)) return;
 
           const activeTasks = group.tasks.filter(t => t.assigneeId !== null && t.assignee !== "Unassigned");
           activeTasks.forEach(task => {
@@ -2187,16 +2202,24 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
               const projectData = projects.find(p => p.name === projName);
               const pcEndCol = projectData?.pcEndDate ? getColFromDate(projectData.pcEndDate) : null;
 
+              const isCollapsed = collapsedProjects.has(projName);
+
               return (
                 <div key={projName}>
                   {/* Project Section Separator with PC milestone marker */}
                   <div style={{ display:"flex", background:"#F8FAFC", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, minHeight:30, alignItems:"center" }}>
-                    <div style={{ ...stickyLeft("#F8FAFC"), padding:"5px 14px", fontSize:11, fontWeight:700, color:C.blue, display:"flex", alignItems:"center", gap:6 }}>
+                    <div
+                      onClick={() => toggleProjectCollapse(projName)}
+                      style={{ ...stickyLeft("#F8FAFC"), padding:"5px 14px", fontSize:11, fontWeight:700, color:C.blue, display:"flex", alignItems:"center", gap:6, cursor:"pointer", userSelect:"none" }}
+                      title={isCollapsed ? "Expand project" : "Collapse project"}
+                    >
+                      <span style={{ fontSize:9, color:C.gray, marginRight:2, transition:"transform 0.15s", display:"inline-block", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>
                       <span style={{ width:9, height:9, background:group.color, borderRadius:"50%", display:"inline-block", flexShrink:0 }} />
                       {projName.split(" —")[0]}
                       {projectData?.pcEndDate && (
                         <span style={{ fontSize:9.5, fontWeight:500, color:C.gray, marginLeft:4 }}>PC: {projectData.pcEndDate}</span>
                       )}
+                      {isCollapsed && <span style={{ fontSize:9, color:C.gray, fontWeight:400, marginLeft:2 }}>({group.tasks.length} task{group.tasks.length !== 1 ? "s" : ""})</span>}
                     </div>
                     {Array.from({length:COLS}).map((_, i) => (
                       <div key={i} style={{ width:CW, flexShrink:0, height:30, borderLeft:`0.5px solid ${C.grayLight}`, background: getWeatherStyleForCol(i), position: "relative" }}>
@@ -2211,7 +2234,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                   </div>
 
                   {/* Sub-group 1: Assigned tasks (one row per task) */}
-                  {activeTasks.map(task => {
+                  {!isCollapsed && activeTasks.map(task => {
                     const sCol = getColFromDate(task.start);
                     const lCol = getColDuration(task.start, task.end);
                     const isThisDragged = activeDrag && activeDrag.id === task.id;
@@ -2353,7 +2376,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                   })}
 
                   {/* Sub-group 2: Unassigned Tasks Row (Grouped at bottom of corresponding project) */}
-                  {unassignedTasks.length > 0 && (
+                  {!isCollapsed && unassignedTasks.length > 0 && (
                     <div style={{ display:"flex", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, minHeight:ROW_HEIGHT, alignItems:"center", position:"relative", background: "#FAFBFD" }}>
                       <div style={{ ...stickyLeft("#FAFBFD"), padding:"6px 12px 6px 28px", fontSize:12, color:C.gray, fontStyle: "italic" }}>
                         <span>📋 Unassigned Backlog</span>

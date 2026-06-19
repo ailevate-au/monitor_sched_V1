@@ -487,14 +487,15 @@ async function startServer() {
   // POST /api/v1/resources: register new resources
   app.post("/api/v1/resources", (req, res) => {
     const db = dbInstance;
-    const { name, trade, state, rate, email, company, overtimeRateVal, dailyAllowanceVal, projectRateOverrides } = req.body;
+    const { name, trade, state, rate, email, company, overtimeRateVal, dailyAllowanceVal, projectRateOverrides, bio, skills } = req.body;
     if (!name || !trade) {
       return res.status(400).json({ error: "Missing required fields: name and trade" });
     }
     const initials = name.split(" ").map((n: string) => n.charAt(0)).join("").toUpperCase().slice(0, 3);
     const rateVal = parseInt(rate) || 55;
+    const newId = `r${db.resources.length + 1}`;
     const newResource = {
-      id: `r${db.resources.length + 1}`,
+      id: newId,
       initials: initials || "SR",
       name,
       trade,
@@ -509,9 +510,17 @@ async function startServer() {
       dailyAllowanceVal: parseInt(dailyAllowanceVal) || 0,
       projectRateOverrides: projectRateOverrides || {}
     };
+    if (bio || skills) {
+      const parsedSkills = Array.isArray(skills)
+        ? skills
+        : typeof skills === "string" && skills.trim()
+          ? skills.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : [];
+      RESOURCE_PROFILES[newId] = { bio: bio || "", skills: parsedSkills };
+    }
     db.resources.push(newResource);
     db.save();
-    res.json(newResource);
+    res.json({ ...newResource, ...profileFor(newId) });
   });
 
   // POST /api/v1/resources/bulk: Import multiple professionals at once

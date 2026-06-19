@@ -80,6 +80,8 @@ export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
   const [newCompanyCustom, setNewCompanyCustom] = useState("");
   const [newOvertime, setNewOvertime] = useState("");
   const [newAllowance, setNewAllowance] = useState("");
+  const [newBio, setNewBio] = useState("");
+  const [newSkillsText, setNewSkillsText] = useState("");
   const [newRateType, setNewRateType] = useState<"hourly" | "daily" | "lump_sum">("hourly");
   const [showAddOptional, setShowAddOptional] = useState(false);
 
@@ -192,7 +194,9 @@ export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
         company: targetCompany,
         overtimeRateVal: newOvertime,
         dailyAllowanceVal: newAllowance,
-        rate_type: newRateType
+        rate_type: newRateType,
+        bio: newBio.trim() || undefined,
+        skills: newSkillsText.trim() || undefined,
       })
     })
       .then(res => res.json())
@@ -203,6 +207,8 @@ export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
         setNewCompanyCustom("");
         setNewOvertime("");
         setNewAllowance("");
+        setNewBio("");
+        setNewSkillsText("");
         setNewRateType("hourly");
         setShowAddModal(false);
         loadAllData();
@@ -623,12 +629,32 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
                     />
                   </div>
                 </div>
+                <div>
+                  <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Bio / Summary</label>
+                  <textarea
+                    rows={2}
+                    value={newBio}
+                    placeholder="e.g. 8 yrs concrete formwork. Strong on post-tension decks."
+                    onChange={e => setNewBio(e.target.value)}
+                    style={{ width:"100%", fontSize:12, padding:"6px 10px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, resize:"vertical", fontFamily:"inherit" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Skills <span style={{ fontWeight:400 }}>(comma-separated)</span></label>
+                  <input
+                    type="text"
+                    value={newSkillsText}
+                    placeholder="e.g. Jump-form, Post-tension decks, Crane coordination"
+                    onChange={e => setNewSkillsText(e.target.value)}
+                    style={{ width:"100%", fontSize:12, padding:"6px 10px", borderRadius:6, border:`0.5px solid ${C.grayLight}` }}
+                  />
+                </div>
               </div>
             )}
 
             <div style={{ display:"flex", gap:8 }}>
               <Btn primary onClick={handleAddResource}>Add Resource</Btn>
-              <Btn onClick={() => { setShowAddModal(false); setShowAddOptional(false); }}>Cancel</Btn>
+              <Btn onClick={() => { setShowAddModal(false); setShowAddOptional(false); setNewBio(""); setNewSkillsText(""); }}>Cancel</Btn>
             </div>
           </Card>
         </div>
