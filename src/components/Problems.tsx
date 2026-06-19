@@ -7,6 +7,9 @@ import {
   CheckCircle2,
   ArrowRight,
   X,
+  ChevronDown,
+  ChevronUp,
+  CalendarDays,
 } from "lucide-react";
 import {
   Problem,
@@ -39,46 +42,45 @@ const EMPTY: ProblemsResponse = {
   summary: { total: 0, critical: 0, projectsAffected: 0, projectsTotal: 0 },
 };
 
-/** Visual treatment per problem category. */
 const CATEGORY_META: Record<
   Problem["category"],
   { label: string; icon: React.ReactNode; accent: string; bg: string; border: string }
 > = {
   conflict: { label: "Double-booking", icon: <TriangleAlert size={16} />, accent: C.redDark, bg: "#FFF8F8", border: "#FECACA" },
-  late: { label: "Running late", icon: <Clock size={16} />, accent: C.amber, bg: "#FFFBEB", border: "#FCD34D" },
-  fragile: { label: "Tight handover", icon: <Link2 size={16} />, accent: C.amber, bg: "#FFFBF2", border: "#FDE68A" },
-  weather: { label: "Weather risk", icon: <CloudRain size={16} />, accent: C.blue, bg: "#F1F7FE", border: "#BFDBFE" },
+  late:     { label: "Running late",   icon: <Clock size={16} />,          accent: C.amber,   bg: "#FFFBEB", border: "#FCD34D" },
+  fragile:  { label: "Tight handover", icon: <Link2 size={16} />,          accent: C.amber,   bg: "#FFFBF2", border: "#FDE68A" },
+  weather:  { label: "Weather risk",   icon: <CloudRain size={16} />,      accent: C.blue,    bg: "#F1F7FE", border: "#BFDBFE" },
 };
 
 export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => void }) {
-  const [data, setData] = useState<ProblemsResponse>(EMPTY);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [resolvedIds, setResolvedIds] = useState<Record<string, string>>({}); // id -> message
-  const [pending, setPending] = useState<{ problem: Problem; action: ProblemAction } | null>(null);
+  const [data, setData]           = useState<ProblemsResponse>(EMPTY);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+  const [resolvedIds, setResolvedIds] = useState<Record<string, string>>({});
+  const [pending, setPending]     = useState<{ problem: Problem; action: ProblemAction } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Cards start expanded; user can collapse the suggested-fixes section per card
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const toggleCollapsed = (id: string) =>
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const load = () => {
     setLoading(true);
     fetch("/api/v1/problems")
-      .then((r) => {
+      .then(r => {
         if (!r.ok) throw new Error("Could not load problems");
         return r.json();
       })
-      .then((d) => {
-        setData(parseProblemsResponse(d));
-        setLoading(false);
-        setError(null);
-      })
-      .catch((e) => {
-        setError(e.message || "Failed to load problems");
-        setLoading(false);
-      });
+      .then(d => { setData(parseProblemsResponse(d)); setLoading(false); setError(null); })
+      .catch(e => { setError(e.message || "Failed to load problems"); setLoading(false); });
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   const confirmResolve = () => {
     if (!pending) return;
@@ -89,21 +91,16 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ actionId: action.id }),
     })
-      .then((r) => r.json())
-      .then((res) => {
+      .then(r => r.json())
+      .then(res => {
         setSubmitting(false);
         setPending(null);
         if (res.success) {
-          // Flash the card green, then refresh the live list after a beat.
-          setResolvedIds((m) => ({ ...m, [problem.id]: action.label }));
+          setResolvedIds(m => ({ ...m, [problem.id]: action.label }));
           if (res.problems) {
             setTimeout(() => {
               setData(parseProblemsResponse(res));
-              setResolvedIds((m) => {
-                const next = { ...m };
-                delete next[problem.id];
-                return next;
-              });
+              setResolvedIds(m => { const next = { ...m }; delete next[problem.id]; return next; });
             }, 1400);
           } else {
             setTimeout(load, 1400);
@@ -112,29 +109,24 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
           alert(res.error || "Could not resolve this problem.");
         }
       })
-      .catch(() => {
-        setSubmitting(false);
-        setPending(null);
-        alert("Network error while resolving.");
-      });
+      .catch(() => { setSubmitting(false); setPending(null); alert("Network error while resolving."); });
   };
 
   const { problems, summary } = data;
 
-  if (loading && problems.length === 0) {
+  if (loading && problems.length === 0)
     return <div style={{ padding: 20, color: C.gray }}>Scanning your portfolio for issues…</div>;
-  }
-  if (error) {
+
+  if (error)
     return (
       <div style={{ padding: 20, color: C.redDark, background: C.redBg, borderRadius: 12, border: `0.5px solid ${C.red}` }}>
         {error}
       </div>
     );
-  }
 
   return (
     <div>
-      {/* Header — plain-language summary for the owner */}
+      {/* Header */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 3 }}>
           {summary.total > 0
@@ -148,11 +140,11 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
         </div>
       </div>
 
-      {/* Stat strip */}
+      {/* KPI strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, marginBottom: 20 }}>
-        <KpiCard label="Open Problems" value={`${summary.total}`} valueColor={summary.total > 0 ? C.red : C.greenDark} sub="Need a decision" />
-        <KpiCard label="Critical" value={`${summary.critical}`} valueColor={summary.critical > 0 ? C.redDark : C.greenDark} sub="Double-bookings" />
-        <KpiCard label="Projects Affected" value={`${summary.projectsAffected}`} valueColor={C.amber} sub={`of ${summary.projectsTotal} active`} />
+        <KpiCard label="Open Problems"     value={`${summary.total}`}             valueColor={summary.total > 0 ? C.red : C.greenDark}      sub="Need a decision" />
+        <KpiCard label="Critical"          value={`${summary.critical}`}          valueColor={summary.critical > 0 ? C.redDark : C.greenDark} sub="Double-bookings" />
+        <KpiCard label="Projects Affected" value={`${summary.projectsAffected}`} valueColor={C.amber}                                        sub={`of ${summary.projectsTotal} active`} />
       </div>
 
       {/* Empty state */}
@@ -165,9 +157,11 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
       )}
 
       {/* Problem cards */}
-      {problems.map((p) => {
-        const meta = CATEGORY_META[p.category];
+      {problems.map(p => {
+        const meta     = CATEGORY_META[p.category];
         const resolved = resolvedIds[p.id];
+        const fixesCollapsed = collapsed.has(p.id);
+
         return (
           <div
             key={p.id}
@@ -180,8 +174,8 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
               transition: "border-color .2s",
             }}
           >
-            {/* Resolved overlay state */}
             {resolved ? (
+              /* Resolved flash */
               <div style={{ padding: "18px 18px", background: C.greenBg, display: "flex", alignItems: "center", gap: 10 }}>
                 <CheckCircle2 size={22} color={C.green} />
                 <div>
@@ -191,31 +185,70 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
               </div>
             ) : (
               <>
-                {/* What's wrong */}
+                {/* Problem header */}
                 <div style={{ padding: "14px 16px", borderBottom: `1px solid ${meta.border}`, background: meta.bg }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                  {/* Row 1: category badge + project pill */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7, flexWrap: "wrap" }}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: meta.accent, background: C.white, border: `1px solid ${meta.border}`, padding: "2px 8px", borderRadius: 20 }}>
                       {meta.icon} {meta.label.toUpperCase()}
                     </span>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{p.title}</span>
-                    <span style={{ fontSize: 11, color: C.gray, marginLeft: "auto" }}>{p.projectName}</span>
+                    {/* Project name — prominent pill */}
+                    <span
+                      style={{ fontSize: 10.5, fontWeight: 600, color: C.blue, background: C.blueLight, border: `1px solid #BFDBFE`, padding: "2px 9px", borderRadius: 20, cursor: onNav ? "pointer" : "default" }}
+                      title={onNav ? "Open in Timeline" : undefined}
+                      onClick={() => onNav?.("gantt")}
+                    >
+                      {p.projectName}
+                    </span>
                   </div>
+                  {/* Row 2: title */}
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 6 }}>{p.title}</div>
+                  {/* Row 3: what + impact */}
                   <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: 6 }}>{p.what}</div>
-                  <div style={{ fontSize: 11.5, color: meta.accent, lineHeight: 1.5, display: "flex", gap: 5 }}>
-                    <span style={{ fontWeight: 700 }}>Impact:</span> <span style={{ color: C.text }}>{p.impact}</span>
+                  <div style={{ fontSize: 11.5, display: "flex", gap: 5 }}>
+                    <span style={{ fontWeight: 700, color: meta.accent }}>Impact:</span>
+                    <span style={{ color: C.text }}>{p.impact}</span>
                   </div>
+                  {/* Row 4: View in Timeline link */}
+                  {onNav && (
+                    <button
+                      type="button"
+                      onClick={() => onNav("gantt")}
+                      style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}
+                    >
+                      <CalendarDays size={12} /> View in Timeline
+                    </button>
+                  )}
                 </div>
 
-                {/* Suggested fixes */}
-                <div style={{ padding: "14px 16px" }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 600, color: C.gray, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    Suggested fixes — pick one
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {p.suggestedActions.map((a) => (
-                      <ActionRow key={a.id} action={a} onPick={() => setPending({ problem: p, action: a })} />
-                    ))}
-                  </div>
+                {/* Suggested fixes — collapsible */}
+                <div style={{ padding: "0 16px" }}>
+                  {/* Toggle header */}
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapsed(p.id)}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                      background: "none", border: "none", cursor: "pointer", padding: "12px 0",
+                      borderBottom: fixesCollapsed ? "none" : `0.5px solid ${C.grayLight}`,
+                    }}
+                  >
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: C.gray, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      Suggested fixes — pick one
+                    </span>
+                    {fixesCollapsed
+                      ? <ChevronDown size={15} color={C.gray} />
+                      : <ChevronUp size={15} color={C.gray} />}
+                  </button>
+
+                  {/* Action rows */}
+                  {!fixesCollapsed && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingBottom: 14 }}>
+                      {p.suggestedActions.map(a => (
+                        <ActionRow key={a.id} action={a} onPick={() => setPending({ problem: p, action: a })} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -237,18 +270,13 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
   );
 }
 
-/** A single suggested-fix row. Reassign actions show the replacement's rate + bio/skills. */
 function ActionRow({ action, onPick }: { action: ProblemAction; onPick: () => void }) {
   const r = action.resource;
   const recommended = action.recommended;
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "10px 12px",
-        borderRadius: 10,
+        display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
         border: `1px solid ${recommended ? C.green : C.grayLight}`,
         background: recommended ? C.greenBg : C.white,
       }}
@@ -272,7 +300,7 @@ function ActionRow({ action, onPick }: { action: ProblemAction; onPick: () => vo
         <div style={{ fontSize: 11, color: C.gray, marginTop: 2, lineHeight: 1.45 }}>{action.detail}</div>
         {r && r.skills && r.skills.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
-            {r.skills.slice(0, 4).map((s) => (
+            {r.skills.slice(0, 4).map(s => (
               <span key={s} style={{ fontSize: 9.5, padding: "1px 6px", borderRadius: 4, background: C.blueLight, color: C.blue, fontWeight: 600 }}>{s}</span>
             ))}
           </div>
@@ -298,17 +326,9 @@ function ActionRow({ action, onPick }: { action: ProblemAction; onPick: () => vo
 }
 
 function ConfirmModal({
-  problem,
-  action,
-  submitting,
-  onCancel,
-  onConfirm,
+  problem, action, submitting, onCancel, onConfirm,
 }: {
-  problem: Problem;
-  action: ProblemAction;
-  submitting: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
+  problem: Problem; action: ProblemAction; submitting: boolean; onCancel: () => void; onConfirm: () => void;
 }) {
   const r = action.resource;
   return (
@@ -331,7 +351,7 @@ function ConfirmModal({
               {r.bio && <div style={{ color: C.gray, marginTop: 3 }}>{r.bio}</div>}
               {r.skills && r.skills.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-                  {r.skills.map((s) => (
+                  {r.skills.map(s => (
                     <span key={s} style={{ fontSize: 9.5, padding: "1px 6px", borderRadius: 4, background: C.blueLight, color: C.blue, fontWeight: 600 }}>{s}</span>
                   ))}
                 </div>
