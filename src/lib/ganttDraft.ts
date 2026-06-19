@@ -285,7 +285,7 @@ export function assessTaskConstraints(
   const pct = task.percent_complete ?? 0;
   if (pct > 0) {
     lockScore += 40 + Math.min(pct, 30);
-    reasons.push(`${pct}% complete — work started`);
+    reasons.push(`${pct}% done — already started on site`);
   }
 
   const dependents = countDependents(tasks, task.id);
@@ -293,26 +293,26 @@ export function assessTaskConstraints(
     lockScore += 35 + dependents * 5;
     reasons.push(
       dependents === 1
-        ? "1 downstream task depends on this"
-        : `${dependents} downstream tasks depend on this`
+        ? "1 other task is waiting on this to finish"
+        : `${dependents} other tasks are waiting on this to finish`
     );
   }
 
   if (task.status === "weather") {
     lockScore += 30;
-    reasons.push("Weather-sensitive window — dates should hold");
+    reasons.push("tied to a weather window — dates matter");
   }
   if (task.status === "fragile") {
     lockScore += 25;
-    reasons.push("Critical path / tight buffer");
+    reasons.push("tight schedule — little room to slip");
   }
   if (task.status === "inprogress") {
     lockScore += 30;
-    reasons.push("Currently in progress on site");
+    reasons.push("crew already on site");
   }
   if (task.status === "overdue") {
     lockScore += 20;
-    reasons.push("Overdue — finish date priority");
+    reasons.push("already overdue");
   }
 
   const predecessors = (task.dependencies || "")
@@ -321,12 +321,12 @@ export function assessTaskConstraints(
     .filter((d) => d && d !== "-");
   if (predecessors.length > 0) {
     lockScore += 15;
-    reasons.push("Sequenced after predecessor");
+    reasons.push("waits on another task finishing first");
   }
 
   if (pendingById[task.id]) {
     lockScore += 50;
-    reasons.push("Just edited in this draft — keep as-is");
+    reasons.push("you just edited this — keeping it as-is");
   }
 
   return {
@@ -689,11 +689,11 @@ function appendOptionsForDirection(
       anchorTaskId: anchorTask.id,
       anchorTaskName: anchorName,
       anchorReasons: anchorProfile.reasons,
-      headline: `Keep "${anchorName}" fixed — shift "${moveName}" to ${afterStart} – ${afterEnd}`,
-      detail: `"${anchorName}" should stay (${anchorReasonText}). Adjust the other task to start after ${anchorTask.end}.`,
+      headline: `Move "${moveName}" to ${afterStart} – ${afterEnd}`,
+      detail: `"${anchorName}" keeps its dates (${anchorReasonText}). "${moveName}" starts after it finishes — same person, no overlap.`,
       start: afterStart,
       end: afterEnd,
-      tags: ["Keep anchor fixed", "Adjust other task", "Same manpower", "Clears overlap"],
+      tags: ["Same person", "No overlap", "Clears conflict"],
       score: 90 + directionBonus + (refreshSeed % 3),
       costImpact,
     });
@@ -727,11 +727,11 @@ function appendOptionsForDirection(
       anchorTaskId: anchorTask.id,
       anchorTaskName: anchorName,
       anchorReasons: anchorProfile.reasons,
-      headline: `Keep "${anchorName}" fixed — move "${moveName}" earlier (${beforeStart} – ${beforeEnd})`,
-      detail: `"${anchorName}" stays on current dates (${anchorReasonText}). Finish the other task before it starts.`,
+      headline: `Start "${moveName}" earlier — ${beforeStart} to ${beforeEnd}`,
+      detail: `"${anchorName}" keeps its dates (${anchorReasonText}). "${moveName}" finishes before "${anchorName}" starts — no overlap.`,
       start: beforeStart,
       end: beforeEnd,
-      tags: ["Keep anchor fixed", "Move earlier", "Same manpower", "Clears overlap"],
+      tags: ["Same person", "Move earlier", "Clears conflict"],
       score: 75 + directionBonus + (refreshSeed % 3),
       costImpact,
     });
@@ -776,11 +776,11 @@ function appendOptionsForDirection(
       anchorTaskId: anchorTask.id,
       anchorTaskName: anchorName,
       anchorReasons: anchorProfile.reasons,
-      headline: `Keep "${anchorName}" fixed — assign "${moveName}" to ${candidate.name}`,
-      detail: `Leave "${anchorName}" with ${conflict.resourceName} (${anchorReasonText}). Reallocate ${candidate.name} (${trade}, ${candidate.util}% load) on the other task only.`,
+      headline: `Swap "${moveName}" to ${candidate.name}`,
+      detail: `${conflict.resourceName} stays on "${anchorName}" (${anchorReasonText}). ${candidate.name} takes over "${moveName}" — ${candidate.util}% current load.`,
       resourceId: candidate.id,
       resourceName: candidate.name,
-      tags: ["Keep anchor fixed", "Reallocate other task", ...candidate.reasonTags, costTag],
+      tags: ["Different person", ...candidate.reasonTags, costTag],
       score: candidate.score + directionBonus - idx * 5,
       costImpact,
     });

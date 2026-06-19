@@ -5,7 +5,8 @@ import { createServer as createViteServer } from "vite";
 import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 import { dbInstance } from "./src/server/db";
-import { runConflictDetection, computeCascade, getConflictHubPayload } from "./src/server/conflictEngine";
+import { runConflictDetection, computeCascade, getConflictHubPayload, getReplacementCandidates } from "./src/server/conflictEngine";
+import { RESOURCE_PROFILES } from "./src/server/seedData";
 import { getBOMForecast } from "./src/server/bomWeather";
 import {
   getMastersBundle,
@@ -479,20 +480,22 @@ async function startServer() {
   // GET /api/v1/resources: lists resource personnel and utilization values
   app.get("/api/v1/resources", (req, res) => {
     const db = dbInstance;
-    res.json(db.resources);
+    // Merge in static bio/skills profiles (reference data, not persisted).
+    res.json(db.resources.map(r => ({ ...r, ...(RESOURCE_PROFILES[r.id] || {}) })));
   });
 
   // POST /api/v1/resources: register new resources
   app.post("/api/v1/resources", (req, res) => {
     const db = dbInstance;
-    const { name, trade, state, rate, email, company, overtimeRateVal, dailyAllowanceVal, projectRateOverrides } = req.body;
+    const { name, trade, state, rate, email, company, overtimeRateVal, dailyAllowanceVal, projectRateOverrides, bio, skills } = req.body;
     if (!name || !trade) {
       return res.status(400).json({ error: "Missing required fields: name and trade" });
     }
     const initials = name.split(" ").map((n: string) => n.charAt(0)).join("").toUpperCase().slice(0, 3);
     const rateVal = parseInt(rate) || 55;
+    const newId = `r${db.resources.length + 1}`;
     const newResource = {
-      id: `r${db.resources.length + 1}`,
+      id: newId,
       initials: initials || "SR",
       name,
       trade,
@@ -507,9 +510,17 @@ async function startServer() {
       dailyAllowanceVal: parseInt(dailyAllowanceVal) || 0,
       projectRateOverrides: projectRateOverrides || {}
     };
+    if (bio || skills) {
+      const parsedSkills = Array.isArray(skills)
+        ? skills
+        : typeof skills === "string" && skills.trim()
+          ? skills.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : [];
+      RESOURCE_PROFILES[newId] = { bio: bio || "", skills: parsedSkills };
+    }
     db.resources.push(newResource);
     db.save();
-    res.json(newResource);
+    res.json({ ...newResource, ...profileFor(newId) });
   });
 
   // POST /api/v1/resources/bulk: Import multiple professionals at once
@@ -662,6 +673,304 @@ async function startServer() {
     }
 
     res.status(400).json({ error: "Nothing to undo" });
+  });
+
+  // ─── PROBLEMS HUB ─────────────────────────────────────────────────────────
+  // Owner-centric unified feed: conflicts + late projects + fragile buffers +
+  // weather, each carrying 2–3 plain-language suggested fixes. Derived on every
+  // request (not persisted); resolving an action mutates the underlying tasks so
+  // the problem disappears on the next recompute.
+  const SCENARIO_TODAY = new Date("2026-06-02"); // demo "now" — aligns with weather + dashboard
+
+  const profileFor = (id: string): { bio?: string; skills?: string[] } => RESOURCE_PROFILES[id] || {};
+  const stateForTask = (t: any) =>
+    dbInstance.projects.find(p => p.id === t?.projectId)?.state || "NSW";
+  const projectNameFor = (pid: string) =>
+    dbInstance.projects.find(p => p.id === pid)?.name || "Unknown project";
+
+  function applyShift(taskId: string, delayDays: number) {
+    const db = dbInstance;
+    const t = db.tasks.find(x => x.id === taskId);
+    if (!t) return;
+    const updated = computeCascade(db.tasks, taskId, delayDays, stateForTask(t));
+    db.tasks = db.tasks.map(tk => {
+      const u = updated.find(x => x.id === tk.id);
+      return u ? { ...tk, start: u.start, end: u.end } : tk;
+    });
+  }
+
+  function buildProblemsResponse() {
+    const db = dbInstance;
+    const problems: any[] = [];
+    const conflictedIds = new Set(db.conflicts.map(c => c.resourceId));
+
+    // 1) CONFLICTS — double-booked resources
+    for (const c of db.conflicts) {
+      const reassignTask = db.tasks.find(t => t.assigneeId === c.resourceId && t.status === "conflict");
+      const projNames = Array.from(new Set(
+        db.tasks.filter(t => t.assigneeId === c.resourceId && t.status === "conflict").map(t => projectNameFor(t.projectId))
+      ));
+      const candidates = (c.candidates || [])
+        .filter((cd: any) => !conflictedIds.has(cd.id))
+        .slice(0, 2);
+
+      const actions: any[] = candidates.map((cd: any, i: number) => {
+        const prof = profileFor(cd.id);
+        const interstate = cd.same_state === false ? ` · interstate (${cd.state})` : "";
+        return {
+          id: `reassign:${cd.id}`,
+          kind: "reassign",
+          label: `Reassign to ${cd.name}`,
+          detail: `${cd.rate} · ${cd.util}% current load${interstate}. ${prof.bio || ""}`.trim(),
+          recommended: i === 0,
+          resource: { ...cd, bio: prof.bio, skills: prof.skills, recommended: i === 0 },
+        };
+      });
+      if (reassignTask) {
+        actions.push({
+          id: `shift:${reassignTask.id}:14`,
+          kind: "accept_delay",
+          label: "Accept a 14-day delay instead",
+          detail: `Keep ${c.resource} on both jobs — push the conflicting task out 14 working days. Downstream tasks cascade automatically.`,
+          delayDays: 14,
+        });
+      }
+
+      problems.push({
+        id: `prob-conflict-${c.resourceId}`,
+        category: "conflict",
+        severity: "critical",
+        title: `${c.resource} is booked on two jobs at once`,
+        projectName: projNames.join(" + ") || (reassignTask ? projectNameFor(reassignTask.projectId) : ""),
+        what: (c.overlapPairs && c.overlapPairs.length)
+          ? c.overlapPairs.map((p: any) => `${p.taskA} (${p.datesA}) clashes with ${p.taskB} (${p.datesB})`).join("; ")
+          : c.desc,
+        impact: candidates.length
+          ? "Whichever job isn't covered will slip, delaying every task that waits on it."
+          : `No other ${c.trade} is free for these dates — accepting a short delay is the only safe option.`,
+        suggestedActions: actions,
+      });
+    }
+
+    // 2) LATE — tasks already past their end date (relative to the scenario date)
+    const lateByProject = new Map<string, any[]>();
+    for (const t of db.tasks) {
+      if (t.status === "completed" || (t.percent_complete ?? 0) >= 100) continue;
+      if (new Date(t.end) >= SCENARIO_TODAY) continue;
+      if (!lateByProject.has(t.projectId)) lateByProject.set(t.projectId, []);
+      lateByProject.get(t.projectId)!.push(t);
+    }
+    for (const [pid, tasks] of lateByProject) {
+      const worst = tasks.slice().sort((a, b) => +new Date(a.end) - +new Date(b.end))[0];
+      const daysLate = Math.round((SCENARIO_TODAY.getTime() - new Date(worst.end).getTime()) / 86400000);
+      const project = db.projects.find(p => p.id === pid);
+      const actions: any[] = [{
+        id: `shift:${worst.id}:10`,
+        kind: "extend_deadline",
+        label: "Re-baseline & approve a 2-week extension",
+        detail: `Shift the overdue task forward 10 working days. Dependent tasks cascade. Clears the overdue flag.`,
+        delayDays: 10,
+        recommended: true,
+      }];
+      const assignee = db.resources.find(r => r.id === worst.assigneeId);
+      if (assignee) {
+        const cands = getReplacementCandidates(assignee.id, assignee.trade, worst).filter(cd => !conflictedIds.has(cd.id));
+        if (cands[0]) {
+          const prof = profileFor(cands[0].id);
+          actions.push({
+            id: `reassign:${cands[0].id}`,
+            kind: "reassign",
+            label: `Bring in ${cands[0].name} to recover`,
+            detail: `${cands[0].rate} · ${cands[0].util}% load. ${prof.bio || ""}`.trim(),
+            resource: { ...cands[0], bio: prof.bio, skills: prof.skills },
+          });
+        }
+      }
+      problems.push({
+        id: `prob-late-${worst.id}`,
+        category: "late",
+        severity: "high",
+        title: `${projectNameFor(pid)} is running late`,
+        projectName: projectNameFor(pid),
+        what: `${worst.name} was due ${worst.end} — now ${daysLate} day${daysLate !== 1 ? "s" : ""} overdue${assignee ? ` (assigned: ${assignee.name})` : ""}.`,
+        impact: project ? `Every day past plan adds LD exposure of about A$${(project.ldRatePerDay || 0).toLocaleString()}.` : "Downstream tasks are blocked until this finishes.",
+        suggestedActions: actions,
+      });
+    }
+
+    // 3) FRAGILE — surface only the single most at-risk handover (keeps the
+    // owner's feed focused rather than listing every ≤1-day gap).
+    const worstFragile = db.fragileTasks.slice().sort((a, b) => a.bufferDays - b.bufferDays)[0];
+    for (const f of (worstFragile ? [worstFragile] : [])) {
+      const parent = db.tasks.find(t => t.id === f.id);
+      if (!parent) continue;
+      const child = db.tasks.find(t => (t.dependencies || "").split(",").map(d => d.trim()).includes(f.id) && t.assigneeId);
+      const actions: any[] = [];
+      if (child) {
+        actions.push({
+          id: `shift:${child.id}:3`,
+          kind: "extend_deadline",
+          label: "Add a 3-day buffer before the handover",
+          detail: `Delays the next task 3 working days so there's breathing room after the handover. Removes the tight-schedule risk.`,
+          delayDays: 3,
+          recommended: true,
+        });
+      }
+      actions.push({
+        id: `shift:${f.id}:-2`,
+        kind: "extend_deadline",
+        label: "Start the earlier task sooner",
+        detail: `Pulls the earlier task forward 2 working days to open up a safety gap before the handover.`,
+        delayDays: -2,
+      });
+      problems.push({
+        id: `prob-fragile-${f.id}`,
+        category: "fragile",
+        severity: "medium",
+        title: `Tight handover on ${f.name}`,
+        projectName: projectNameFor(parent.projectId),
+        what: f.desc,
+        impact: "If the earlier task slips even a day, the next trade can't start — a hidden chain reaction.",
+        suggestedActions: actions,
+      });
+    }
+
+    // 4) WEATHER — group all storm-exposed tasks into one problem
+    const weatherTasks = db.tasks.filter(t => t.status === "weather");
+    if (weatherTasks.length) {
+      const ids = weatherTasks.map(t => t.id).join(",");
+      problems.push({
+        id: `prob-weather`,
+        category: "weather",
+        severity: "high",
+        title: `Severe weather threatens ${weatherTasks.length} task(s) this week`,
+        projectName: Array.from(new Set(weatherTasks.map(t => projectNameFor(t.projectId)))).join(" + "),
+        what: `BOM forecasts heavy rain and storms (Wed–Fri). Affected: ${weatherTasks.map(t => t.name).join("; ")}.`,
+        impact: "Outdoor works in this window risk rework, safety stand-downs, and unclaimed delay.",
+        suggestedActions: [
+          {
+            id: `shiftmany:${ids}:5`,
+            kind: "extend_deadline",
+            label: "Reschedule affected works past the storm",
+            detail: "Move the exposed tasks 5 working days later so they fall in clear weather.",
+            delayDays: 5,
+            recommended: true,
+          },
+          {
+            id: `shiftmany:${ids}:7`,
+            kind: "extend_deadline",
+            label: "Lodge an Extension of Time & extend the programme",
+            detail: "Treat the storm window as an EOT event and extend affected tasks by 7 working days.",
+            delayDays: 7,
+          },
+        ],
+      });
+    }
+
+    const order: Record<string, number> = { critical: 0, high: 1, medium: 2 };
+    problems.sort((a, b) => order[a.severity] - order[b.severity]);
+
+    return {
+      problems,
+      summary: {
+        total: problems.length,
+        critical: problems.filter(p => p.severity === "critical").length,
+        projectsAffected: new Set(problems.flatMap(p => p.projectName.split(" + "))).size,
+        projectsTotal: db.projects.filter(p => p.status === "ACTIVE").length,
+      },
+    };
+  }
+
+  app.get("/api/v1/problems", (_req, res) => {
+    res.json(buildProblemsResponse());
+  });
+
+  app.post("/api/v1/problems/:id/resolve", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { actionId } = req.body || {};
+    if (!actionId) return res.status(400).json({ success: false, error: "Missing actionId" });
+
+    const parts = String(actionId).split(":");
+    const kind = parts[0];
+
+    try {
+      if (kind === "reassign") {
+        const targetResourceId = parts[1];
+        // Resolve the task tied to this problem (conflict or late).
+        let task: any;
+        if (id.startsWith("prob-conflict-")) {
+          const rid = id.replace("prob-conflict-", "");
+          task = db.tasks.find(t => t.assigneeId === rid && t.status === "conflict");
+        } else if (id.startsWith("prob-late-")) {
+          task = db.tasks.find(t => t.id === id.replace("prob-late-", ""));
+        }
+        if (!task) return res.status(404).json({ success: false, error: "No task found for this problem" });
+        db.undoStack.push({ targetId: task.id, prevAssigneeId: task.assigneeId });
+        db.conflictResolutionLog.push({ resourceId: task.assigneeId || "", resolvedAt: new Date().toISOString(), undone: false });
+        task.assigneeId = targetResourceId;
+      } else if (kind === "shift") {
+        applyShift(parts[1], parseInt(parts[2], 10) || 0);
+      } else if (kind === "shiftmany") {
+        const ids = parts[1].split(",");
+        const delay = parseInt(parts[2], 10) || 0;
+        ids.forEach(tid => applyShift(tid, delay));
+      } else {
+        return res.status(400).json({ success: false, error: `Unknown action: ${actionId}` });
+      }
+
+      runConflictDetection();
+      db.save();
+      return res.json({ success: true, message: "Problem resolved.", ...buildProblemsResponse() });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Failed to resolve problem" });
+    }
+  });
+
+  // POST /api/v1/projects/import — bulk import projects (CSV rows or a sample set)
+  app.post("/api/v1/projects/import", (req, res) => {
+    const db = dbInstance;
+    const { rows, sample } = req.body || {};
+
+    const SAMPLE_ROWS = [
+      { name: "Wollongong Marina Precinct", type: "Mixed-use development", location: "Wollongong NSW", contractor: "Richard Crookes", state: "NSW", contractValue: 44, ldRatePerDay: 44000, pcEndDate: "2027-04-30" },
+      { name: "Ballarat Civic Plaza", type: "Commercial office", location: "Ballarat VIC", contractor: "Kane Constructions", state: "VIC", contractValue: 28, ldRatePerDay: 28000, pcEndDate: "2027-03-15" },
+    ];
+    const source: any[] = sample ? SAMPLE_ROWS : (Array.isArray(rows) ? rows : []);
+    if (!source.length) {
+      return res.status(400).json({ success: false, error: "No rows to import. Provide rows[] or sample:true." });
+    }
+
+    let nextNum = db.projects.length + 1;
+    const created = source.map((row) => {
+      const val = parseFloat(row.contractValue ?? row.originalContractSum) || 10;
+      const ld = parseFloat(row.ldRatePerDay) || val * 1000;
+      const proj = {
+        id: `p${nextNum++}`,
+        name: row.name || `Imported Project ${nextNum}`,
+        type: row.type || "Commercial construction",
+        location: row.location || "Sydney NSW",
+        contractor: row.contractor || "TBC",
+        state: row.state || "NSW",
+        originalContractSum: val,
+        finalContractSum: val,
+        plannedCost: val * 0.85,
+        actualCost: 0,
+        ldRatePerDay: ld,
+        pcStartDate: new Date().toISOString().split("T")[0],
+        pcEndDate: row.pcEndDate || new Date(Date.now() + 240 * 24 * 3600 * 1000).toISOString().split("T")[0],
+        retentionPercent: 5.0,
+        status: "ACTIVE" as const,
+        progress: 0,
+        weatherRisk: false,
+        overBudget: false,
+      };
+      db.projects.push(proj);
+      return proj;
+    });
+
+    db.save();
+    res.json({ success: true, imported: created.length, projects: created });
   });
 
   // FINANCIAL APIs (AS 4000-1997 audit specifications)

@@ -176,6 +176,43 @@ export default function Login() {
             against the live programme data.
           </div>
         </form>
+
+        {/* Quick demo sign-in — one click per role (no typing needed on stage) */}
+        <div style={{ padding: "0 28px 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 12px" }}>
+            <div style={{ flex: 1, height: 1, background: C.grayLight }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: C.gray, letterSpacing: "0.05em" }}>QUICK DEMO SIGN-IN</span>
+            <div style={{ flex: 1, height: 1, background: C.grayLight }} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {[
+              { label: "Owner (Superadmin)", email: "owner@flowiq.com.au" },
+              { label: "Admin", email: "admin@flowiq.com.au" },
+              { label: "Project Manager", email: "pm@flowiq.com.au" },
+              { label: "Field Worker", email: "worker@flowiq.com.au" },
+            ].map((role) => (
+              <button
+                key={role.email}
+                type="button"
+                disabled={loading}
+                onClick={() => login(role.email, "demo")}
+                style={{
+                  padding: "9px 10px",
+                  borderRadius: 9,
+                  border: `1px solid ${C.grayLight}`,
+                  background: "#F8FAFC",
+                  color: C.textMuted,
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: loading ? "not-allowed" : "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                {role.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* keyframes for the button spinner (scoped, harmless if duplicated) */}

@@ -4,7 +4,7 @@ import ScreenProjects from "./components/Projects";
 import ScreenWeather from "./components/Weather";
 import ScreenGantt from "./components/Gantt";
 import ScreenResources from "./components/Resources";
-import ScreenConflicts from "./components/Conflicts";
+import ScreenProblems from "./components/Problems";
 import ScreenFinancial from "./components/Financial";
 import ScreenClaims from "./components/Claims";
 import ScreenReports from "./components/Reports";
@@ -28,7 +28,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { AppNavigate, MasterTabId } from "./types/masters";
-import { parseConflictHubResponse } from "./types";
+import { parseProblemsResponse } from "./types";
 
 /** Roles that land on the mobile-first worker view; everyone else gets the full console. */
 const WORKER_ROLES = new Set(["Worker", "Resource"]);
@@ -66,7 +66,7 @@ const SCREEN_TO_PATH: Record<string, string> = {
   weather: "/weather",
   gantt: "/gantt",
   resources: "/resources",
-  conflicts: "/conflicts",
+  problems: "/problems",
   financial: "/financial",
   claims: "/claims",
   reports: "/reports",
@@ -115,12 +115,12 @@ export default function FlowIQApp() {
   const [expensesCount, setExpensesCount] = useState(0);
 
   const fetchLiveBadges = () => {
-    // Sync conflict badge count
-    fetch("/api/v1/conflicts")
+    // Sync the Problems badge with the live open-problem count
+    fetch("/api/v1/problems")
       .then(res => res.json())
       .then(data => {
-        const hub = parseConflictHubResponse(data);
-        setConflictsCount(hub.metrics.hardConflicts);
+        const { summary } = parseProblemsResponse(data);
+        setConflictsCount(summary.total);
       })
       .catch(() => {});
 
@@ -150,11 +150,20 @@ export default function FlowIQApp() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  // The Owner is an overseer — land them on Problems (their decision queue),
+  // not the operational dashboard. Runs once when the session becomes available.
+  useEffect(() => {
+    if (isAuthenticated && user?.role === "Owner" && typeof window !== "undefined" && window.location.pathname === "/") {
+      navigate("problems");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user]);
+
   const ICON_SIZE = 16;
   const navItems = [
     { id:"dashboard", label:"Overview",           icon:<Home size={ICON_SIZE} />,         group:"Overview"    },
     { id:"projects",  label:"Projects",           icon:<Folder size={ICON_SIZE} />,       group:"Overview"    },
-    { id:"conflicts", label:"Conflicts",          icon:<TriangleAlert size={ICON_SIZE} />, group:"Overview",   badge: conflictsCount },
+    { id:"problems",  label:"Problems",           icon:<TriangleAlert size={ICON_SIZE} />, group:"Overview",   badge: conflictsCount },
     { id:"weather",   label:"Weather",            icon:<CloudRain size={ICON_SIZE} />,    group:"Overview"    },
     { id:"gantt",     label:"Timeline",           icon:<CalendarDays size={ICON_SIZE} />, group:"Scheduling"  },
     { id:"resources", label:"Resources",          icon:<HardHat size={ICON_SIZE} />,      group:"Scheduling"  },
@@ -176,7 +185,7 @@ export default function FlowIQApp() {
     weather:   <ScreenWeather />,
     gantt:     <ScreenGantt onNav={navigate} />,
     resources: <ScreenResources onNav={navigate} />,
-    conflicts: <ScreenConflicts onNav={navigate} />,
+    problems:  <ScreenProblems onNav={navigate} />,
     financial: <ScreenFinancial />,
     claims:    <ScreenClaims />,
     reports:   <ScreenReports />,
@@ -190,7 +199,7 @@ export default function FlowIQApp() {
     weather: "Weather",
     gantt: "Timeline",
     resources: "Resources",
-    conflicts: "Conflicts",
+    problems: "Problems",
     financial: "Finance",
     claims: "Project Expenses",
     reports: "Reports",
@@ -233,7 +242,7 @@ export default function FlowIQApp() {
           <div key={g} style={{ marginTop: 10 }}>
             <div style={{ padding:"5px 14px 2px", fontSize:10, fontWeight:600, color:C.gray, letterSpacing:"0.06em", textTransform:"uppercase" }}>{g}</div>
             {navItems.filter(n => n.group === g).map(n => {
-              const isConflictAlert = n.id === "conflicts" && conflictsCount > 0 && screen !== "conflicts";
+              const isConflictAlert = n.id === "problems" && conflictsCount > 0 && screen !== "problems";
               return (
               <div key={n.id} onClick={() => navigate(n.id)} style={{
                 display:"flex",

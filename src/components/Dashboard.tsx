@@ -246,7 +246,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
               One or more team members are double-booked across projects. FlowIQ has identified replacements — resolve now to keep your programme on track.
             </div>
           </div>
-          <Btn primary onClick={() => onNav("conflicts")} style={{ flexShrink: 0, padding: "9px 18px", fontSize: 12.5, fontWeight: 700 }}>
+          <Btn primary onClick={() => onNav("problems")} style={{ flexShrink: 0, padding: "9px 18px", fontSize: 12.5, fontWeight: 700 }}>
             Fix Now →
           </Btn>
         </div>
@@ -254,18 +254,12 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
 
       {/* KPI Row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:10, marginBottom:16 }}>
-        <KpiCard label="Active Projects" value={stats.activeProjectsCount} sub="NSW, VIC & QLD Operations" />
-        <KpiCard label="On Programme Pace" value={`${stats.onProgrammePct}%`} valueColor={C.green} trend="↑ +5% vs previous fortnight" />
-        <KpiCard label="Active Conflicts" value={stats.resourceConflictsCount} valueColor={C.red} sub="Conflicts requires PM reassignment" />
+        <KpiCard label="Active Projects" value={stats.activeProjectsCount} sub="Across your portfolio" />
+        <KpiCard label="On Programme Pace" value={`${stats.onProgrammePct}%`} valueColor={C.green} sub="Tasks tracking to plan" />
+        <KpiCard label="Open Problems" value={stats.resourceConflictsCount} valueColor={stats.resourceConflictsCount > 0 ? C.red : C.green} sub="Need a decision" />
         <KpiCard label="Workplace LTI-free days" value={stats.whsLtiFreeDays} valueColor={C.greenDark} sub="No registered site accidents" />
       </div>
 
-      {/* Overdue Alert banner */}
-      <div style={{ background:C.redBg, border:`0.5px solid #FECACA`, borderRadius:8, padding:"9px 13px", marginBottom:14, display:"flex", alignItems:"center", gap:8, fontSize:12, color:C.redDark }}>
-        <span>🔴</span>
-        <span><strong>Workplace Action Plan:</strong> Excavation on Victoria Harbour has passed PC deadline. Progress claim certification recommended.</span>
-        <Btn small danger onClick={() => onNav("claims")} style={{ marginLeft:"auto" }}>Verify Claim</Btn>
-      </div>
 
       {/* FIXED 8 — DASHBOARD: AT-RISK TASKS BASELINE BREAKDOWN */}
       <Card style={{ padding: 16, marginBottom: 16 }}>
