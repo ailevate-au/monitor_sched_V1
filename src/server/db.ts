@@ -122,7 +122,7 @@ export class Datastore {
           id: t.id, projectId: t.projectId, name: t.name, assigneeId: t.assigneeId,
           tradeRequired: t.tradeRequired, start: t.start, end: t.end, durationDays: t.durationDays,
           dependencies: t.dependencies, status: t.status, dependencyType: "FS", lagDays: 0,
-          percentComplete: t.status === "inprogress" ? 40 : t.id === "TSK-001" ? 15 : 0,
+          percentComplete: t.status === "completed" ? 100 : t.status === "inprogress" ? 40 : t.id === "TSK-001" ? 15 : 0,
         },
       });
     }

@@ -67,6 +67,12 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   const [pcEndDate, setPcEndDate] = useState("2026-11-30");
   const [retentionPercent, setRetentionPercent] = useState("5.0");
 
+  // Import projects state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [csvText, setCsvText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
   // Project overrides state
   const [showRatesModal, setShowRatesModal] = useState(false);
   const [selectedProj, setSelectedProj] = useState<Project | null>(null);
@@ -170,6 +176,49 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       });
   };
 
+  const runImport = (body: object, label: string) => {
+    setImporting(true);
+    setImportMsg(null);
+    fetch("/api/v1/projects/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(res => res.json())
+      .then(res => {
+        setImporting(false);
+        if (res.success) {
+          setImportMsg(`✓ Imported ${res.imported} project${res.imported > 1 ? "s" : ""} (${label}).`);
+          setCsvText("");
+          loadProjectsAndResources();
+          setTimeout(() => { setShowImportModal(false); setImportMsg(null); }, 1400);
+        } else {
+          setImportMsg(res.error || "Import failed.");
+        }
+      })
+      .catch(() => {
+        setImporting(false);
+        setImportMsg("Network error during import.");
+      });
+  };
+
+  // Parse a small CSV (header row: name,type,location,contractor,state,contractValue,ldRatePerDay,pcEndDate)
+  const handleImportCsv = () => {
+    const lines = csvText.trim().split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) {
+      setImportMsg("Paste a header row plus at least one project row.");
+      return;
+    }
+    const headers = lines[0].split(",").map(h => h.trim());
+    const rows = lines.slice(1).map(line => {
+      const cells = line.split(",").map(c => c.trim());
+      const row: Record<string, string> = {};
+      headers.forEach((h, i) => { row[h] = cells[i] ?? ""; });
+      return row;
+    });
+    runImport({ rows }, "from CSV");
+  };
+
   if (loading) {
     return <div style={{ padding: 20, color: C.gray }}>Querying project contracts...</div>;
   }
@@ -189,7 +238,10 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
         <span style={{ fontSize:12, fontWeight:600, color:C.gray, textTransform:"uppercase", letterSpacing:"0.05em" }}>Active Builder Programs</span>
-        <Btn primary small onClick={() => setShowAddModal(true)}>+ New Project Contract</Btn>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn small onClick={() => { setShowImportModal(true); setImportMsg(null); }}>⤓ Import Projects</Btn>
+          <Btn primary small onClick={() => setShowAddModal(true)}>+ New Project Contract</Btn>
+        </div>
       </div>
 
       {projects.map(p => {
@@ -397,6 +449,55 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
             <div style={{ display:"flex", gap:8 }}>
               <Btn primary onClick={handleAddProject}>Register Project</Btn>
               <Btn onClick={() => setShowAddModal(false)}>Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Projects Modal */}
+      {showImportModal && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(15,31,61,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:99 }}>
+          <div style={{ background:C.white, borderRadius:12, width: 460, padding: 22, border:`0.5px solid ${C.grayLight}`, boxShadow: "0 10px 25px rgba(0,0,0,0.1)", maxHeight: "92vh", overflowY: "auto" }}>
+            <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:4 }}>⤓ Import Projects</div>
+            <div style={{ fontSize:11.5, color:C.gray, marginBottom:16 }}>Bring projects in from a spreadsheet, or load a ready-made sample set to try it out.</div>
+
+            {importMsg && (
+              <div style={{ marginBottom: 14, padding: "9px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: importMsg.startsWith("✓") ? C.greenBg : C.redBg, color: importMsg.startsWith("✓") ? C.greenDark : C.redDark,
+                border: `1px solid ${importMsg.startsWith("✓") ? C.green : C.red}` }}>
+                {importMsg}
+              </div>
+            )}
+
+            {/* One-click sample */}
+            <div style={{ background: C.blueLight, border: `1px solid ${C.blueMid}55`, borderRadius: 10, padding: "12px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.blue }}>Quick start</div>
+                <div style={{ fontSize: 11, color: C.gray }}>Adds 2 sample projects instantly — great for a demo.</div>
+              </div>
+              <Btn primary small disabled={importing} onClick={() => runImport({ sample: true }, "sample set")}>
+                {importing ? "Importing…" : "Load sample set"}
+              </Btn>
+            </div>
+
+            {/* CSV paste */}
+            <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4, fontWeight: 600 }}>Or paste CSV</label>
+            <div style={{ fontSize: 10.5, color: "#94A3B8", marginBottom: 6, fontFamily: "monospace" }}>
+              name,type,location,contractor,state,contractValue,ldRatePerDay,pcEndDate
+            </div>
+            <textarea
+              value={csvText}
+              onChange={e => setCsvText(e.target.value)}
+              placeholder={"name,type,location,contractor,state,contractValue,ldRatePerDay,pcEndDate\nRiver Quarter Tower,Mixed-use,Brisbane QLD,Hutchinson,QLD,52,52000,2027-06-30"}
+              rows={5}
+              style={{ width:"100%", fontSize:11.5, padding:"8px 10px", borderRadius:8, border:`0.5px solid ${C.grayLight}`, fontFamily:"monospace", resize:"vertical", boxSizing: "border-box" }}
+            />
+
+            <div style={{ display:"flex", gap:8, justifyContent: "flex-end", marginTop: 16 }}>
+              <Btn onClick={() => setShowImportModal(false)}>Close</Btn>
+              <Btn primary disabled={importing || !csvText.trim()} onClick={handleImportCsv}>
+                {importing ? "Importing…" : "Import from CSV"}
+              </Btn>
             </div>
           </div>
         </div>

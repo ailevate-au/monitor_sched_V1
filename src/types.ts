@@ -35,6 +35,8 @@ export interface Resource {
   overtimeRateVal?: number;
   dailyAllowanceVal?: number;
   projectRateOverrides?: { [projectId: string]: number };
+  bio?: string;
+  skills?: string[];
 }
 
 export interface Task {
@@ -158,5 +160,79 @@ export interface CostCategory {
   name: string;
   is_active: boolean;
   sort_order: number;
+}
+
+// ── Problems hub ──────────────────────────────────────────────────────────────
+// One unified feed of everything wrong across the portfolio. Each problem is a
+// plain-language issue carrying 2–3 suggested fixes; the owner picks one,
+// confirms, and the problem resolves.
+
+export type ProblemCategory = "conflict" | "late" | "fragile" | "weather";
+export type ProblemSeverity = "critical" | "high" | "medium";
+
+/** A candidate replacement attached to a "reassign" action. */
+export interface ProblemActionResource {
+  id: string;
+  initials: string;
+  name: string;
+  trade: string;
+  rate: string;
+  util: number;
+  state?: string;
+  same_state?: boolean;
+  recommended?: boolean;
+  bio?: string;
+  skills?: string[];
+}
+
+export interface ProblemAction {
+  id: string;
+  kind: "reassign" | "accept_delay" | "extend_deadline";
+  label: string;
+  /** Plain-language description of what this action does. */
+  detail: string;
+  recommended?: boolean;
+  /** Present for kind === "reassign". */
+  resource?: ProblemActionResource;
+  /** Present for delay/extend actions. */
+  delayDays?: number;
+}
+
+export interface Problem {
+  id: string;
+  category: ProblemCategory;
+  severity: ProblemSeverity;
+  /** Short headline, e.g. "Ben Nguyen is double-booked". */
+  title: string;
+  projectName: string;
+  /** What is wrong, in plain English. */
+  what: string;
+  /** The downstream impact / cascade. */
+  impact: string;
+  suggestedActions: ProblemAction[];
+}
+
+export interface ProblemsResponse {
+  problems: Problem[];
+  summary: {
+    total: number;
+    critical: number;
+    projectsAffected: number;
+    projectsTotal: number;
+  };
+}
+
+export function parseProblemsResponse(data: unknown): ProblemsResponse {
+  const payload = (data ?? {}) as Partial<ProblemsResponse>;
+  const problems = Array.isArray(payload.problems) ? payload.problems : [];
+  return {
+    problems,
+    summary: payload.summary ?? {
+      total: problems.length,
+      critical: problems.filter((p) => p.severity === "critical").length,
+      projectsAffected: new Set(problems.map((p) => p.projectName)).size,
+      projectsTotal: 0,
+    },
+  };
 }
 

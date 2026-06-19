@@ -400,6 +400,14 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
                       <div style={{ fontSize:11, color:C.gray, marginTop: 2 }}>
                         {r.trade} · <span style={{ color: C.navy, fontWeight: 500 }}>{r.company || "Direct Hire"}</span> · Base: <strong>{r.rate || `A$${r.hourlyRateVal}/hr`}</strong>
                       </div>
+                      {r.bio && <div style={{ fontSize:10.5, color:"#94A3B8", marginTop: 3, maxWidth: 460 }}>{r.bio}</div>}
+                      {r.skills && r.skills.length > 0 && (
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop: 5 }}>
+                          {r.skills.map(s => (
+                            <span key={s} style={{ fontSize:9, padding:"1px 6px", borderRadius:4, background:C.blueLight, color:C.blue, fontWeight:600 }}>{s}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   
