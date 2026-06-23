@@ -597,9 +597,9 @@ export default function ScreenMasterData({ initialTab = "cost_categories" }: { i
   return (
     <div style={{ padding: "4px 0" }}>
       <div style={{ background: C.white, border: `0.5px solid ${C.grayLight}`, borderRadius: 12, padding: 18, marginBottom: 16 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: C.navy, margin: "0 0 6px 0" }}>Reference Data Administration</h2>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: C.navy, margin: "0 0 6px 0" }}>Settings — Dropdown Lists</h2>
         <p style={{ fontSize: 12.5, color: C.gray, margin: 0, lineHeight: 1.5 }}>
-          Configure dropdown values used across projects, resources, and finance. Changes apply immediately to new forms; existing records keep their saved values.
+          Set the dropdown choices used across projects, resources, and finance. Changes show up straight away on new forms; anything you've already saved keeps its current values.
         </p>
       </div>
 

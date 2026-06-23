@@ -24,9 +24,9 @@ const C = {
 };
 
 const MODE_LABEL: Record<ChangeSet["mode"], string> = {
-  full: "Full cascade",
-  partial: "Partial",
-  none: "No cascade",
+  full: "Moved all following tasks",
+  partial: "Used spare time first",
+  none: "Moved only this task",
 };
 
 function taskShort(name: string): string {
@@ -95,8 +95,8 @@ export default function ChangeHistoryTab({
           No confirmed adjustments yet
         </div>
         <div style={{ fontSize: 12 }}>
-          Use <strong>⏱ Adjust Timeline</strong> to stage and confirm a delay. Confirmed changes
-          appear here and can be reverted.
+          Use <strong>⏱ Adjust Timeline</strong> to preview and confirm a delay. Confirmed changes
+          appear here and can be undone.
         </div>
       </div>
     );
@@ -106,7 +106,7 @@ export default function ChangeHistoryTab({
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 12, color: C.textMuted }}>
         {changeSets.filter((c) => !c.reverted).length} active ·{" "}
-        {changeSets.filter((c) => c.reverted).length} reverted · newest first
+        {changeSets.filter((c) => c.reverted).length} undone · newest first
       </div>
 
       {changeSets.map((cs) => {
@@ -169,7 +169,7 @@ export default function ChangeHistoryTab({
                         gap: 3,
                       }}
                     >
-                      <Undo2 size={10} /> Reverted
+                      <Undo2 size={10} /> Undone
                     </span>
                   )}
                   {!cs.reverted && cs.warningsAtConfirm.length > 0 && (
@@ -228,7 +228,7 @@ export default function ChangeHistoryTab({
                   }}
                 >
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <Undo2 size={12} /> Revert
+                    <Undo2 size={12} /> Undo
                   </span>
                 </button>
               )}
@@ -263,12 +263,12 @@ export default function ChangeHistoryTab({
                 }}
               >
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: C.redDark, marginBottom: 6 }}>
-                  Revert this adjustment?
+                  Undo this change?
                 </div>
                 <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.5, marginBottom: 8 }}>
                   This restores the original dates for all {cs.moves.length} task
-                  {cs.moves.length === 1 ? "" : "s"} in one step. Statuses (conflicts, fragile,
-                  overdue) will be recomputed and may change across the platform.
+                  {cs.moves.length === 1 ? "" : "s"} in one step. Double-bookings, tight gaps and
+                  overdue flags will be recalculated and may change across the app.
                 </div>
 
                 {stale.length > 0 && (
@@ -292,7 +292,7 @@ export default function ChangeHistoryTab({
                       </div>
                     ))}
                     <div style={{ fontSize: 11, color: C.redDark, marginTop: 4, fontWeight: 600 }}>
-                      Reverting will overwrite those later changes.
+                      Undoing will overwrite those later changes.
                     </div>
                   </div>
                 )}
@@ -331,7 +331,7 @@ export default function ChangeHistoryTab({
                       cursor: "pointer",
                     }}
                   >
-                    {stale.length > 0 ? "Revert anyway" : "Revert adjustment"}
+                    {stale.length > 0 ? "Undo anyway" : "Undo change"}
                   </button>
                 </div>
               </div>

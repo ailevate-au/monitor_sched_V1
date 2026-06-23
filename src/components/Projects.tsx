@@ -220,7 +220,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   };
 
   if (loading) {
-    return <div style={{ padding: 20, color: C.gray }}>Querying project contracts...</div>;
+    return <div style={{ padding: 20, color: C.gray }}>Loading projects…</div>;
   }
 
   // Calculate sum metrics from real states
@@ -237,7 +237,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       </div>
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-        <span style={{ fontSize:12, fontWeight:600, color:C.gray, textTransform:"uppercase", letterSpacing:"0.05em" }}>Active Builder Programs</span>
+        <span style={{ fontSize:12, fontWeight:600, color:C.gray, textTransform:"uppercase", letterSpacing:"0.05em" }}>Active Projects</span>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn small onClick={() => { setShowImportModal(true); setImportMsg(null); }}>⤓ Import Projects</Btn>
           <Btn primary small onClick={() => setShowAddModal(true)}>+ New Project Contract</Btn>
@@ -285,11 +285,11 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {overrideCount > 0 && (
                   <span style={{ fontSize: 10, background: C.blueLight, color: C.blue, fontWeight: 700, padding: "2px 6px", borderRadius: 4 }}>
-                    {overrideCount} Custom Rate Rules Active
+                    {overrideCount} Custom Labor Rates
                   </span>
                 )}
                 <Btn small onClick={(e) => handleOpenRates(e, p)} style={{ background: C.bgSecond, color: C.navy, border: `0.5px solid ${C.grayLight}` }}>
-                  ⚙️ Labor Rate Overrides
+                  ⚙️ Adjust Labor Rates
                 </Btn>
               </div>
             </div>
@@ -302,7 +302,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       {showAddModal && (
         <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(15,31,61,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:99 }}>
           <div style={{ background:C.white, borderRadius:12, width: 420, padding: 22, border:`0.5px solid ${C.grayLight}`, boxShadow: "0 10px 25px rgba(0,0,0,0.1)", maxHeight: "95vh", overflowY: "auto" }}>
-            <div style={{ fontSize:14, fontWeight:600, color:C.text, marginBottom:4 }}>Register New Project</div>
+            <div style={{ fontSize:14, fontWeight:600, color:C.text, marginBottom:4 }}>Add New Project</div>
             <div style={{ fontSize:11, color:C.gray, marginBottom:16 }}>Enter the key contract details — you can update costs and dates later.</div>
 
             {/* Row 1: Name */}
@@ -507,7 +507,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       {showRatesModal && selectedProj && (
         <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(15,31,61,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:99 }}>
           <Card style={{ width: 500, padding: 22, overflowY: "auto", maxHeight: "90vh" }}>
-            <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:4 }}>⚙️ Site Labor Rate Rules ({selectedProj.name})</div>
+            <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:4 }}>⚙️ Labor Rates for This Project ({selectedProj.name})</div>
             <div style={{ fontSize:11, color:C.gray, marginBottom:16 }}>Specify project-specific rates (e.g. due to Union EBA minimums, travel allowances, or remote loading). Leave blank to use subbie's default rate.</div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "50vh", overflowY: "auto", paddingRight: 6, marginBottom: 16 }}>

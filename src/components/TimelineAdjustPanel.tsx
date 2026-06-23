@@ -29,9 +29,9 @@ const C = {
 };
 
 const MODE_INFO: { id: CascadeMode; label: string; help: string }[] = [
-  { id: "full", label: "Full cascade", help: "Push every dependent in this project by the same delay." },
-  { id: "partial", label: "Partial", help: "Dependents absorb spare margin first, then shift." },
-  { id: "none", label: "No cascade", help: "Move only this task — dependents stay put." },
+  { id: "full", label: "Move all following tasks", help: "Push every following task in this project by the same delay." },
+  { id: "partial", label: "Use spare time first", help: "Following tasks use up any spare time first, then move." },
+  { id: "none", label: "Move only this task", help: "Move only this task — the following tasks stay put." },
 ];
 
 function taskShort(name: string): string {
@@ -94,7 +94,7 @@ export default function TimelineAdjustPanel({
         }}
       >
         <Timer size={17} />
-        <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>Stage timeline adjustment</span>
+        <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>Preview a delay</span>
         <button
           type="button"
           onClick={onCancel}
@@ -161,7 +161,7 @@ export default function TimelineAdjustPanel({
         {/* Cascade mode */}
         <div>
           <label style={{ display: "block", fontSize: 10.5, fontWeight: 700, color: C.gray, marginBottom: 6 }}>
-            CASCADE MODE
+            HOW SHOULD THE FOLLOWING TASKS MOVE?
           </label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {MODE_INFO.map((m) => {
@@ -219,9 +219,9 @@ export default function TimelineAdjustPanel({
         {/* Summary */}
         {staged && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11 }}>
-            <SummaryChip label="tasks shifted" value={summary.shifted} tone="neutral" />
-            <SummaryChip label="new conflicts" value={summary.newlyConflict} tone="danger" />
-            <SummaryChip label="now fragile" value={summary.newlyFragile} tone="warn" />
+            <SummaryChip label="tasks moved" value={summary.shifted} tone="neutral" />
+            <SummaryChip label="new double-bookings" value={summary.newlyConflict} tone="danger" />
+            <SummaryChip label="now tight" value={summary.newlyFragile} tone="warn" />
             <SummaryChip label="now overdue" value={summary.newlyOverdue} tone="warn" />
           </div>
         )}

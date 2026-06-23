@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Task, Resource, Project } from "../types";
+import { AppNavigate } from "../types/masters";
 import { LabelWithInfo } from "./InfoTip";
 import { useMasters } from "../hooks/useMasters";
 import { useProgrammeSettings } from "../hooks/useProgrammeSettings";
@@ -226,7 +227,10 @@ function MultiSelectDropdown({
   );
 }
 
-export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => void }) {
+/** Task statuses that count as an open "problem" surfaced in the Problems hub. */
+const PROBLEM_STATUSES = new Set(["conflict", "fragile", "overdue", "weather"]);
+
+export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { onNav?: AppNavigate; initialStatus?: string | null; initialTaskIds?: string[] | null }) {
   const { masters } = useMasters(true);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
@@ -291,7 +295,9 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [changeSets, setChangeSets] = useState<ChangeSet[]>(() => changeHistory.list());
   const adjustActive = adjustAnchorId !== null;
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  // Open the advanced-filter row when arriving with a pre-seeded status filter,
+  // so the active "Problems only" filter is visible (and clearable) to the user.
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(!!initialStatus && initialStatus !== "all");
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const [leftColWidth, setLeftColWidth] = useState(340);
   const [isResizingLeftCol, setIsResizingLeftCol] = useState(false);
@@ -299,8 +305,11 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   const [filterProjects, setFilterProjects] = useState<string[]>([]);
   const [filterResources, setFilterResources] = useState<string[]>([]);
   const [filterSearch, setFilterSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] = useState(initialStatus || "all");
   const [filterTrade, setFilterTrade] = useState("all");
+  // When arriving from a Problems-hub KPI, focus on the exact tasks behind those
+  // problems. Empty = no task-level focus. Cleared via the "Clear filters" button.
+  const [focusTaskIds, setFocusTaskIds] = useState<string[]>(initialTaskIds || []);
 
   const CW = 40; // Column (day) width in px
   const MIN_LEFT_COL_WIDTH = 240;
@@ -872,11 +881,17 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   // the normal draft view.
   const renderSourceTasks = adjustActive && adjustMoves.length > 0 ? adjustSimTasks : displayTasks;
 
+  const focusTaskIdSet = useMemo(() => new Set(focusTaskIds), [focusTaskIds]);
   const filteredTasks = useMemo(() => {
     const q = filterSearch.trim().toLowerCase();
     return renderSourceTasks.filter((t) => {
+      if (focusTaskIdSet.size > 0 && !focusTaskIdSet.has(t.id)) return false;
       if (filterProjects.length > 0 && !filterProjects.includes(t.project || "")) return false;
-      if (filterStatus !== "all" && t.status !== filterStatus) return false;
+      if (filterStatus === "problems") {
+        if (!PROBLEM_STATUSES.has(t.status || "")) return false;
+      } else if (filterStatus !== "all" && t.status !== filterStatus) {
+        return false;
+      }
       const tradeLabel = t.trade || t.tradeRequired || "";
       if (filterTrade !== "all" && tradeLabel !== filterTrade) return false;
       if (filterResources.length > 0 && !filterResources.includes(t.assigneeId || "unassigned")) return false;
@@ -886,7 +901,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       }
       return true;
     });
-  }, [renderSourceTasks, filterProjects, filterStatus, filterTrade, filterResources, filterSearch]);
+  }, [renderSourceTasks, focusTaskIdSet, filterProjects, filterStatus, filterTrade, filterResources, filterSearch]);
 
   const tradeFilterOptions = useMemo(() => {
     const set = new Set<string>();
@@ -1109,7 +1124,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       let cascade = autoCascadeRef.current;
       if (!cascade && taskHasDependents(taskId)) {
         cascade = window.confirm(
-          "Also shift tasks that depend on this one?\n\nOK = move dependents too · Cancel = only this task"
+          "Also move the tasks that follow this one?\n\nOK = move the following tasks too · Cancel = move only this task"
         );
       }
 
@@ -1201,6 +1216,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   }
 
   const hasActiveFilters =
+    focusTaskIds.length > 0 ||
     filterProjects.length > 0 ||
     filterResources.length > 0 ||
     filterStatus !== "all" ||
@@ -1208,6 +1224,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
     filterSearch.trim().length > 0;
 
   const clearFilters = () => {
+    setFocusTaskIds([]);
     setFilterProjects([]);
     setFilterResources([]);
     setFilterStatus("all");
@@ -1562,7 +1579,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
           <button
             style={{ padding: "8px 14px", background: adjustActive ? C.purple : "#F3F2FF", color: adjustActive ? C.white : C.purple, border: `0.5px solid ${C.purple}`, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}
             onClick={() => (adjustActive ? closeAdjust() : openAdjust())}
-            title="Stage a working-day delay with full / partial / no cascade"
+            title="Preview a delay and choose how the following tasks move"
           >
             <Timer size={14} /> {adjustActive ? "Close Adjuster" : "Adjust Timeline"}
           </button>
@@ -1638,11 +1655,12 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
           style={{ padding: "8px 12px", fontSize: 12.5, borderRadius: 8, border: `0.5px solid ${C.grayLight}` }}
         >
           <option value="all">All statuses</option>
+          <option value="problems">Problems only</option>
           <option value="scheduled">Scheduled</option>
           <option value="inprogress">In progress</option>
           <option value="completed">Completed</option>
           <option value="conflict">Conflict</option>
-          <option value="fragile">Fragile buffer</option>
+          <option value="fragile">Tight gap</option>
           <option value="weather">Weather risk</option>
           <option value="overdue">Overdue</option>
         </select>
@@ -1659,6 +1677,19 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
           ))}
         </select>
           </>
+        )}
+        {focusTaskIds.length > 0 && (
+          <span
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "6px 10px", fontSize: 11.5, fontWeight: 600,
+              borderRadius: 8, background: C.blueLight, color: C.blue,
+              border: `0.5px solid #BFDBFE`,
+            }}
+            title="Showing only the tasks behind the problems you came from"
+          >
+            Focused on {focusTaskIds.length} flagged task{focusTaskIds.length !== 1 ? "s" : ""}
+          </span>
         )}
         {hasActiveFilters && (
           <button
@@ -2931,7 +2962,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                     type="button"
                     onClick={() => { const id = editingTask.id; setShowAddModal(false); openAdjust(id); }}
                     style={{ padding: "8px 14px", borderRadius: 8, background:"#F3F2FF", border:`0.5px solid ${C.purple}`, color:C.purple, fontSize:12, cursor:"pointer", fontWeight:600, marginRight:"auto" }}
-                    title="Stage a working-day delay with cascade options"
+                    title="Preview a delay and choose how the following tasks move"
                   >
                     ⏱ Delay / adjust…
                   </button>

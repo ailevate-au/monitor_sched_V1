@@ -101,8 +101,17 @@ export default function FlowIQApp() {
     user && WORKER_ROLES.has(user.role) ? "Resource" : "PM"
   );
 
-  const navigate: AppNavigate = (nextScreen, tab) => {
+  // When navigating to the Gantt with a filter intent, seed its status filter.
+  // The Gantt remounts on each entry, so it reads this as its initial filter.
+  const [ganttFocus, setGanttFocus] = useState<string | null>(null);
+  const [ganttFocusTaskIds, setGanttFocusTaskIds] = useState<string[] | null>(null);
+
+  const navigate: AppNavigate = (nextScreen, tab, options) => {
     if (tab) setMasterTab(tab);
+    if (nextScreen === "gantt") {
+      setGanttFocus(options?.ganttStatus ?? null);
+      setGanttFocusTaskIds(options?.ganttTaskIds ?? null);
+    }
     setScreen(nextScreen);
     if (typeof window !== "undefined") {
       const nextPath = SCREEN_TO_PATH[nextScreen] || "/";
@@ -183,7 +192,7 @@ export default function FlowIQApp() {
     dashboard: <ScreenDashboard onNav={navigate} />,
     projects:  <ScreenProjects  onNav={navigate} />,
     weather:   <ScreenWeather />,
-    gantt:     <ScreenGantt onNav={navigate} />,
+    gantt:     <ScreenGantt onNav={navigate} initialStatus={ganttFocus} initialTaskIds={ganttFocusTaskIds} />,
     resources: <ScreenResources onNav={navigate} />,
     problems:  <ScreenProblems onNav={navigate} />,
     financial: <ScreenFinancial />,

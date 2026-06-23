@@ -121,7 +121,7 @@ export default function ScreenWeather() {
   };
 
   if (loading && forecast.length === 0) {
-    return <div style={{ padding: 20, color: C.gray }}>Requesting real-time Bureau of Meteorology (BOM) radar data...</div>;
+    return <div style={{ padding: 20, color: C.gray }}>Loading the weather forecast…</div>;
   }
 
   // Count active hazards
@@ -132,27 +132,27 @@ export default function ScreenWeather() {
     <div>
       {/* KPI Stats Grid */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:10, marginBottom:16 }}>
-        <KpiCard label="Meteorological Watch" value={dangerDays > 0 ? "High Storm Alert" : "Stable Conditions"} valueColor={dangerDays > 0 ? C.red : C.green} sub="BOM New South Wales Radar Connection" />
-        <KpiCard label="Severe Winds Setpoint" value="24 km/h" sub="Threshold: 45 km/h limit on tower cranes" />
-        <KpiCard label="Inclement Rain Forecast" value="84mm rain accumulation" valueColor={warningDays > 0 ? C.amber : C.text} sub="Heavy cell Sydney (Wed – Thu)" />
-        <KpiCard label="Active Site Warnings" value={`${warningDays + dangerDays} days`} valueColor={C.amber} sub="Automatic risk trigger assigned" />
+        <KpiCard label="Weather Status" value={dangerDays > 0 ? "High Storm Alert" : "Stable Conditions"} valueColor={dangerDays > 0 ? C.red : C.green} sub="From the Bureau of Meteorology (NSW)" />
+        <KpiCard label="Strong Wind Limit" value="24 km/h" sub="Tower cranes stop at 45 km/h" />
+        <KpiCard label="Heavy Rain Forecast" value="84mm rain accumulation" valueColor={warningDays > 0 ? C.amber : C.text} sub="Heavy cell Sydney (Wed – Thu)" />
+        <KpiCard label="Weather Warning Days" value={`${warningDays + dangerDays} days`} valueColor={C.amber} sub="Flagged automatically on your schedule" />
       </div>
 
       {weatherAlertText && (
         <div style={{ background: C.redBg, border: `0.5px solid #FECACA`, borderRadius: 12, padding: "16px 20px", marginBottom: 16, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.redDark, fontWeight: 600 }}>
             <span style={{ fontSize: 18 }}>🚨</span>
-            <span>BOM Dynamic Site Emergency Dispatch</span>
+            <span>Severe Weather Alert</span>
           </div>
           <p style={{ fontSize: 12.5, color: C.redDark, margin: 0, lineHeight: 1.5 }}>
-            {weatherAlertText}. Concrete pours, high-angle rigging operations, and excavations must trigger strict EOT (Extension of Time) claims or safety stand-downs to avoid contract penalties.
+            {weatherAlertText}. Concrete pours, crane and rigging work, and excavations should be paused, or logged as an Extension of Time (EOT) claim, to avoid contract penalties.
           </p>
         </div>
       )}
 
       {/* Weather Forecast Details Grid */}
       <Card style={{ padding: "20px" }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 14 }}>Bureau of Meteorology (BOM) — Sydney Metro 7-day Operational Outlook</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 14 }}>7-Day Weather Forecast — Sydney (Bureau of Meteorology)</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))", gap:10 }}>
           {forecast.map((d, index) => (
             <div key={index} style={{
@@ -187,7 +187,7 @@ export default function ScreenWeather() {
       {/* Meteorological Trade & On-Site Activity Risk Matrix */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14, margin: "14px 0" }}>
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>Standard Operational Safety Thresholds (AS 3850/AS 2550)</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>Safe Working Limits by Trade (AS 3850 / AS 2550)</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[
               { trade: "Formwork & Concrete Pour", limit: "Rain > 10mm / day", metric: "Wet cure failure, cold joints risk", status: "blocked", bg: C.redBg, clr: C.redDark },
@@ -198,7 +198,7 @@ export default function ScreenWeather() {
               <div key={idx} style={{ padding: "10px 14px", border: `0.5px solid ${C.grayLight}`, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 12.5, fontWeight: 500, color: C.text }}>{thr.trade}</div>
-                  <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>Audit Criterion: <strong style={{color: C.text}}>{thr.limit}</strong></div>
+                  <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>Work stops if: <strong style={{color: C.text}}>{thr.limit}</strong></div>
                   <div style={{ fontSize: 10, color: C.gray }}>Impact: {thr.metric}</div>
                 </div>
                 <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: thr.bg, color: thr.clr, textTransform: "uppercase" }}>
@@ -210,7 +210,7 @@ export default function ScreenWeather() {
         </Card>
 
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>Inclement Delay & Extension of Time (EOT) Management</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>Weather Delays & Extension of Time (EOT)</div>
           <p style={{ fontSize: 12, color: C.gray, lineHeight: 1.5, margin: "0 0 12px 0" }}>
             Under standard commercial construction contracts (e.g., AS 4000-1997 Clause 34.2), the builder is entitled to claim cost-compensated Extensions of Time (EOT) when works are disrupted by wet weather beyond average historical meteorological averages.
           </p>
@@ -228,7 +228,7 @@ export default function ScreenWeather() {
       {/* Affected tasks & active Compensation Tool */}
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Active Tasks At Weather Delay Risk</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Tasks That Could Be Delayed by Weather</span>
           <span style={{ fontSize: 11, color: C.gray }}>* Auto-synchronized from timeline baseline database</span>
         </div>
 
@@ -262,7 +262,7 @@ export default function ScreenWeather() {
                       <Btn primary small onClick={() => {
                         setRescheduleTask(t);
                         setNewDays("3");
-                      }}>Shift/EOT Compensate</Btn>
+                      }}>Reschedule & Claim Delay</Btn>
                     </td>
                   </tr>
                 ))}
@@ -276,17 +276,17 @@ export default function ScreenWeather() {
       {rescheduleTask && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15,31,61,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99 }}>
           <Card style={{ width: 360, padding: 22 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>EOT Weather Compensation Tool</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Weather Delay & EOT Tool</div>
             <div style={{ fontSize: 12, color: C.gray, marginBottom: 10 }}>
               Adjusting scheduled dates for: <strong style={{ color: C.text }}>{rescheduleTask.id} — {rescheduleTask.name}</strong>
             </div>
 
             <div style={{ background: C.amberBg, border: `0.5px solid #FCD34D`, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: C.amber, marginBottom: 14 }}>
-              * Under AS 4000 Section 34.2, this will submit a compensated working day shift to mitigate liquid damages exposure.
+              * Under AS 4000 (clause 34.2), this records the weather delay as approved extra days, reducing your Liquidated Damages (LD) exposure.
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 11, color: C.gray, display: "block", marginBottom: 4 }}>Inject EOT Delay Days (Working Days offset)</label>
+              <label style={{ fontSize: 11, color: C.gray, display: "block", marginBottom: 4 }}>How many working days to add?</label>
               <input 
                 type="number" 
                 value={newDays} 
