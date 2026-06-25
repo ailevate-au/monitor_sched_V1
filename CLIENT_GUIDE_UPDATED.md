@@ -78,6 +78,7 @@ Four roles (one-click login buttons on the sign-in screen):
 - Views: **Team Allocation**, **By Project**, **By Resource**, **Change History** *(Kanban removed)*
 - Each project row shows its **state + weather chip**; an **"Issues on this schedule"** strip and a **status legend** explain what's flagged
 - Each job has **PM status controls** (In progress / Complete / **Delayed +N**); a delay cascades dependents and reports how many new issues it created
+- **Saving never blocks.** If a change creates a clash you can still **Save anyway** — then **Undo last change** reverts the whole save (and any knock-on clashes) back to the previous schedule in one click
 - Drag task bars to reschedule; resize to change duration
 - **Draft-first workflow:** drag, resize, and add/edit tasks stay in **draft** until you click **Save programme**
 - Draft conflict check runs client-side (same manpower + overlapping dates) — save is blocked until conflicts are resolved

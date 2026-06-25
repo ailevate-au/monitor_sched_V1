@@ -30,7 +30,7 @@ import {
 import { changeHistory, makeChangeSetId, type ChangeSet } from "../lib/changeHistory";
 import TimelineAdjustPanel from "./TimelineAdjustPanel";
 import ChangeHistoryTab from "./ChangeHistoryTab";
-import { Timer, Users, FolderKanban, HardHat, History } from "lucide-react";
+import { Timer, Users, FolderKanban, HardHat, History, RotateCcw } from "lucide-react";
 import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
 
 const C = {
@@ -264,6 +264,9 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
   // Live committed problems (same source as the Problems hub) — so the Timeline
   // surfaces ALL issue types on the schedule, not just unsaved clashes.
   const [openProblems, setOpenProblems] = useState<any[]>([]);
+  // One-level undo: snapshot of the committed tasks taken just before a save,
+  // so a change that creates clashes can be reverted in one click.
+  const [undoSnapshot, setUndoSnapshot] = useState<{ label: string; tasks: Array<{ id: string; start: string; end: string; assigneeId: string | null; durationDays: number; percent_complete: number }> } | null>(null);
 
   // Modal / Editing form State
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -585,9 +588,50 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
     setSavingMsg(null);
   };
 
+  // Snapshot the current committed schedule so the next save can be undone.
+  const captureUndo = (label: string) => {
+    setUndoSnapshot({
+      label,
+      tasks: tasksRef.current.map((t) => ({
+        id: t.id,
+        start: t.start,
+        end: t.end,
+        assigneeId: t.assigneeId ?? null,
+        durationDays: t.durationDays,
+        percent_complete: t.percent_complete ?? 0,
+      })),
+    });
+  };
+
+  const undoLastChange = () => {
+    if (!undoSnapshot) return;
+    setSavingMsg("Undoing last change…");
+    fetch("/api/v1/tasks/restore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tasks: undoSnapshot.tasks }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.success) throw new Error("restore failed");
+        setUndoSnapshot(null);
+        setPmCascadeNote(null);
+        clearDrafts();
+        loadAllData();
+        setSavingMsg("Reverted to the previous schedule.");
+        window.setTimeout(() => setSavingMsg(null), 3500);
+      })
+      .catch(() => {
+        setSavingMsg("Could not undo. Try again.");
+        window.setTimeout(() => setSavingMsg(null), 3000);
+      });
+  };
+
   const commitDrafts = async () => {
     if (!hasPendingDrafts) return;
-    if (draftConflicts.length > 0) return;
+    // Note: saving is allowed even with clashes — the user can Undo if the
+    // knock-on isn't what they wanted. Snapshot first so Undo has a target.
+    captureUndo("schedule change");
 
     setSavingMsg("Saving programme changes…");
     try {
@@ -1327,6 +1371,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
       if (delayDays === 0) return;
     }
     setShowAddModal(false);
+    captureUndo(pmStatus === "delayed" ? "delay" : "status change");
     fetch(`/api/v1/tasks/${task.id}/status`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1705,6 +1750,15 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
           >
             <Timer size={14} /> {adjustActive ? "Close Adjuster" : "Adjust Timeline"}
           </button>
+          {undoSnapshot && (
+            <button
+              style={{ padding: "8px 14px", background: C.amberBg, color: C.amber, border: `0.5px solid #FCD34D`, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}
+              onClick={undoLastChange}
+              title="Revert the last saved change (and any clashes it caused) back to the previous schedule"
+            >
+              <RotateCcw size={14} /> Undo last change
+            </button>
+          )}
           <button style={{ padding: "8px 14px", background: C.bgSecond, color: C.text, border: `0.5px solid ${C.grayLight}`, borderRadius: 8, fontSize: 12, cursor: "pointer" }} onClick={loadAllData} title="Reload tasks">↻ Refresh</button>
         </div>
       </div>
@@ -1874,47 +1928,44 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
           <div style={{ fontSize: 12.5, color: C.text }}>
             <strong>Draft mode</strong> · {pendingChangeCount} unsaved change{pendingChangeCount === 1 ? "" : "s"}
             {draftConflicts.length > 0 ? (
-              <span style={{ color: C.redDark, fontWeight: 600 }}> — resolve conflict above before saving</span>
+              <span style={{ color: C.redDark, fontWeight: 600 }}> — this will create a clash. You can save anyway and Undo if it's not what you wanted.</span>
             ) : (
               <span style={{ color: C.greenDark }}> — ready to save</span>
             )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {!draftConflicts.length && (
-              <button
-                type="button"
-                onClick={discardDrafts}
-                style={{
-                  padding: "7px 12px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  borderRadius: 8,
-                  border: `1px solid ${C.grayLight}`,
-                  background: C.white,
-                  cursor: "pointer",
-                  color: C.text,
-                }}
-              >
-                Discard
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={discardDrafts}
+              style={{
+                padding: "7px 12px",
+                fontSize: 12,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: `1px solid ${C.grayLight}`,
+                background: C.white,
+                cursor: "pointer",
+                color: C.text,
+              }}
+            >
+              Discard
+            </button>
             <button
               type="button"
               onClick={() => void commitDrafts()}
-              disabled={draftConflicts.length > 0}
-              title={draftConflicts.length > 0 ? "Resolve conflicts first" : "Save to live programme"}
+              title="Save to live programme"
               style={{
                 padding: "7px 14px",
                 fontSize: 12,
                 fontWeight: 600,
                 borderRadius: 8,
                 border: "none",
-                background: draftConflicts.length > 0 ? C.grayLight : C.blue,
-                color: draftConflicts.length > 0 ? C.gray : C.white,
-                cursor: draftConflicts.length > 0 ? "not-allowed" : "pointer",
+                background: draftConflicts.length > 0 ? C.amber : C.blue,
+                color: C.white,
+                cursor: "pointer",
               }}
             >
-              Save programme
+              {draftConflicts.length > 0 ? "Save anyway" : "Save programme"}
             </button>
           </div>
         </div>
@@ -2228,7 +2279,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
             const lCol = getColDuration(task.start, task.end);
             const xStart = LW + sCol * CW;
             const xEnd = xStart + Math.max(26, lCol * CW);
-            taskCoordinates[task.id] = { xStart, xEnd, y: bodyHeight + 19 };
+            taskCoordinates[task.id] = { xStart, xEnd, y: bodyHeight + ROW_HEIGHT / 2 };
             bodyHeight += ROW_HEIGHT;
           });
 
@@ -2239,7 +2290,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
               const lCol = getColDuration(task.start, task.end);
               const xStart = LW + sCol * CW;
               const xEnd = xStart + Math.max(26, lCol * CW);
-              taskCoordinates[task.id] = { xStart, xEnd, y: bodyHeight + 19 };
+              taskCoordinates[task.id] = { xStart, xEnd, y: bodyHeight + ROW_HEIGHT / 2 };
             });
             bodyHeight += ROW_HEIGHT;
           }
@@ -2321,14 +2372,23 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                     if (!taskObj) return null;
                     const deps = (taskObj.dependencies || "").split(",").map(d => d.trim()).filter(d => d && d !== "-");
                     return deps.map(predId => {
+                      if (predId === id) return null; // ignore self-reference
                       const predCoord = taskCoordinates[predId];
                       if (!predCoord) return null;
-                      
-                      const x1 = predCoord.xEnd;
+
+                      // Skip arrows whose predecessor finishes before the visible
+                      // window starts, or whose successor starts after it ends —
+                      // otherwise the line is drawn from/to off-screen coordinates
+                      // and appears to point at an empty section.
+                      const VIS_LEFT = LW;
+                      const VIS_RIGHT = LW + COLS * CW;
+                      if (predCoord.xEnd < VIS_LEFT || succCoord.xStart > VIS_RIGHT) return null;
+
+                      const x1 = Math.min(Math.max(predCoord.xEnd, VIS_LEFT), VIS_RIGHT);
                       const y1 = predCoord.y;
-                      const x2 = succCoord.xStart;
+                      const x2 = Math.min(Math.max(succCoord.xStart, VIS_LEFT), VIS_RIGHT);
                       const y2 = succCoord.y;
-                      
+
                       // Calculate cubic bezier curves
                       const dx = x2 - x1;
                       const controlOffset = Math.max(25, Math.abs(dx) * 0.4);

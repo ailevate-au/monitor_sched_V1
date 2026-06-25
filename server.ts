@@ -540,6 +540,27 @@ async function startServer() {
     });
   });
 
+  // POST /api/v1/tasks/restore — revert tasks to a client-supplied snapshot.
+  // Powers the Timeline "Undo last change": if a save created clashes, restore the
+  // previous dates/assignees in one shot and re-run detection.
+  app.post("/api/v1/tasks/restore", (req, res) => {
+    const db = dbInstance;
+    const { tasks } = req.body || {};
+    if (!Array.isArray(tasks)) return res.status(400).json({ success: false, error: "Missing tasks snapshot" });
+    for (const s of tasks) {
+      const t = db.tasks.find(x => x.id === s.id) as any;
+      if (!t) continue;
+      if (s.start !== undefined) t.start = s.start;
+      if (s.end !== undefined) t.end = s.end;
+      if (s.durationDays !== undefined) t.durationDays = s.durationDays;
+      if (Object.prototype.hasOwnProperty.call(s, "assigneeId")) t.assigneeId = s.assigneeId;
+      if (s.percent_complete !== undefined) t.percent_complete = s.percent_complete;
+    }
+    runConflictDetection();
+    db.save();
+    res.json({ success: true, tasks: db.tasks });
+  });
+
   // GET /api/v1/resources: lists resource personnel and utilization values
   app.get("/api/v1/resources", (req, res) => {
     const db = dbInstance;
