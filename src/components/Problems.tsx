@@ -10,8 +10,6 @@ import {
   ChevronDown,
   ChevronUp,
   CalendarDays,
-  Zap,
-  RotateCcw,
 } from "lucide-react";
 import {
   Problem,
@@ -148,16 +146,6 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
               : "No clashes, no late jobs, nothing to worry about."}
           </div>
         </div>
-        {summary.total > 0 && onNav && (
-          <button
-            type="button"
-            onClick={() => onNav("projects")}
-            title="Issues are created from the Projects tab"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", fontSize: 12, fontWeight: 600, borderRadius: 9, border: `1px solid ${C.grayLight}`, background: C.white, color: C.gray, cursor: "pointer" }}
-          >
-            <RotateCcw size={14} /> Manage in Projects
-          </button>
-        )}
       </div>
 
       {/* KPI strip — one clear number, plus two supporting */}
@@ -192,17 +180,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
         <div style={{ padding: "44px 20px", textAlign: "center", background: C.white, borderRadius: 12, border: `0.5px solid ${C.grayLight}` }}>
           <div style={{ fontSize: 38, marginBottom: 10 }}>✅</div>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Everything's on track</div>
-          <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 18 }}>No clashes, no late jobs. Nothing needs you right now.</div>
-          {onNav && (
-            <button
-              type="button"
-              onClick={() => onNav("projects")}
-              style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 22px", fontSize: 13.5, fontWeight: 700, borderRadius: 9, border: "none", background: C.blue, color: C.white, cursor: "pointer" }}
-            >
-              <Zap size={16} /> Bring in new work
-            </button>
-          )}
-          <div style={{ fontSize: 11, color: C.gray, marginTop: 10 }}>New work — an import or a schedule change — is where problems come from. Add some on the Projects tab to see it live.</div>
+          <div style={{ fontSize: 12.5, color: C.gray }}>No clashes, no late jobs. Nothing needs you right now.</div>
         </div>
       )}
 
