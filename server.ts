@@ -6,7 +6,7 @@ import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 import { dbInstance } from "./src/server/db";
 import { runConflictDetection, computeCascade, getConflictHubPayload, getReplacementCandidates } from "./src/server/conflictEngine";
-import { RESOURCE_PROFILES } from "./src/server/seedData";
+import { RESOURCE_PROFILES, DEFAULT_TASKS } from "./src/server/seedData";
 import { getBOMForecast, getForecast, getWeatherSummary, setStormScenario } from "./src/server/bomWeather";
 import {
   getMastersBundle,
@@ -771,6 +771,12 @@ async function startServer() {
     dbInstance.projects.find(p => p.id === t?.projectId)?.state || "NSW";
   const projectNameFor = (pid: string) =>
     dbInstance.projects.find(p => p.id === pid)?.name || "Unknown project";
+  // Clear, unambiguous job label: project + full task name, so two jobs with the
+  // same name (e.g. "… — Level 4/5") are told apart. e.g. "Parramatta Square · Structural Steel Frame — Level 4".
+  const jobLabelFor = (t: any) => {
+    const proj = (projectNameFor(t?.projectId) || "").split(" — ")[0];
+    return proj ? `${proj} · ${t?.name}` : (t?.name || "this job");
+  };
 
   function applyShift(taskId: string, delayDays: number) {
     const db = dbInstance;
@@ -803,8 +809,8 @@ async function startServer() {
         return {
           id: `reassign:${cd.id}`,
           kind: "reassign",
-          label: `Give the job to ${cd.name}`,
-          detail: `Free these dates. Costs ${cd.rate}, ${cd.util}% booked right now.${interstate} ${prof.bio || ""}`.trim(),
+          label: reassignTask ? `Give "${jobLabelFor(reassignTask)}" to ${cd.name}` : `Give the job to ${cd.name}`,
+          detail: `${cd.name} is free for these dates. Costs ${cd.rate}, ${cd.util}% booked right now.${interstate} ${prof.bio || ""}`.trim(),
           recommended: i === 0,
           resource: { ...cd, bio: prof.bio, skills: prof.skills, recommended: i === 0 },
         };
@@ -813,8 +819,8 @@ async function startServer() {
         actions.push({
           id: `shift:${reassignTask.id}:14`,
           kind: "accept_delay",
-          label: "Push one job back 2 weeks instead",
-          detail: `Keep ${c.resource} on both jobs and move the second one 2 weeks later. Tasks that wait on it move too.`,
+          label: `Push "${jobLabelFor(reassignTask)}" back 2 weeks instead`,
+          detail: `Keep ${c.resource} on both jobs and move "${reassignTask.name}" 2 weeks later. Jobs that wait on it move too.`,
           delayDays: 14,
         });
       }
@@ -829,9 +835,7 @@ async function startServer() {
         what: (c.overlapPairs && c.overlapPairs.length)
           ? c.overlapPairs.map((p: any) => `${p.taskA} and ${p.taskB} overlap (${p.datesA}).`).join(" ")
           : c.desc,
-        impact: candidates.length
-          ? "One of the two jobs won't get done on time, and everything waiting on it slips too."
-          : `No other ${c.trade} is free for these dates — pushing one job back is the only safe choice.`,
+        impact: "The same person can't be on two jobs at once — one of them will slip unless you fix it.",
         suggestedActions: actions,
       });
     }
@@ -852,8 +856,8 @@ async function startServer() {
         return {
           id: `assign:${t.id}:${cd.id}`,
           kind: "reassign",
-          label: `Assign ${cd.name}`,
-          detail: `Put ${cd.name} on this job. Costs ${cd.rate}, ${cd.util}% booked right now.${interstate} ${prof.bio || ""}`.trim(),
+          label: `Put ${cd.name} on "${jobLabelFor(t)}"`,
+          detail: `${cd.name} is free for these dates. Costs ${cd.rate}, ${cd.util}% booked right now.${interstate} ${prof.bio || ""}`.trim(),
           recommended: i === 0,
           resource: { ...cd, bio: prof.bio, skills: prof.skills, recommended: i === 0 },
         };
@@ -863,12 +867,10 @@ async function startServer() {
         category: "unassigned",
         severity: "medium",
         taskIds: [t.id],
-        title: `No one is assigned to ${t.name}`,
+        title: `No one is assigned to "${jobLabelFor(t)}"`,
         projectName: projectNameFor(t.projectId),
         what: `"${t.name}" (${t.start} – ${t.end}) needs a ${t.tradeRequired}, but nobody is on it yet.`,
-        impact: actions.length
-          ? "Until someone's assigned, this job can't start and anything waiting on it slips."
-          : `No ${t.tradeRequired} is currently free for these dates — you may need to move the job or bring someone in.`,
+        impact: "Nobody is doing this job yet, so it can't start.",
         suggestedActions: actions,
       });
     }
@@ -914,8 +916,8 @@ async function startServer() {
         taskIds: [worst.id],
         title: `${projectNameFor(pid)} is behind schedule`,
         projectName: projectNameFor(pid),
-        what: `${worst.name} was due ${worst.end} — it's ${daysLate} day${daysLate !== 1 ? "s" : ""} late${assignee ? ` (${assignee.name}'s job)` : ""}.`,
-        impact: project ? `Every late day costs about A$${(project.ldRatePerDay || 0).toLocaleString()} in penalties.` : "Nothing after this can start until it's done.",
+        what: `"${jobLabelFor(worst)}" was due ${worst.end} — it's ${daysLate} day${daysLate !== 1 ? "s" : ""} late${assignee ? ` (${assignee.name}'s job)` : ""}.`,
+        impact: "This job is already late, so the jobs after it are waiting too.",
         suggestedActions: actions,
       });
     }
@@ -969,8 +971,8 @@ async function startServer() {
         taskIds: weatherTasks.map(t => t.id),
         title: `Bad weather could stop ${weatherTasks.length} job(s) this week`,
         projectName: Array.from(new Set(weatherTasks.map(t => projectNameFor(t.projectId)))).join(" + "),
-        what: `Rain and storms forecast this week. Outdoor jobs at risk: ${weatherTasks.map(t => t.name).join("; ")}.`,
-        impact: "Working through the storm risks redoing work, sending crews home, and lost time you can't claim.",
+        what: `Rain and storms forecast this week. Outdoor jobs at risk: ${weatherTasks.map(t => jobLabelFor(t)).join("; ")}.`,
+        impact: "Storms could stop this outdoor work, so the jobs may not get done this week.",
         suggestedActions: [
           {
             id: `shiftmany:${ids}:5`,
@@ -1091,22 +1093,28 @@ async function startServer() {
 
   app.post("/api/v1/demo/reset", (_req, res) => {
     const db = dbInstance;
-    setTask("TSK-P2-03", { assigneeId: "r9", start: "2026-06-01", end: "2026-06-09", durationDays: 7, percent_complete: 0, status: "scheduled" });
-    setTask("TSK-P3-01", { assigneeId: "r4", start: "2026-06-23", end: "2026-07-13", durationDays: 15, percent_complete: 0, status: "scheduled" });
-    setTask("TSK-P2-01", { percent_complete: 100, status: "completed" });
-    setTask("TSK-P1-04", { start: "2026-06-30", end: "2026-07-10", durationDays: 9 });
+    // FULL restore to the seeded baseline. Rebuilding every task from DEFAULT_TASKS
+    // (rather than nudging a handful) means "Reset to clean" is truly clean — it
+    // scrubs ANY manual drags/edits/created tasks, not just the scripted scenario,
+    // and always returns to 0 issues.
+    db.tasks = DEFAULT_TASKS.map((s: any) => ({
+      id: s.id,
+      projectId: s.projectId,
+      name: s.name,
+      assigneeId: s.assigneeId,
+      tradeRequired: s.tradeRequired,
+      start: s.start,
+      end: s.end,
+      durationDays: s.durationDays,
+      dependencies: s.dependencies,
+      status: s.status,
+      lag_days: 0,
+      dependency_type: "FS",
+      cost_override: null,
+      cost_override_type: null,
+      percent_complete: s.percent_complete ?? (s.status === "completed" ? 100 : 0),
+    }));
     setStormScenario(false);
-    setTask("TSK-P1-06", { start: "2026-06-10", end: "2026-06-21", durationDays: 9 });
-    setTask("TSK-P1-08", { assigneeId: "r8" });
-    // Restore the PM-flow baseline: Tom's North-Sector piling + its p2 dependents,
-    // in case a PM "Delayed" cascade moved them this session.
-    setTask("TSK-P2-02", { start: "2026-06-02", end: "2026-06-20", durationDays: 15 });
-    setTask("TSK-P2-05", { start: "2026-07-21", end: "2026-08-07", durationDays: 14 });
-    setTask("TSK-P2-06", { start: "2026-06-26", end: "2026-07-08", durationDays: 9 });
-    setTask("TSK-P2-07", { start: "2026-07-07", end: "2026-07-18", durationDays: 9 });
-    // Ensure Ben still owns his original Level-4 pour even if it was reassigned
-    // away during a resolve, so the baseline is fully restored.
-    setTask("TSK-P1-01", { assigneeId: "r1" });
     runConflictDetection();
     db.save();
     res.json({ success: true, ...buildProblemsResponse() });

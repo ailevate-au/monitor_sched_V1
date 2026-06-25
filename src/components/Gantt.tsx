@@ -1659,21 +1659,16 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                         </button>
                       </div>
 
-                      {constraintInsight && (
-                        <div style={{ fontSize: 11.5, color: C.text, background: C.white, borderRadius: 8, border: `1px solid ${C.amber}55`, padding: "8px 10px", marginBottom: 10, lineHeight: 1.45 }}>
-                          <div style={{ fontWeight: 700, color: C.amber, marginBottom: 6 }}>Which task can't move?</div>
-                          <div style={{ marginBottom: 4 }}>
-                            <strong>{constraintInsight.taskA.name}</strong>
-                            <span style={{ color: constraintInsight.suggestedAnchorTaskId === primary.taskAId ? C.greenDark : C.blue, fontWeight: 600 }}>{constraintInsight.suggestedAnchorTaskId === primary.taskAId ? " · keep as-is" : " · can be moved"}</span>
-                            {constraintInsight.taskA.reasons.length > 0 && <span style={{ color: C.textMuted }}> — {constraintInsight.taskA.reasons.join("; ")}</span>}
+                      {constraintInsight && (() => {
+                        const anchorIsA = constraintInsight.suggestedAnchorTaskId === primary.taskAId;
+                        const keepName = anchorIsA ? primary.taskAName : primary.taskBName;
+                        const moveName = anchorIsA ? primary.taskBName : primary.taskAName;
+                        return (
+                          <div style={{ fontSize: 11.5, color: C.text, background: C.white, borderRadius: 8, border: `1px solid ${C.amber}55`, padding: "8px 10px", marginBottom: 10, lineHeight: 1.45 }}>
+                            Keep <strong>{keepName}</strong> where it is, and move <strong>{moveName}</strong> instead.
                           </div>
-                          <div>
-                            <strong>{constraintInsight.taskB.name}</strong>
-                            <span style={{ color: constraintInsight.suggestedAnchorTaskId === primary.taskBId ? C.greenDark : C.blue, fontWeight: 600 }}>{constraintInsight.suggestedAnchorTaskId === primary.taskBId ? " · keep as-is" : " · can be moved"}</span>
-                            {constraintInsight.taskB.reasons.length > 0 && <span style={{ color: C.textMuted }}> — {constraintInsight.taskB.reasons.join("; ")}</span>}
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {recommendations.length > 0 ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -2473,29 +2468,31 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                     const done = isTaskDone(task);
                     const isDraft = isDraftTaskId(task.id, pendingDrafts);
 
+                    const firstDep = (task.dependencies || "").split(",").map(d => d.trim()).filter(d => d && d !== "-")[0];
+                    const depTask = firstDep ? displayTasks.find(t => t.id === firstDep) : null;
+
                     return (
-                      <div key={task.id} style={{ display:"flex", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, minHeight:ROW_HEIGHT, alignItems:"center", position:"relative" }}>
-                        
+                      // Fixed row height keeps the dependency-arrow coordinates (which
+                      // assume ROW_HEIGHT per row) aligned with the rendered bars.
+                      <div key={task.id} style={{ display:"flex", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, height:ROW_HEIGHT, alignItems:"center", position:"relative" }}>
+
                         {/* Left Assignee info cell */}
-                        <div style={{ ...stickyLeft(C.white), padding:"6px 12px 6px 28px", fontSize:12.5, color:C.textMuted, overflow:"hidden", display:"flex", flexDirection:"column", gap:2 }}>
+                        <div style={{ ...stickyLeft(C.white), padding:"6px 12px 6px 28px", fontSize:12.5, color:C.textMuted, overflow:"hidden", display:"flex", flexDirection:"column", justifyContent:"center", height:ROW_HEIGHT, gap:2 }}>
                           <span style={{ fontSize: 12.5, color: C.text, display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
                             {done && <span style={{ color: C.greenDark, flexShrink: 0 }}>✓</span>}
                             <TaskNameWithId task={task} onClick={() => handleOpenEdit(task)} nameStyle={{ color: C.text }} />
                           </span>
+                          {/* Assignee + dependency hint on ONE line so every row stays the
+                              same height (variable height was breaking arrow alignment). */}
                           <span style={{ fontSize: 9.5, color: C.gray, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                             👷 {task.assignee} · {task.trade}
-                          </span>
-                          {(() => {
-                            const firstDep = (task.dependencies || "").split(",").map(d => d.trim()).filter(d => d && d !== "-")[0];
-                            const depTask = firstDep ? displayTasks.find(t => t.id === firstDep) : null;
-                            if (!depTask) return null;
-                            return (
-                              <span style={{ fontSize: 9, color: C.purple, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}
+                            {depTask && (
+                              <span style={{ color: C.purple }}
                                 title={`Starts after "${depTask.name}" finishes (${task.dependency_type || "FS"}). Move that job and this one moves too.`}>
-                                ↳ after {taskDisplayName(depTask)}{task.dependency_type === "SS" ? " (starts together)" : ""}
+                                {"  ·  ↳ after "}{taskDisplayName(depTask)}{task.dependency_type === "SS" ? " (starts together)" : ""}
                               </span>
-                            );
-                          })()}
+                            )}
+                          </span>
                         </div>
 
                         {/* Columns backgrounds */}
