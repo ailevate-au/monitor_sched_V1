@@ -52,17 +52,17 @@ export default function ProgrammeSettingsPanel() {
         <span>
           <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: C.navy }}>
             <LabelWithInfo
-              label="Auto-shift dependent tasks"
-              title="Auto-Shift Dependent Tasks"
+              label="Auto-move linked tasks"
+              title="Auto-Move Linked Tasks"
               body={
-                "When enabled, moving or extending a task automatically pushes successor tasks that are linked by dependencies (Finish-to-Start or Start-to-Start, including lag days).\n\nWhen disabled, only the task you edit moves. On drag-reschedule, you may be asked once whether to include dependents."
+                "When turned on, moving or extending a task automatically moves the tasks that follow it (the ones set to start after it).\n\nWhen turned off, only the task you edit moves. When you drag a task to reschedule it, you may be asked once whether to move the following tasks too."
               }
             />
           </span>
           <span style={{ display: "block", fontSize: 11.5, color: C.gray, marginTop: 4, lineHeight: 1.45 }}>
             {autoCascadeDependents
-              ? "Successors will follow predecessors when dates change."
-              : "Only the selected task moves unless you confirm shifting dependents."}
+              ? "Following tasks move automatically when dates change."
+              : "Only the selected task moves unless you choose to move the following tasks too."}
           </span>
         </span>
       </label>

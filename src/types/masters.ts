@@ -2,7 +2,15 @@ export type MasterType = "states" | "sectors" | "trades" | "companies";
 
 export type MasterTabId = MasterType | "cost_categories";
 
-export type AppNavigate = (screen: string, masterTab?: MasterTabId) => void;
+/** Optional intent passed alongside a navigation, e.g. pre-filtering a screen. */
+export interface NavOptions {
+  /** When navigating to the Gantt, seed its status filter (e.g. "problems", "conflict"). */
+  ganttStatus?: string;
+  /** When navigating to the Gantt, focus it on this exact set of task IDs. */
+  ganttTaskIds?: string[];
+}
+
+export type AppNavigate = (screen: string, masterTab?: MasterTabId, options?: NavOptions) => void;
 
 export interface MasterItem {
   id: string;

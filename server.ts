@@ -706,10 +706,9 @@ async function startServer() {
 
     // 1) CONFLICTS — double-booked resources
     for (const c of db.conflicts) {
-      const reassignTask = db.tasks.find(t => t.assigneeId === c.resourceId && t.status === "conflict");
-      const projNames = Array.from(new Set(
-        db.tasks.filter(t => t.assigneeId === c.resourceId && t.status === "conflict").map(t => projectNameFor(t.projectId))
-      ));
+      const conflictTasks = db.tasks.filter(t => t.assigneeId === c.resourceId && t.status === "conflict");
+      const reassignTask = conflictTasks[0];
+      const projNames = Array.from(new Set(conflictTasks.map(t => projectNameFor(t.projectId))));
       const candidates = (c.candidates || [])
         .filter((cd: any) => !conflictedIds.has(cd.id))
         .slice(0, 2);
@@ -740,6 +739,7 @@ async function startServer() {
         id: `prob-conflict-${c.resourceId}`,
         category: "conflict",
         severity: "critical",
+        taskIds: conflictTasks.map(t => t.id),
         title: `${c.resource} is booked on two jobs at once`,
         projectName: projNames.join(" + ") || (reassignTask ? projectNameFor(reassignTask.projectId) : ""),
         what: (c.overlapPairs && c.overlapPairs.length)
@@ -790,6 +790,7 @@ async function startServer() {
         id: `prob-late-${worst.id}`,
         category: "late",
         severity: "high",
+        taskIds: [worst.id],
         title: `${projectNameFor(pid)} is running late`,
         projectName: projectNameFor(pid),
         what: `${worst.name} was due ${worst.end} — now ${daysLate} day${daysLate !== 1 ? "s" : ""} overdue${assignee ? ` (assigned: ${assignee.name})` : ""}.`,
@@ -827,6 +828,7 @@ async function startServer() {
         id: `prob-fragile-${f.id}`,
         category: "fragile",
         severity: "medium",
+        taskIds: [f.id],
         title: `Tight handover on ${f.name}`,
         projectName: projectNameFor(parent.projectId),
         what: f.desc,
@@ -843,6 +845,7 @@ async function startServer() {
         id: `prob-weather`,
         category: "weather",
         severity: "high",
+        taskIds: weatherTasks.map(t => t.id),
         title: `Severe weather threatens ${weatherTasks.length} task(s) this week`,
         projectName: Array.from(new Set(weatherTasks.map(t => projectNameFor(t.projectId)))).join(" + "),
         what: `BOM forecasts heavy rain and storms (Wed–Fri). Affected: ${weatherTasks.map(t => t.name).join("; ")}.`,

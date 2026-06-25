@@ -282,11 +282,11 @@ export default function ScreenFinancial() {
   };
 
   const tabs = [
-    { id: "overview", label: "Portfolio Overview" },
-    { id: "planvscertified", label: "Plan vs Actual (Ops)" },
-    { id: "weekly", label: "Weekly Expenditure" },
+    { id: "overview", label: "All Projects" },
+    { id: "planvscertified", label: "Planned vs Actual" },
+    { id: "weekly", label: "Weekly Spend" },
     { id: "breakdown", label: "Cost Breakdown" },
-    { id: "variance", label: "Variation Ledger" },
+    { id: "variance", label: "Variation Log" },
   ];
 
   const totalContract = projList.reduce((acc, p) => acc + p.finalContractSum, 0);
@@ -1122,7 +1122,7 @@ export default function ScreenFinancial() {
             <Card>
               <SectionHeader
                 title="Contract variance & LD risk"
-                right={<Btn primary small onClick={() => setShowAddModal(true)}>+ Register variation</Btn>}
+                right={<Btn primary small onClick={() => setShowAddModal(true)}>+ Add variation</Btn>}
               />
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -1211,7 +1211,7 @@ export default function ScreenFinancial() {
         {showAddModal && (
           <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15,31,61,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}>
             <div style={{ background: C.white, borderRadius: 12, width: 360, padding: 22, border: `0.5px solid ${C.grayLight}`, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 14 }}>Register contract variation</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 14 }}>Add a contract variation</div>
               <div style={{ marginBottom: 10 }}>
                 <label style={{ fontSize: 11, color: C.gray, display: "block", marginBottom: 4 }}>Project</label>
                 <select value={selProjectId} onChange={(e) => setSelProjectId(e.target.value)} style={{ width: "100%", ...filterInputStyle }}>

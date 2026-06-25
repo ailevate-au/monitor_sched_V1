@@ -44,8 +44,8 @@ interface RecentExport {
 }
 
 const REPORTS_BASE: ReportDef[] = [
-  { icon: "📊", title: "Portfolio Programme Report", sub: "Schedule baseline alignment and delivery status for selected project", color: C.blue, category: "schedule", exportType: "Portfolio-Programme", metrics: [] },
-  { icon: "💰", title: "Financial Variance Ledger", sub: "Contract sums, budget variance, and margin for selected project", color: C.green, category: "finance", exportType: "Financial-Variance-Ledger", metrics: [] },
+  { icon: "📊", title: "All-Projects Programme Report", sub: "How the schedule is tracking and delivery status for the selected project", color: C.blue, category: "schedule", exportType: "Portfolio-Programme", metrics: [] },
+  { icon: "💰", title: "Financial Variance Report", sub: "Contract sums, budget variance, and margin for selected project", color: C.green, category: "finance", exportType: "Financial-Variance-Ledger", metrics: [] },
   { icon: "📋", title: "Project Expense Summary", sub: "Recorded expenses and retention balance for selected project", color: C.amber, category: "finance", exportType: "Project-Expense-Summary", metrics: [] },
 ];
 
@@ -341,7 +341,7 @@ export default function ScreenReports() {
             {selectedRecent && !detail && (
               <>
                 <div style={{ fontSize: 12, color: C.gray, marginBottom: 12, lineHeight: 1.5 }}>
-                  Archived export from the SaaS report log. Re-download to get the same snapshot, or regenerate from the template for live data.
+                  A previously saved report. Re-download to get the same snapshot, or regenerate from the template for up-to-date data.
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <span title={exportDisabledTooltip}>
@@ -373,7 +373,7 @@ export default function ScreenReports() {
                   </span>
                 </div>
                 <div style={{ marginTop: 14, padding: 10, background: C.bgSecond, borderRadius: 8, fontSize: 11, color: C.gray, lineHeight: 1.5 }}>
-                  Demo mode: only 3 key reports are shown and each export uses the selected project context.
+                  Demo: only 3 key reports are shown, and each export uses the project you've selected.
                 </div>
               </>
             )}

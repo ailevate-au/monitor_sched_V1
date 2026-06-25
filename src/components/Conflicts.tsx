@@ -324,8 +324,8 @@ export default function ScreenConflicts({ onNav }: { onNav?: (screen: string) =>
 
       {/* Stat strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
-        <KpiCard label="Active Conflicts" value={`${metrics.hardConflicts}`} valueColor={metrics.hardConflicts > 0 ? C.red : C.greenDark} sub="Same person, overlapping tasks" />
-        <KpiCard label="Fragile Buffers" value={`${metrics.fragileBufferSlots}`} valueColor={C.amber} sub="≤ 1 working day gap" />
+        <KpiCard label="Active Conflicts" value={`${metrics.hardConflicts}`} valueColor={metrics.hardConflicts > 0 ? C.red : C.greenDark} sub="Same person, two jobs at once" />
+        <KpiCard label="Tight Gaps" value={`${metrics.fragileBufferSlots}`} valueColor={C.amber} sub="Less than 1 day of spare time" />
         <KpiCard label="Resolved (14 days)" value={`${metrics.resolvedThisFortnight}`} valueColor={C.greenDark} sub="Reassignments completed" />
       </div>
 
@@ -439,7 +439,7 @@ export default function ScreenConflicts({ onNav }: { onNav?: (screen: string) =>
       {fragileTasks.length > 0 && (
         <div style={{ marginTop: conflicts.length > 0 ? 8 : 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 10 }}>
-            ⚡ Fragile buffers — tasks with less than 1 day gap
+            ⚡ Tight gaps — tasks with less than 1 day of spare time
           </div>
           {fragileTasks.map((task, i) => (
             <div key={i}><FragileTaskCard task={task} /></div>

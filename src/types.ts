@@ -202,6 +202,8 @@ export interface Problem {
   id: string;
   category: ProblemCategory;
   severity: ProblemSeverity;
+  /** Timeline task IDs this problem covers — used to focus the Gantt. */
+  taskIds?: string[];
   /** Short headline, e.g. "Ben Nguyen is double-booked". */
   title: string;
   projectName: string;

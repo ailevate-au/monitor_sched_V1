@@ -27,7 +27,7 @@ const C = {
 export const StatusBadge = ({ status }: { status: string }) => {
   const map: { [key: string]: { bg: string; color: string; label: string; icon: string | null } } = {
     conflict:   { bg: C.redBg,    color: C.redDark,  label: "Conflict",     icon: "⚠" },
-    fragile:    { bg: C.amberBg,  color: C.amber,    label: "Fragile Spot", icon: "⚡" },
+    fragile:    { bg: C.amberBg,  color: C.amber,    label: "Tight Gap",    icon: "⚡" },
     weather:    { bg: "#EFF6FF",  color: "#1D4ED8",  label: "Weather Risk", icon: "🌧" },
     overdue:    { bg: C.redBg,    color: C.redDark,  label: "Overdue",      icon: "🔴" },
     inprogress: { bg: C.blueLight,color: C.blue,     label: "In Progress",  icon: null },
@@ -38,7 +38,7 @@ export const StatusBadge = ({ status }: { status: string }) => {
     pending:    { bg: C.amberBg,  color: C.amber,    label: "Pending Cert.",icon: null },
     certified:  { bg: C.greenBg,  color: C.greenDark,label: "Certified",    icon: "✓" },
     released:   { bg: "#F0EEFF",  color: "#4A3DB0",  label: "Retention Released", icon: null },
-    ok:         { bg: C.greenBg,  color: C.greenDark,label: "On Track",     icon: null },
+    ok:         { bg: C.greenBg,  color: C.greenDark,label: "On Schedule",  icon: null },
   };
   const s = map[status] || map.scheduled;
   return (
@@ -53,14 +53,40 @@ export const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-export const KpiCard = ({ label, value, sub, trend, valueColor }: { label: string; value: string; sub?: string; trend?: string; valueColor?: string }) => (
-  <div style={{ background:C.white, border:`0.5px solid ${C.grayLight}`, borderRadius:12, padding:"16px 18px", boxShadow:"0 1px 3px rgba(0,0,0,0.02)" }}>
-    <div style={{ fontSize:11, color:C.gray, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</div>
-    <div style={{ fontSize:23, fontWeight:600, color:valueColor||C.text, lineHeight:1.1 }}>{value}</div>
-    {sub   && <div style={{ fontSize:11, color:C.textMuted, marginTop:5 }}>{sub}</div>}
-    {trend && <div style={{ fontSize:11, marginTop:5, fontWeight:600, color:trend.startsWith("+") || trend.includes("over") ? C.red : C.green }}>{trend}</div>}
-  </div>
-);
+export const KpiCard = ({ label, value, sub, trend, valueColor, onClick, actionLabel }: { label: string; value: string; sub?: string; trend?: string; valueColor?: string; onClick?: () => void; actionLabel?: string }) => {
+  const [hover, setHover] = useState(false);
+  const clickable = !!onClick;
+  return (
+    <div
+      onClick={onClick}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick!(); } } : undefined}
+      onMouseEnter={() => clickable && setHover(true)}
+      onMouseLeave={() => clickable && setHover(false)}
+      title={clickable ? (actionLabel || "Open in the Timeline") : undefined}
+      style={{
+        background:C.white,
+        border:`0.5px solid ${clickable && hover ? C.blue : C.grayLight}`,
+        borderRadius:12,
+        padding:"16px 18px",
+        boxShadow: clickable && hover ? "0 2px 10px rgba(26,95,168,0.16)" : "0 1px 3px rgba(0,0,0,0.02)",
+        cursor: clickable ? "pointer" : "default",
+        transition:"border-color .15s, box-shadow .15s",
+      }}
+    >
+      <div style={{ fontSize:11, color:C.gray, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</div>
+      <div style={{ fontSize:23, fontWeight:600, color:valueColor||C.text, lineHeight:1.1 }}>{value}</div>
+      {sub   && <div style={{ fontSize:11, color:C.textMuted, marginTop:5 }}>{sub}</div>}
+      {trend && <div style={{ fontSize:11, marginTop:5, fontWeight:600, color:trend.startsWith("+") || trend.includes("over") ? C.red : C.green }}>{trend}</div>}
+      {clickable && (
+        <div style={{ fontSize:11, marginTop:8, fontWeight:600, color:C.blue, display:"flex", alignItems:"center", gap:4 }}>
+          {actionLabel || "View in Timeline"} <span style={{ transform: hover ? "translateX(2px)" : "none", transition:"transform .15s" }}>→</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const Card = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
   <div style={{ background:C.white, border:`0.5px solid ${C.grayLight}`, borderRadius:12, padding:18, marginBottom:14, ...style }}>
@@ -255,8 +281,8 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
       {/* KPI Row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:10, marginBottom:16 }}>
         <KpiCard label="Active Projects" value={stats.activeProjectsCount} sub="Across your portfolio" />
-        <KpiCard label="On Programme Pace" value={`${stats.onProgrammePct}%`} valueColor={C.green} sub="Tasks tracking to plan" />
-        <KpiCard label="Open Problems" value={stats.resourceConflictsCount} valueColor={stats.resourceConflictsCount > 0 ? C.red : C.green} sub="Need a decision" />
+        <KpiCard label="On Schedule" value={`${stats.onProgrammePct}%`} valueColor={C.green} sub="Tasks tracking to plan" />
+        <KpiCard label="Needs Attention" value={stats.resourceConflictsCount} valueColor={stats.resourceConflictsCount > 0 ? C.red : C.green} sub="Need a decision" />
         <KpiCard label="Workplace LTI-free days" value={stats.whsLtiFreeDays} valueColor={C.greenDark} sub="No registered site accidents" />
       </div>
 
@@ -265,13 +291,13 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
       <Card style={{ padding: 16, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.grayLight}`, paddingBottom: 6, marginBottom: 12 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.redDark, display: "flex", alignItems: "center", gap: 6 }}>
-            <span>⚠️</span> Task Schedule Baseline Watchlist ("At Risk")
+            <span>⚠️</span> Tasks Falling Behind
           </span>
-          <span style={{ fontSize: 11, fontStyle: "italic", color: C.gray }}>Formula: progress intensity &lt; 80% baseline speed</span>
+          <span style={{ fontSize: 11, fontStyle: "italic", color: C.gray }}>Less than 80% of the work that should be done by now</span>
         </div>
         {atRiskTasks.length === 0 ? (
           <div style={{ padding: 12, fontSize: 11.5, color: C.gray, fontStyle: "italic" }}>
-            ✓ All active programmed tasks are performing within target baseline schedule constraints.
+            ✓ All tasks are keeping up with the schedule.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -309,11 +335,11 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
         {/* Site Delay Notices Section (Improvement 5 & 6) */}
         <Card style={{ padding: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.navy, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-            <span>📢</span> Subcontractor Site Alerts & Claims (Rule 2 Logs)
+            <span>📢</span> Site Delay Reports from Subcontractors
           </div>
           {alerts.length === 0 ? (
             <div style={{ padding: 12, background: "#F1F5F9", color: C.gray, borderRadius: 8, fontSize: 11.5 }}>
-              No active delay warnings received from site resources.
+              No delay reports from site crews right now.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 180, overflowY: "auto" }}>
@@ -321,7 +347,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
                 <div key={a.id} style={{ background: a.type === "delay" ? C.amberBg : C.blueLight, border: `0.5px solid ${a.type === "delay" ? C.amber : C.blueMid}`, borderRadius: 8, padding: "10px", fontSize: 11.5 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                     <span style={{ fontWeight: 700, color: a.type === "delay" ? C.amber : C.blue }}>
-                      {a.type === "delay" ? "🚨 DELAY INCIDENT FILED" : "📝 STATUS UPDATE"}
+                      {a.type === "delay" ? "🚨 DELAY REPORTED" : "📝 STATUS UPDATE"}
                     </span>
                     <span style={{ fontSize: 9, color: C.gray }}>{new Date(a.timestamp).toLocaleTimeString()}</span>
                   </div>
@@ -333,7 +359,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
                         onClick={() => handleApproveExtension(a)}
                         style={{ background: C.green, color: C.white, border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}
                       >
-                        ✓ Approve Date Extension & Waterfall (Rule 1)
+                        ✓ Approve Extension & Move Linked Tasks
                       </button>
                       <button 
                         onClick={() => handleDismissAlert(a.id)}
@@ -347,7 +373,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
                       onClick={() => handleDismissAlert(a.id)}
                       style={{ background: "transparent", color: C.gray, border: `0.5px solid ${C.grayLight}`, borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer" }}
                     >
-                      Acknowledge Log
+                      Acknowledge
                     </button>
                   )}
                 </div>
@@ -360,7 +386,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
       {/* Task Table */}
       <Card>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12, flexWrap: "wrap", gap: 10 }}>
-          <span style={{ fontSize:13, fontWeight:600, color:C.text }}>Portfolio Trade Breakdown & Progress Audit</span>
+          <span style={{ fontSize:13, fontWeight:600, color:C.text }}>Progress by Trade — All Projects</span>
           <div style={{ display:"flex", gap:6 }}>
             <select 
               value={statusFilter} 
@@ -369,7 +395,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
             >
               <option value="all">All Statuses</option>
               <option value="conflict">Conflict</option>
-              <option value="fragile">Fragile Spot</option>
+              <option value="fragile">Tight Gap</option>
               <option value="weather">Weather Risk</option>
               <option value="overdue">Overdue</option>
               <option value="inprogress">In Progress</option>

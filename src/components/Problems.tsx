@@ -18,6 +18,7 @@ import {
   parseProblemsResponse,
 } from "../types";
 import { KpiCard } from "./Dashboard";
+import { AppNavigate } from "../types/masters";
 
 const C = {
   navy: "#0F1F3D",
@@ -52,7 +53,7 @@ const CATEGORY_META: Record<
   weather:  { label: "Weather risk",   icon: <CloudRain size={16} />,      accent: C.blue,    bg: "#F1F7FE", border: "#BFDBFE" },
 };
 
-export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => void }) {
+export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
   const [data, setData]           = useState<ProblemsResponse>(EMPTY);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -114,6 +115,11 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
 
   const { problems, summary } = data;
 
+  // Exact Gantt task sets behind the KPI counts (a problem can cover several
+  // tasks, and the same task can surface in more than one problem — dedupe).
+  const allProblemTaskIds = Array.from(new Set(problems.flatMap(p => p.taskIds || [])));
+  const criticalTaskIds = Array.from(new Set(problems.filter(p => p.severity === "critical").flatMap(p => p.taskIds || [])));
+
   if (loading && problems.length === 0)
     return <div style={{ padding: 20, color: C.gray }}>Scanning your portfolio for issues…</div>;
 
@@ -142,8 +148,26 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
 
       {/* KPI strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, marginBottom: 20 }}>
-        <KpiCard label="Open Problems"     value={`${summary.total}`}             valueColor={summary.total > 0 ? C.red : C.greenDark}      sub="Need a decision" />
-        <KpiCard label="Critical"          value={`${summary.critical}`}          valueColor={summary.critical > 0 ? C.redDark : C.greenDark} sub="Double-bookings" />
+        <KpiCard
+          label="Needs Attention"
+          value={`${summary.total}`}
+          valueColor={summary.total > 0 ? C.red : C.greenDark}
+          sub="Need a decision"
+          onClick={onNav && summary.total > 0
+            ? () => onNav("gantt", undefined, allProblemTaskIds.length > 0 ? { ganttTaskIds: allProblemTaskIds } : { ganttStatus: "problems" })
+            : undefined}
+          actionLabel="View in Timeline"
+        />
+        <KpiCard
+          label="Double-Bookings"
+          value={`${summary.critical}`}
+          valueColor={summary.critical > 0 ? C.redDark : C.greenDark}
+          sub="Same person, two jobs at once"
+          onClick={onNav && summary.critical > 0
+            ? () => onNav("gantt", undefined, criticalTaskIds.length > 0 ? { ganttTaskIds: criticalTaskIds } : { ganttStatus: "conflict" })
+            : undefined}
+          actionLabel="View in Timeline"
+        />
         <KpiCard label="Projects Affected" value={`${summary.projectsAffected}`} valueColor={C.amber}                                        sub={`of ${summary.projectsTotal} active`} />
       </div>
 
