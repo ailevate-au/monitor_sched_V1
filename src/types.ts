@@ -17,6 +17,8 @@ export interface Project {
   weatherRisk: boolean;
   overBudget: boolean;
   retentionPercent?: number;
+  /** Email of the PM who owns this project. PMs only see their own projects. */
+  managerEmail?: string;
 }
 
 export interface Resource {
@@ -59,6 +61,11 @@ export interface Task {
   cost_override?: number | null;
   cost_override_type?: "hourly" | "daily" | "lump_sum" | null;
   percent_complete?: number;
+  /**
+   * PM-controlled lifecycle, separate from the engine-derived `status`
+   * (conflict/weather/etc). PMs set this; "delayed" triggers a real cascade.
+   */
+  pmStatus?: "not_started" | "in_progress" | "complete" | "delayed";
 }
 
 export interface ProgressClaim {
@@ -167,7 +174,7 @@ export interface CostCategory {
 // plain-language issue carrying 2–3 suggested fixes; the owner picks one,
 // confirms, and the problem resolves.
 
-export type ProblemCategory = "conflict" | "late" | "fragile" | "weather";
+export type ProblemCategory = "conflict" | "late" | "fragile" | "weather" | "unassigned";
 export type ProblemSeverity = "critical" | "high" | "medium";
 
 /** A candidate replacement attached to a "reassign" action. */

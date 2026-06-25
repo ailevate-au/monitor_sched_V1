@@ -10,7 +10,9 @@ import {
   ChevronDown,
   ChevronUp,
   CalendarDays,
+  UserX,
 } from "lucide-react";
+import { useAuth } from "../lib/auth";
 import {
   Problem,
   ProblemAction,
@@ -51,9 +53,13 @@ const CATEGORY_META: Record<
   late:     { label: "Running late",   icon: <Clock size={16} />,          accent: C.amber,   bg: "#FFFBEB", border: "#FCD34D" },
   fragile:  { label: "Tight handover", icon: <Link2 size={16} />,          accent: C.amber,   bg: "#FFFBF2", border: "#FDE68A" },
   weather:  { label: "Weather risk",   icon: <CloudRain size={16} />,      accent: C.blue,    bg: "#F1F7FE", border: "#BFDBFE" },
+  unassigned: { label: "No one assigned", icon: <UserX size={16} />,        accent: C.amber,   bg: "#FFFBF2", border: "#FDE68A" },
 };
 
 export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
+  const { user } = useAuth();
+  const isPM = user?.role === "PM";
+  const [myProjectNames, setMyProjectNames] = useState<Set<string> | null>(null);
   const [data, setData]           = useState<ProblemsResponse>(EMPTY);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -82,6 +88,19 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
   };
 
   useEffect(() => { load(); }, []);
+
+  // PMs only see their own projects, so they shouldn't see cross-project problems
+  // that touch a project they don't own. Build the set of names they DO own.
+  useEffect(() => {
+    if (!isPM || !user?.email) { setMyProjectNames(null); return; }
+    fetch("/api/v1/projects")
+      .then(r => r.json())
+      .then((rows: any[]) => {
+        if (!Array.isArray(rows)) return;
+        setMyProjectNames(new Set(rows.filter(p => p.managerEmail === user.email).map(p => p.name)));
+      })
+      .catch(() => {});
+  }, [isPM, user?.email]);
 
   const confirmResolve = () => {
     if (!pending) return;
@@ -113,7 +132,20 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
       .catch(() => { setSubmitting(false); setPending(null); alert("Network error while resolving."); });
   };
 
-  const { problems, summary } = data;
+  // For a PM, drop any problem that touches a project they don't own (a problem
+  // can span two projects via "A + B"). The Owner sees everything.
+  const visibleProblems = (isPM && myProjectNames)
+    ? data.problems.filter(p => p.projectName.split(" + ").every(n => myProjectNames.has(n.trim())))
+    : data.problems;
+  const problems = visibleProblems;
+  const summary = (isPM && myProjectNames)
+    ? {
+        total: visibleProblems.length,
+        critical: visibleProblems.filter(p => p.severity === "critical").length,
+        projectsAffected: new Set(visibleProblems.flatMap(p => p.projectName.split(" + ").map(n => n.trim()))).size,
+        projectsTotal: myProjectNames.size,
+      }
+    : data.summary;
 
   // Exact Gantt task sets behind the KPI counts (a problem can cover several
   // tasks, and the same task can surface in more than one problem — dedupe).

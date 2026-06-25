@@ -31,6 +31,7 @@ import { changeHistory, makeChangeSetId, type ChangeSet } from "../lib/changeHis
 import TimelineAdjustPanel from "./TimelineAdjustPanel";
 import ChangeHistoryTab from "./ChangeHistoryTab";
 import { Timer, Users, FolderKanban, HardHat, History } from "lucide-react";
+import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
 
 const C = {
   navy:       "#0F1F3D",
@@ -85,6 +86,23 @@ function getResourceViewBarColor(task: Task): string {
 
 function taskDisplayName(task: Task): string {
   return (task.name || "").split(" — ")[0] || "Unnamed Task";
+}
+
+/** Small per-project weather indicator (the project's own state, not Sydney). */
+function WeatherChip({ state, chip }: { state: string; chip?: { icon: string; temp: string; desc: string; risk: string } }) {
+  if (!chip) return null;
+  const danger = chip.risk === "danger";
+  const warn = chip.risk === "warn";
+  const bg = danger ? C.redBg : warn ? C.amberBg : "#F1F5F9";
+  const fg = danger ? C.redDark : warn ? C.amber : C.gray;
+  return (
+    <span
+      title={`${state}: ${chip.desc}, ${chip.temp}`}
+      style={{ display:"inline-flex", alignItems:"center", gap:3, marginLeft:6, fontSize:9.5, fontWeight:600, color:fg, background:bg, border:`0.5px solid ${danger ? "#FECACA" : warn ? "#FCD34D" : C.grayLight}`, padding:"1px 6px", borderRadius:10 }}
+    >
+      <span>{chip.icon}</span>{state} {chip.temp}
+    </span>
+  );
 }
 
 function TaskNameWithId({
@@ -231,12 +249,21 @@ function MultiSelectDropdown({
 const PROBLEM_STATUSES = new Set(["conflict", "fragile", "overdue", "weather"]);
 
 export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { onNav?: AppNavigate; initialStatus?: string | null; initialTaskIds?: string[] | null }) {
+  const { user } = useAuth();
+  const isPM = user?.role === "PM";
   const { masters } = useMasters(true);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [weatherForecast, setWeatherForecast] = useState<any[]>([]);
+  // Per-state "current conditions" chips, keyed by state code (NSW, VIC, …).
+  const [weatherSummary, setWeatherSummary] = useState<Record<string, { icon: string; temp: string; desc: string; risk: string }>>({});
   const [loading, setLoading] = useState(true);
+  // Set after a PM "Delayed" save: how many new issues that change just created.
+  const [pmCascadeNote, setPmCascadeNote] = useState<{ newIssues: number; taskName: string } | null>(null);
+  // Live committed problems (same source as the Problems hub) — so the Timeline
+  // surfaces ALL issue types on the schedule, not just unsaved clashes.
+  const [openProblems, setOpenProblems] = useState<any[]>([]);
 
   // Modal / Editing form State
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -432,13 +459,30 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
       .then(res => res.json())
       .then(projData => {
         const list = Array.isArray(projData) ? projData : [];
-        setProjects(list);
-        setFormProject(prev => prev || list[0]?.name || "");
+        // PMs only see their own projects — scope both the project list and the
+        // tasks shown on the Timeline to what they manage.
+        const visList = scopeProjects(user, list);
+        const visIds = new Set(visList.map(p => p.id));
+        setProjects(visList);
+        if (user && user.role === "PM") {
+          setTasks(prev => (Array.isArray(prev) ? prev.filter(t => visIds.has(t.projectId)) : prev));
+        }
+        setFormProject(prev => prev || visList[0]?.name || "");
         return fetch("/api/v1/weather/forecast");
       })
       .then(res => res.json())
       .then(forecastData => {
         setWeatherForecast(forecastData);
+        return fetch("/api/v1/weather/summary");
+      })
+      .then(res => res.json())
+      .then(summary => {
+        if (summary && typeof summary === "object") setWeatherSummary(summary);
+        return fetch("/api/v1/problems");
+      })
+      .then(res => res.json())
+      .then(probData => {
+        setOpenProblems(Array.isArray(probData?.problems) ? probData.problems : []);
         setLoading(false);
       })
       .catch(err => {
@@ -1272,6 +1316,33 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
     setShowAddModal(true);
   };
 
+  // PM lifecycle change. "delayed" does a REAL cascade server-side, which can
+  // create cross-project clashes the PM can't see but the Owner will.
+  const applyPmStatus = (task: Task, pmStatus: "not_started" | "in_progress" | "complete" | "delayed") => {
+    let delayDays = 0;
+    if (pmStatus === "delayed") {
+      const raw = window.prompt("How many working days is this job delayed?", "5");
+      if (raw === null) return;
+      delayDays = parseInt(raw, 10) || 0;
+      if (delayDays === 0) return;
+    }
+    setShowAddModal(false);
+    fetch(`/api/v1/tasks/${task.id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pmStatus, delayDays }),
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (!res.success) { alert(res.error || "Could not update the job."); return; }
+        if (pmStatus === "delayed") {
+          setPmCascadeNote({ newIssues: res.newIssues ?? 0, taskName: taskDisplayName(task) });
+        }
+        loadAllData();
+      })
+      .catch(() => alert("Network error while updating the job."));
+  };
+
   // Open Create Dialog
   const handleOpenCreate = () => {
     setEditingTask(null);
@@ -1432,8 +1503,59 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
     return <div style={{ padding: 25, color: C.gray, textAlign: "center", fontSize: 14 }}>Loading programme...</div>;
   }
 
+  // Committed problems on this schedule, scoped to what the viewer can see.
+  const visibleProjectNames = new Set(projects.map(p => p.name));
+  const timelineProblems = openProblems.filter(p =>
+    !isPM || String(p.projectName || "").split(" + ").every(n => visibleProjectNames.has(n.trim()))
+  );
+  const issueCounts = timelineProblems.reduce<Record<string, number>>((acc, p) => {
+    acc[p.category] = (acc[p.category] || 0) + 1;
+    return acc;
+  }, {});
+  const ISSUE_META: Record<string, { label: string; color: string }> = {
+    conflict:   { label: "Double-booking", color: C.red },
+    late:       { label: "Running late",   color: C.redDark },
+    fragile:    { label: "Tight handover", color: C.amber },
+    weather:    { label: "Weather risk",   color: C.blue },
+    unassigned: { label: "No one assigned", color: C.gray },
+  };
+
   return (
     <div>
+      {/* PM cascade note — a "Delayed" change just rippled across the portfolio */}
+      {pmCascadeNote && (
+        <div style={{ marginBottom: 12, borderRadius: 12, border: `1px solid ${pmCascadeNote.newIssues > 0 ? "#FCD34D" : "#BBF7D0"}`, background: pmCascadeNote.newIssues > 0 ? C.amberBg : C.greenBg, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 16 }}>{pmCascadeNote.newIssues > 0 ? "🔗" : "✓"}</span>
+          <span style={{ flex: 1, minWidth: 200, fontSize: 12.5, color: pmCascadeNote.newIssues > 0 ? C.amber : C.greenDark, fontWeight: 600 }}>
+            {pmCascadeNote.newIssues > 0
+              ? `Delaying "${pmCascadeNote.taskName}" moved the jobs that follow — and created ${pmCascadeNote.newIssues} new issue${pmCascadeNote.newIssues > 1 ? "s" : ""} across the portfolio.${isPM ? " Some may be on projects you don't manage — the owner will see them." : ""}`
+              : `Delaying "${pmCascadeNote.taskName}" moved the dependent jobs. No new clashes.`}
+          </span>
+          {!isPM && pmCascadeNote.newIssues > 0 && onNav && (
+            <button type="button" onClick={() => onNav("problems")} style={{ padding: "5px 11px", fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: "none", background: C.blue, color: C.white, cursor: "pointer" }}>See Problems →</button>
+          )}
+          <button type="button" onClick={() => setPmCascadeNote(null)} style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: `0.5px solid ${C.grayLight}`, background: C.white, color: C.gray, cursor: "pointer" }}>Dismiss</button>
+        </div>
+      )}
+
+      {/* Issues on this schedule — every category, not just unsaved clashes */}
+      {timelineProblems.length > 0 && (
+        <div style={{ marginBottom: 12, borderRadius: 12, border: `1px solid ${C.grayLight}`, background: C.white, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.textMuted }}>Issues on this schedule:</span>
+          {Object.entries(issueCounts).map(([cat, n]) => {
+            const meta = ISSUE_META[cat] || { label: cat, color: C.gray };
+            return (
+              <span key={cat} onClick={() => onNav?.("problems")} title="Open Problems"
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: meta.color, background: "#F8FAFC", border: `1px solid ${C.grayLight}`, padding: "2px 9px", borderRadius: 20, cursor: onNav ? "pointer" : "default" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: meta.color, display: "inline-block" }} />
+                {meta.label} · {n}
+              </span>
+            );
+          })}
+          {onNav && <button type="button" onClick={() => onNav("problems")} style={{ marginLeft: "auto", padding: "4px 10px", fontSize: 11, fontWeight: 700, borderRadius: 6, border: "none", background: C.blue, color: C.white, cursor: "pointer" }}>Open Problems →</button>}
+        </div>
+      )}
+
       {/* Conflict alert — compact header, expandable details */}
       {draftConflicts.length > 0 && (
         <div style={{ marginBottom: 16, borderRadius: 12, border: `1.5px solid ${C.red}`, background: C.redBg, overflow: "hidden", boxShadow: "0 4px 14px rgba(224,74,74,0.10)" }}>
@@ -1831,8 +1953,12 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
       {scheduleViewMode !== "history" && (
         <div style={{ display:"flex", gap:16, alignItems:"center", fontSize:12, color:C.textMuted, flexWrap: "wrap", marginBottom:14 }}>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.red, borderRadius:"50%", display:"inline-block" }} />Conflict</span>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.redDark, borderRadius:"50%", display:"inline-block" }} />Late</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.amber, borderRadius:"50%", display:"inline-block" }} />Fragile</span>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.blue, borderRadius:"50%", display:"inline-block" }} />Weather</span>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.green, borderRadius:"50%", display:"inline-block" }} />Done</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.blueMid, borderRadius:"50%", display:"inline-block" }} />On track</span>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:"#94A3B8", border:"1px dashed #64748B", borderRadius:4, display:"inline-block" }} />Unassigned</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, border:`2px dashed ${C.amber}`, borderRadius:4, display:"inline-block" }} />Draft (unsaved)</span>
           {(scheduleViewMode === "overall" || scheduleViewMode === "projectteam") && <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ display:"inline-block", width:2, height:14, background:C.blue, borderRadius:1 }} /><span style={{ fontSize:9, marginLeft:1 }}>▼</span>PC Deadline</span>}
         </div>
@@ -1934,6 +2060,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                         <span style={{ fontSize:9, color:C.gray, marginRight:2, transition:"transform 0.15s", display:"inline-block", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>
                         <span style={{ width:9, height:9, background:group.color, borderRadius:"50%", display:"inline-block", flexShrink:0 }} />
                         {projName.split(" —")[0]}
+                        {projectData?.state && <WeatherChip state={projectData.state} chip={weatherSummary[projectData.state]} />}
                         {projectData?.pcEndDate && <span style={{ fontSize:9.5, fontWeight:500, color:C.gray, marginLeft:4 }}>PC: {projectData.pcEndDate}</span>}
                         {isCollapsed && <span style={{ fontSize:9, color:C.gray, fontWeight:400, marginLeft:2 }}>({group.tasks.length} task{group.tasks.length !== 1 ? "s" : ""})</span>}
                       </div>
@@ -2247,6 +2374,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                       <span style={{ fontSize:9, color:C.gray, marginRight:2, transition:"transform 0.15s", display:"inline-block", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>
                       <span style={{ width:9, height:9, background:group.color, borderRadius:"50%", display:"inline-block", flexShrink:0 }} />
                       {projName.split(" —")[0]}
+                      {projectData?.state && <WeatherChip state={projectData.state} chip={weatherSummary[projectData.state]} />}
                       {projectData?.pcEndDate && (
                         <span style={{ fontSize:9.5, fontWeight:500, color:C.gray, marginLeft:4 }}>PC: {projectData.pcEndDate}</span>
                       )}
@@ -2297,6 +2425,17 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                           <span style={{ fontSize: 9.5, color: C.gray, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                             👷 {task.assignee} · {task.trade}
                           </span>
+                          {(() => {
+                            const firstDep = (task.dependencies || "").split(",").map(d => d.trim()).filter(d => d && d !== "-")[0];
+                            const depTask = firstDep ? displayTasks.find(t => t.id === firstDep) : null;
+                            if (!depTask) return null;
+                            return (
+                              <span style={{ fontSize: 9, color: C.purple, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}
+                                title={`Starts after "${depTask.name}" finishes (${task.dependency_type || "FS"}). Move that job and this one moves too.`}>
+                                ↳ after {taskDisplayName(depTask)}{task.dependency_type === "SS" ? " (starts together)" : ""}
+                              </span>
+                            );
+                          })()}
                         </div>
 
                         {/* Columns backgrounds */}
@@ -2951,6 +3090,34 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                         </div>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* PM job-status controls — change the lifecycle of a live job.
+                  "Mark delayed" cascades and can ripple into other projects. */}
+              {editingTask && !editingTask.id.startsWith("DRAFT-") && !editingTask.id.startsWith("DRAFT") && (
+                <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, background: "#F8FAFC", border: `0.5px solid ${C.grayLight}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, marginBottom: 8 }}>
+                    Job status {isPM ? "(you manage this job)" : ""}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <button type="button" onClick={() => applyPmStatus(editingTask, "in_progress")}
+                      style={{ padding: "6px 12px", borderRadius: 7, background: C.white, border: `0.5px solid ${C.grayLight}`, color: C.text, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+                      ▶ Mark in progress
+                    </button>
+                    <button type="button" onClick={() => applyPmStatus(editingTask, "complete")}
+                      style={{ padding: "6px 12px", borderRadius: 7, background: C.greenBg, border: `0.5px solid #BBF7D0`, color: C.greenDark, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+                      ✓ Mark complete
+                    </button>
+                    <button type="button" onClick={() => applyPmStatus(editingTask, "delayed")}
+                      style={{ padding: "6px 12px", borderRadius: 7, background: C.amberBg, border: `0.5px solid #FCD34D`, color: C.amber, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+                      title="Push this job out by N working days — dependent jobs move too">
+                      ⏳ Mark delayed…
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: C.gray, marginTop: 6 }}>
+                    Delaying a job moves the jobs that depend on it — and can create clashes on other projects.
                   </div>
                 </div>
               )}

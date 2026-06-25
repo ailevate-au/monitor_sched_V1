@@ -7,7 +7,7 @@ import ExcelJS from "exceljs";
 import { dbInstance } from "./src/server/db";
 import { runConflictDetection, computeCascade, getConflictHubPayload, getReplacementCandidates } from "./src/server/conflictEngine";
 import { RESOURCE_PROFILES } from "./src/server/seedData";
-import { getBOMForecast, setStormScenario } from "./src/server/bomWeather";
+import { getBOMForecast, getForecast, getWeatherSummary, setStormScenario } from "./src/server/bomWeather";
 import {
   getMastersBundle,
   getMasterList,
@@ -206,6 +206,10 @@ async function startServer() {
 
     const { summary } = buildProblemsResponse();
     const activeProjects = db.projects.filter(p => p.status === "ACTIVE").length;
+    const activeProjectIds = new Set(db.projects.filter(p => p.status === "ACTIVE").map(p => p.id));
+    const unassignedCount = db.tasks.filter(
+      t => !t.assigneeId && t.status !== "completed" && activeProjectIds.has(t.projectId)
+    ).length;
 
     // On-track % = share of live (not-completed) tasks with no problem flag.
     const live = db.tasks.filter(t => t.status !== "completed" && (t.percent_complete ?? 0) < 100);
@@ -223,7 +227,8 @@ async function startServer() {
       projectsAffected: summary.projectsAffected,
       // kept for backward-compat with older callers
       resourceConflictsCount: summary.total,
-      whsLtiFreeDays: 142,
+      // jobs on active projects with nobody assigned (an issue the owner can act on)
+      unassignedCount,
       weatherAlert: {
         severity: stormDays > 0 ? "warning" : "ok",
         title: "Weather",
@@ -491,6 +496,48 @@ async function startServer() {
     runConflictDetection();
     db.save();
     res.json({ success: true, tasks: db.tasks });
+  });
+
+  // POST /api/v1/tasks/:id/status — PM-driven lifecycle change.
+  // "delayed" does a REAL cascade (shifts the task + dependents), which can create
+  // cross-project clashes the PM can't see but the Owner will. Returns the refreshed
+  // problem summary so the UI can say "this created N new issue(s)".
+  app.post("/api/v1/tasks/:id/status", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { pmStatus, delayDays } = req.body || {};
+    const task = db.tasks.find(t => t.id === id) as any;
+    if (!task) return res.status(404).json({ success: false, error: "Task not found" });
+
+    const before = buildProblemsResponse().summary.total;
+
+    if (pmStatus === "complete") {
+      task.percent_complete = 100;
+      task.status = "completed";
+      task.pmStatus = "complete";
+    } else if (pmStatus === "in_progress") {
+      if ((task.percent_complete ?? 0) <= 0) task.percent_complete = 40;
+      task.pmStatus = "in_progress";
+    } else if (pmStatus === "not_started") {
+      task.percent_complete = 0;
+      task.pmStatus = "not_started";
+    } else if (pmStatus === "delayed") {
+      const days = parseInt(delayDays, 10) || 0;
+      if (days !== 0) applyShift(id, days);
+      task.pmStatus = "delayed";
+    } else {
+      return res.status(400).json({ success: false, error: `Unknown status: ${pmStatus}` });
+    }
+
+    runConflictDetection();
+    db.save();
+    const refreshed = buildProblemsResponse();
+    res.json({
+      success: true,
+      newIssues: Math.max(0, refreshed.summary.total - before),
+      ...refreshed,
+      tasks: db.tasks,
+    });
   });
 
   // GET /api/v1/resources: lists resource personnel and utilization values
@@ -768,6 +815,43 @@ async function startServer() {
       });
     }
 
+    // 1b) UNASSIGNED — active-project jobs with nobody assigned. A real problem:
+    // the work has no one to do it. Suggest the best same-trade person who's free.
+    const activeIds = new Set(db.projects.filter(p => p.status === "ACTIVE").map(p => p.id));
+    const unassignedTasks = db.tasks.filter(
+      t => !t.assigneeId && t.status !== "completed" && activeIds.has(t.projectId)
+    );
+    for (const t of unassignedTasks) {
+      const cands = getReplacementCandidates("", t.tradeRequired, t)
+        .filter((cd: any) => !conflictedIds.has(cd.id))
+        .slice(0, 2);
+      const actions: any[] = cands.map((cd: any, i: number) => {
+        const prof = profileFor(cd.id);
+        const interstate = cd.same_state === false ? ` Lives in ${cd.state} (would travel).` : "";
+        return {
+          id: `assign:${t.id}:${cd.id}`,
+          kind: "reassign",
+          label: `Assign ${cd.name}`,
+          detail: `Put ${cd.name} on this job. Costs ${cd.rate}, ${cd.util}% booked right now.${interstate} ${prof.bio || ""}`.trim(),
+          recommended: i === 0,
+          resource: { ...cd, bio: prof.bio, skills: prof.skills, recommended: i === 0 },
+        };
+      });
+      problems.push({
+        id: `prob-unassigned-${t.id}`,
+        category: "unassigned",
+        severity: "medium",
+        taskIds: [t.id],
+        title: `No one is assigned to ${t.name}`,
+        projectName: projectNameFor(t.projectId),
+        what: `"${t.name}" (${t.start} – ${t.end}) needs a ${t.tradeRequired}, but nobody is on it yet.`,
+        impact: actions.length
+          ? "Until someone's assigned, this job can't start and anything waiting on it slips."
+          : `No ${t.tradeRequired} is currently free for these dates — you may need to move the job or bring someone in.`,
+        suggestedActions: actions,
+      });
+    }
+
     // 2) LATE — tasks already past their end date (relative to the scenario date)
     const lateByProject = new Map<string, any[]>();
     for (const t of db.tasks) {
@@ -928,6 +1012,12 @@ async function startServer() {
         db.undoStack.push({ targetId: task.id, prevAssigneeId: task.assigneeId });
         db.conflictResolutionLog.push({ resourceId: task.assigneeId || "", resolvedAt: new Date().toISOString(), undone: false });
         task.assigneeId = targetResourceId;
+      } else if (kind === "assign") {
+        // assign:<taskId>:<resourceId> — put someone on an unassigned job.
+        const targetTask = db.tasks.find(t => t.id === parts[1]);
+        if (!targetTask) return res.status(404).json({ success: false, error: "No task found for this problem" });
+        db.undoStack.push({ targetId: targetTask.id, prevAssigneeId: targetTask.assigneeId });
+        targetTask.assigneeId = parts[2];
       } else if (kind === "shift") {
         applyShift(parts[1], parseInt(parts[2], 10) || 0);
       } else if (kind === "shiftmany") {
@@ -966,8 +1056,13 @@ async function startServer() {
     setTask("TSK-P2-01", { percent_complete: 85, status: "overdue" });
     // 4) A tight handover — Level-5 steel pulled up against Level-4 finishing
     setTask("TSK-P1-04", { start: "2026-06-26", end: "2026-07-08", durationDays: 9 });
-    // 5) A storm hits mid-week
+    // 5) A storm hits mid-week (NSW only — Parramatta is exposed, interstate jobs aren't).
+    //    Pull a clean NSW job into the storm window so the weather risk surfaces
+    //    on a job that isn't already a clash.
     setStormScenario(true);
+    setTask("TSK-P1-06", { start: "2026-06-03", end: "2026-06-09", durationDays: 5 });
+    // 6) A job with nobody assigned — the new batch left the HSE audit unstaffed
+    setTask("TSK-P1-08", { assigneeId: null });
     runConflictDetection();
     db.save();
     res.json({ success: true, ...buildProblemsResponse() });
@@ -980,6 +1075,14 @@ async function startServer() {
     setTask("TSK-P2-01", { percent_complete: 100, status: "completed" });
     setTask("TSK-P1-04", { start: "2026-06-30", end: "2026-07-10", durationDays: 9 });
     setStormScenario(false);
+    setTask("TSK-P1-06", { start: "2026-06-10", end: "2026-06-21", durationDays: 9 });
+    setTask("TSK-P1-08", { assigneeId: "r8" });
+    // Restore the PM-flow baseline: Tom's North-Sector piling + its p2 dependents,
+    // in case a PM "Delayed" cascade moved them this session.
+    setTask("TSK-P2-02", { start: "2026-06-02", end: "2026-06-20", durationDays: 15 });
+    setTask("TSK-P2-05", { start: "2026-07-21", end: "2026-08-07", durationDays: 14 });
+    setTask("TSK-P2-06", { start: "2026-06-26", end: "2026-07-08", durationDays: 9 });
+    setTask("TSK-P2-07", { start: "2026-07-07", end: "2026-07-18", durationDays: 9 });
     // Ensure Ben still owns his original Level-4 pour even if it was reassigned
     // away during a resolve, so the baseline is fully restored.
     setTask("TSK-P1-01", { assigneeId: "r1" });
@@ -1440,9 +1543,16 @@ async function startServer() {
     res.json({ success: true, task, alerts: db.alerts });
   });
 
-  // Weather and forecast
+  // Weather and forecast — per-state so a WA job isn't judged by Sydney's sky.
   app.get("/api/v1/weather/forecast", (req, res) => {
-    res.json(getBOMForecast());
+    const state = typeof req.query.state === "string" ? req.query.state : undefined;
+    res.json(getForecast(state));
+  });
+
+  // GET /api/v1/weather/summary — compact "current conditions" chip per state,
+  // used to paint a small weather indicator on each Timeline row.
+  app.get("/api/v1/weather/summary", (_req, res) => {
+    res.json(getWeatherSummary());
   });
 
   // GET /api/v1/reports/export: PDF & spreadsheet generation

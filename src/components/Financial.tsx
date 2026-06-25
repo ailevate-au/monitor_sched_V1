@@ -290,6 +290,12 @@ export default function ScreenFinancial() {
   ];
 
   const totalContract = projList.reduce((acc, p) => acc + p.finalContractSum, 0);
+  // Retention held = 5% of certified cost on projects not yet at practical completion.
+  // Moved here from the Projects tab so all the deep finance figures live together.
+  const totalRetention = projList.reduce(
+    (acc, p) => acc + (p.status !== "PRACTICAL_COMPLETION" ? p.actualCost * 0.05 : 0),
+    0
+  );
   const totalProfitPool = projList.reduce((acc, p) => acc + (p.finalContractSum - p.actualCost), 0);
   const weightedMargin = totalContract > 0 ? (totalProfitPool / totalContract) * 100 : 0;
 
@@ -694,6 +700,7 @@ export default function ScreenFinancial() {
           <KpiCard label="Portfolio contract sum" value={`A$${totalContract.toFixed(1)}M`} valueColor={C.blue} sub={`${projList.length} active contracts · ${PERIOD_LABELS[periodFilter]}`} />
           <KpiCard label="Certified value" value={`A$${totalCertifiedClaimsVal.toFixed(1)}M`} sub={`${((totalCertifiedClaimsVal / totalContract) * 100 || 0).toFixed(0)}% of contract sum · ${PERIOD_LABELS[periodFilter]}`} />
           <KpiCard label="Total margin pool" value={`A$${totalProfitPool.toFixed(1)}M`} valueColor={C.greenDark} sub="All active projects (all-time)" />
+          <KpiCard label="Retention held (5%)" value={`A$${totalRetention.toFixed(2)}M`} sub="Held under standard AS 4000-1997" />
           <KpiCard label="Margin health" value={weightedMargin > 11 ? `${weightedMargin.toFixed(1)}%` : "In review"} valueColor={weightedMargin > 11 ? C.green : C.amber} sub="Portfolio-weighted (all-time)" />
         </div>
 

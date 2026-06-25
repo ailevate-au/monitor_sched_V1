@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
 
 const C = {
   navy:       "#0F1F3D",
@@ -118,8 +119,9 @@ export const Btn = ({ children, primary, small, danger, onClick, style, disabled
 const PROBLEM_TASK_STATUSES = new Set(["conflict", "overdue", "weather", "fragile"]);
 
 export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void }) {
+  const { user } = useAuth();
   const [stats, setStats] = useState<any>(null);
-  const [projects, setProjects] = useState<any[]>([]);
+  const [allProjects, setAllProjects] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [projectsOpen, setProjectsOpen] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -127,7 +129,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
   useEffect(() => {
     const load = () => {
       fetch("/api/v1/dashboard").then(r => r.json()).then(setStats).catch(() => {});
-      fetch("/api/v1/projects").then(r => r.json()).then(d => { if (Array.isArray(d)) setProjects(d); }).catch(() => {});
+      fetch("/api/v1/projects").then(r => r.json()).then(d => { if (Array.isArray(d)) setAllProjects(d); }).catch(() => {});
       fetch("/api/v1/tasks").then(r => r.json()).then(d => { if (Array.isArray(d)) setTasks(d); }).catch(() => {});
     };
     load();
@@ -140,6 +142,8 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
   }
 
   const issues = stats.totalIssues ?? 0;
+  // PMs only see their own projects in the list below.
+  const projects = scopeProjects(user, allProjects);
   const activeProjects = projects.filter(p => p.status === "ACTIVE");
   const toggleProject = (id: string) =>
     setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -182,7 +186,14 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
           onClick={() => onNav("problems")}
           actionLabel="Open Problems"
         />
-        <KpiCard label="Days Without Injury" value={`${stats.whsLtiFreeDays}`} valueColor={C.greenDark} sub="Safe on site" />
+        <KpiCard
+          label="Unassigned Jobs"
+          value={`${stats.unassignedCount ?? 0}`}
+          valueColor={(stats.unassignedCount ?? 0) > 0 ? C.red : C.greenDark}
+          sub={(stats.unassignedCount ?? 0) > 0 ? "Need someone assigned" : "All jobs staffed"}
+          onClick={() => onNav("problems")}
+          actionLabel="Open Problems"
+        />
       </div>
 
       {/* YOUR PROJECTS — collapsible card; each project expands to its jobs */}

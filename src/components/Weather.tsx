@@ -47,6 +47,12 @@ function addDays(isoDate: string, days: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+// State → capital city, for the forecast header (projects span several states).
+const STATE_CITY: Record<string, string> = {
+  NSW: "Sydney", VIC: "Melbourne", QLD: "Brisbane", ACT: "Canberra",
+  WA: "Perth", SA: "Adelaide", NT: "Darwin", TAS: "Hobart",
+};
+
 export default function ScreenWeather() {
   const [forecast, setForecast] = useState<ForecastDay[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,22 +61,44 @@ export default function ScreenWeather() {
   const [affectedTasks, setAffectedTasks] = useState<AffectedTask[]>([]);
   const [rescheduleTask, setRescheduleTask] = useState<AffectedTask | null>(null);
   const [newDays, setNewDays] = useState("3");
+  // Which state's sky are we looking at? Projects sit in different states, so the
+  // owner can switch the outlook rather than always seeing Sydney.
+  const [stateSel, setStateSel] = useState("NSW");
+  const [stateOptions, setStateOptions] = useState<string[]>(["NSW", "VIC", "QLD", "ACT", "WA", "SA"]);
 
-  const loadWeatherData = () => {
-    setLoading(true);
-    // Fetch dashboard stats to read weather forecasts
-    fetch("/api/v1/dashboard")
+  // Discover which states actually have projects, so the selector is relevant.
+  useEffect(() => {
+    fetch("/api/v1/projects")
       .then(res => res.json())
-      .then(data => {
-        if (data.weatherAlert) {
-          setForecast(data.weatherAlert.forecast || []);
-          setWeatherAlertText(data.weatherAlert.text);
-          setSevere(data.weatherAlert.severity === "warning");
+      .then((rows: any[]) => {
+        if (!Array.isArray(rows)) return;
+        const states = Array.from(new Set(rows.map(p => p.state).filter(Boolean)));
+        if (states.length) setStateOptions(states);
+      })
+      .catch(() => {});
+  }, []);
+
+  const loadWeatherData = (state: string) => {
+    setLoading(true);
+    // Per-state forecast — a WA job isn't judged by Sydney's weather.
+    fetch(`/api/v1/weather/forecast?state=${encodeURIComponent(state)}`)
+      .then(res => res.json())
+      .then((days: any[]) => {
+        if (Array.isArray(days)) {
+          setForecast(days);
+          const danger = days.filter(d => d.risk === "danger").length;
+          const warn = days.filter(d => d.risk === "warn").length;
+          setSevere(danger + warn > 0);
+          setWeatherAlertText(
+            danger + warn > 0
+              ? `Rain or storms forecast in ${STATE_CITY[state] || state} this week — some outdoor work may be affected.`
+              : `Clear week ahead in ${STATE_CITY[state] || state} — no weather risk to site work.`
+          );
         }
       })
       .catch(err => console.error("Error loading weather forecast:", err));
 
-    // Fetch affected tasks matching status weather
+    // Fetch affected tasks matching status weather (portfolio-wide)
     fetch("/api/v1/dashboard/tasks?status=weather")
       .then(res => res.json())
       .then(data => {
@@ -94,8 +122,8 @@ export default function ScreenWeather() {
   };
 
   useEffect(() => {
-    loadWeatherData();
-  }, []);
+    loadWeatherData(stateSel);
+  }, [stateSel]);
 
   const handleApplyReschedule = () => {
     if (!rescheduleTask) return;
@@ -116,7 +144,7 @@ export default function ScreenWeather() {
       .then(res => res.json())
       .then(() => {
         setRescheduleTask(null);
-        loadWeatherData();
+        loadWeatherData(stateSel);
         alert(`Done. ${rescheduleTask.id} moved ${offset} day${offset !== 1 ? "s" : ""} later and the lost time is claimed.`);
       })
       .catch(err => console.error("Error applying weather compensation:", err));
@@ -134,9 +162,9 @@ export default function ScreenWeather() {
     <div>
       {/* KPI Stats Grid */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:10, marginBottom:16 }}>
-        <KpiCard label="Weather Status" value={dangerDays > 0 ? "High Storm Alert" : "Stable Conditions"} valueColor={dangerDays > 0 ? C.red : C.green} sub="From the Bureau of Meteorology (NSW)" />
+        <KpiCard label="Weather Status" value={dangerDays > 0 ? "High Storm Alert" : "Stable Conditions"} valueColor={dangerDays > 0 ? C.red : C.green} sub={`From the Bureau of Meteorology (${stateSel})`} />
         <KpiCard label="Strong Wind Limit" value="24 km/h" sub="Tower cranes stop at 45 km/h" />
-        <KpiCard label="Heavy Rain Forecast" value="84mm rain accumulation" valueColor={warningDays > 0 ? C.amber : C.text} sub="Heavy cell Sydney (Wed – Thu)" />
+        <KpiCard label="Heavy Rain Forecast" value={dangerDays + warningDays > 0 ? "Wet mid-week" : "No major rain"} valueColor={warningDays > 0 ? C.amber : C.text} sub={`${STATE_CITY[stateSel] || stateSel} 7-day outlook`} />
         <KpiCard label="Weather Warning Days" value={`${warningDays + dangerDays} days`} valueColor={C.amber} sub="Flagged automatically on your schedule" />
       </div>
 
@@ -159,7 +187,23 @@ export default function ScreenWeather() {
 
       {/* Weather Forecast Details Grid */}
       <Card style={{ padding: "20px" }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 14 }}>7-Day Weather Forecast — Sydney (Bureau of Meteorology)</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
+            7-Day Weather Forecast — {STATE_CITY[stateSel] || stateSel} {stateSel} (Bureau of Meteorology)
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.gray }}>
+            Location
+            <select
+              value={stateSel}
+              onChange={e => setStateSel(e.target.value)}
+              style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, border: `0.5px solid ${C.grayLight}`, color: C.text, background: C.white }}
+            >
+              {stateOptions.map(s => (
+                <option key={s} value={s}>{STATE_CITY[s] || s} · {s}</option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))", gap:10 }}>
           {forecast.map((d, index) => (
             <div key={index} style={{

@@ -1,6 +1,18 @@
 import { MastersBundle } from "../types/masters";
 import { cloneDefaultMasters } from "./mastersDefaults";
 
+/**
+ * Which PM owns which project. PMs only see their own projects, so when a PM
+ * changes their schedule and it ripples into a project they DON'T own, only the
+ * Owner sees the resulting cross-project problem. Demo reference data (not in the
+ * Prisma schema) — applied in memory on load.
+ */
+export const PROJECT_MANAGERS: Record<string, string> = {
+  // The demo PM (pm@flowiq.com.au) runs Victoria Harbour only. Delaying a piling
+  // job here pushes Tom into a clash on Southbank (p3) — which this PM can't see.
+  p2: "pm@flowiq.com.au",
+};
+
 export const DEFAULT_COST_CATEGORIES = [
   { id: "cc1", name: "Labour", is_active: true, sort_order: 1 },
   { id: "cc2", name: "Subcontractors", is_active: true, sort_order: 2 },
@@ -150,8 +162,8 @@ export const DEFAULT_TASKS = [
   { id: "TSK-P1-07", projectId: "p1", name: "Internal Fitout — Level 1 to 3",     assigneeId: "r6",  tradeRequired: "Interior Foreman",     start: "2026-07-14", end: "2026-08-02", durationDays: 15, dependencies: "TSK-P1-03", status: "scheduled",  percent_complete: 0  },
   // Rachel: HSE audit p1 (Jun 16–17, short)
   { id: "TSK-P1-08", projectId: "p1", name: "HSE Site Audit — Q2",                assigneeId: "r8",  tradeRequired: "HSE Officer",          start: "2026-06-16", end: "2026-06-17", durationDays: 2,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
-  // Unassigned: waterproofing open slot
-  { id: "TSK-P1-09", projectId: "p1", name: "External Waterproofing — Tower C",   assigneeId: null,  tradeRequired: "Interior Foreman",     start: "2026-07-01", end: "2026-07-13", durationDays: 9,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
+  // Chris: waterproofing (assigned so the clean baseline has 0 unassigned jobs)
+  { id: "TSK-P1-09", projectId: "p1", name: "External Waterproofing — Tower C",   assigneeId: "r6",  tradeRequired: "Interior Foreman",     start: "2026-07-01", end: "2026-07-13", durationDays: 9,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
   // Ben again in p1 (Jun 29 — no overlap with anything)
   { id: "TSK-P1-10", projectId: "p1", name: "Formwork Strip & Prep — Level 6",    assigneeId: "r1",  tradeRequired: "Formwork Foreman",     start: "2026-06-29", end: "2026-07-08", durationDays: 8,  dependencies: "TSK-P1-02", status: "scheduled",  percent_complete: 0  },
 
@@ -188,8 +200,8 @@ export const DEFAULT_TASKS = [
   { id: "TSK-P3-07", projectId: "p3", name: "External Scaffold — Stage 1",        assigneeId: "r7",  tradeRequired: "Quantity Surveyor",    start: "2026-07-28", end: "2026-08-08", durationDays: 10, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
   // Yuni: coordination p3 — Jul 7, after her p2 finishes Jun 28
   { id: "TSK-P3-08", projectId: "p3", name: "Subcontractor Coordination — Q3",    assigneeId: "r10", tradeRequired: "Project Coordinator",  start: "2026-07-07", end: "2026-08-01", durationDays: 20, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
-  // Unassigned: fire services open slot
-  { id: "TSK-P3-09", projectId: "p3", name: "Fire Services Rough-in — L1 & L2",  assigneeId: null,  tradeRequired: "Services Coordinator", start: "2026-07-21", end: "2026-08-04", durationDays: 11, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
+  // Anika: fire services (assigned so the clean baseline has 0 unassigned jobs)
+  { id: "TSK-P3-09", projectId: "p3", name: "Fire Services Rough-in — L1 & L2",  assigneeId: "r5",  tradeRequired: "Services Coordinator", start: "2026-07-21", end: "2026-08-04", durationDays: 11, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
 
   // ─── NEWCASTLE FORESHORE (p5) — healthy, no problems ────────────────────
   { id: "TSK-P5-01", projectId: "p5", name: "Site Establishment & Early Works",  assigneeId: "r11", tradeRequired: "Site Manager",         start: "2026-07-06", end: "2026-07-17", durationDays: 10, dependencies: "-",        status: "scheduled",  percent_complete: 0  },

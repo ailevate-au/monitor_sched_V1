@@ -259,7 +259,7 @@ export function runConflictDetection(): void {
 
     const isFragile = fragileTasks.some(f => f.id === t.id);
 
-    if (evaluateWeatherRisk(t.start, t.end)) {
+    if (evaluateWeatherRisk(t.start, t.end, resolveStateForTask(t))) {
       t.status = "weather";
     } else if (isFragile) {
       t.status = "fragile";

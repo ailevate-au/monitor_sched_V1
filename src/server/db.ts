@@ -13,6 +13,7 @@ import {
   DEFAULT_PROJECTS,
   DEFAULT_RESOURCES,
   DEFAULT_TASKS,
+  PROJECT_MANAGERS,
   getDefaultMasters,
 } from "./seedData";
 
@@ -238,6 +239,12 @@ export class Datastore {
   }
 
   private modernizeInMemory() {
+    // PM ownership is demo reference data (not persisted) — re-apply on every load.
+    this.projects = this.projects.map(p => ({
+      ...p,
+      managerEmail: PROJECT_MANAGERS[p.id],
+    }));
+
     const seenCategoryNames = new Set(this.costCategories.map((c) => c.name.trim().toLowerCase()));
     const maxSortOrder = this.costCategories.reduce((max, cat) => Math.max(max, cat.sort_order || 0), 0);
     let nextSortOrder = maxSortOrder + 1;

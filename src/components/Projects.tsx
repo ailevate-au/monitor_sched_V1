@@ -4,6 +4,8 @@ import { KpiCard, StatusBadge, Btn, Card } from "./Dashboard";
 import { useMasters } from "../hooks/useMasters";
 import { AppNavigate } from "../types/masters";
 import { LabelWithInfo } from "./InfoTip";
+import { useAuth } from "../lib/auth";
+import { visibleProjects as scopeProjects } from "../lib/auth";
 
 const C = {
   navy:       "#0F1F3D",
@@ -38,6 +40,7 @@ const ProgressBar = ({ pct, color }: { pct: number; color?: string }) => (
 );
 
 export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
+  const { user } = useAuth();
   const { masters } = useMasters(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
@@ -257,17 +260,24 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
     return <div style={{ padding: 20, color: C.gray }}>Loading projects…</div>;
   }
 
-  // Calculate sum metrics from real states
-  const totalContract = projects.reduce((sum, p) => sum + p.finalContractSum, 0);
-  const totalCertified = projects.reduce((sum, p) => sum + p.actualCost, 0);
-  const totalRetention = projects.reduce((sum, p) => sum + (p.status !== "PRACTICAL_COMPLETION" ? p.actualCost * 0.05 : 0), 0);
+  // PMs only see the projects they manage; Owner/Admin see the whole portfolio.
+  const visProjects = scopeProjects(user, projects);
+  // Simple portfolio counts (deep finance figures live on the Finance tab).
+  const activeCount = visProjects.filter(p => p.status === "ACTIVE").length;
 
   return (
     <div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:10, marginBottom:16 }}>
-        <KpiCard label="Total Contract Value" value={`A$${totalContract.toFixed(0)}M`} valueColor={C.blue} sub={`${projects.length} Tier 1 Projects`} />
-        <KpiCard label="Total Certified Cost" value={`A$${totalCertified.toFixed(1)}M`} trend="+A$2.1M over planned bounds" />
-        <KpiCard label="Retention Held (5%)" value={`A$${totalRetention.toFixed(2)}M`} sub="Held under standard AS 4000-1997" />
+        <KpiCard label="Total Projects" value={`${visProjects.length}`} valueColor={C.blue} sub={user?.role === "PM" ? "Assigned to you" : "Across the portfolio"} />
+        <KpiCard label="Active" value={`${activeCount}`} valueColor={C.green} sub="Live on site right now" />
+        <KpiCard
+          label="Total Issues"
+          value={`${totalIssues}`}
+          valueColor={totalIssues > 0 ? C.red : C.greenDark}
+          sub={totalIssues > 0 ? "Open Problems to fix" : "All clear"}
+          onClick={() => onNav?.("problems")}
+          actionLabel="Open Problems"
+        />
       </div>
 
       {/* Demo control strip — create or clear the problem scenario from here */}
@@ -302,7 +312,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
         </div>
       </div>
 
-      {projects.map(p => {
+      {visProjects.map(p => {
         const cats = issuesByProject[p.name] || new Set<string>();
         const hasConflicts = cats.has("conflict");
         const hasFragile = cats.has("fragile");
