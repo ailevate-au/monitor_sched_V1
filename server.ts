@@ -197,23 +197,39 @@ async function startServer() {
     res.json({ success: true, features: PERM_FEATURES, roles: PERM_ROLES, matrix: permissionMatrix });
   });
 
-  // GET /api/v1/dashboard: portfolio statistics and top-level summaries
+  // GET /api/v1/dashboard: portfolio statistics and top-level summaries.
+  // Total Issues is the SAME number the Problems hub and sidebar show, so every
+  // screen agrees on one count.
   app.get("/api/v1/dashboard", (req, res) => {
     const db = dbInstance;
     const weather = getBOMForecast();
 
-    const conflictsCount = db.conflicts.length;
+    const { summary } = buildProblemsResponse();
     const activeProjects = db.projects.filter(p => p.status === "ACTIVE").length;
+
+    // On-track % = share of live (not-completed) tasks with no problem flag.
+    const live = db.tasks.filter(t => t.status !== "completed" && (t.percent_complete ?? 0) < 100);
+    const okTasks = live.filter(t => !["conflict", "overdue", "weather", "fragile"].includes(t.status)).length;
+    const onTrackPct = live.length === 0 ? 100 : Math.round((okTasks / live.length) * 100);
+
+    const stormDays = weather.filter(d => d.risk !== "ok").length;
 
     res.json({
       activeProjectsCount: activeProjects,
-      onProgrammePct: 57,
-      resourceConflictsCount: conflictsCount,
+      onProgrammePct: onTrackPct,
+      // unified issue counts (same as Problems hub + sidebar)
+      totalIssues: summary.total,
+      criticalIssues: summary.critical,
+      projectsAffected: summary.projectsAffected,
+      // kept for backward-compat with older callers
+      resourceConflictsCount: summary.total,
       whsLtiFreeDays: 142,
       weatherAlert: {
-        severity: "warning",
-        title: "BOM Forecast Alert",
-        text: "Heavy rain / severe storm forecast Sydney (Wed 4 Jun – Thu 5 Jun). 2 tasks at Weather Risk.",
+        severity: stormDays > 0 ? "warning" : "ok",
+        title: "Weather",
+        text: stormDays > 0
+          ? "Rain or storms forecast this week — some outdoor work may be affected."
+          : "Clear week ahead — no weather risk to site work.",
         forecast: weather
       }
     });
@@ -715,12 +731,12 @@ async function startServer() {
 
       const actions: any[] = candidates.map((cd: any, i: number) => {
         const prof = profileFor(cd.id);
-        const interstate = cd.same_state === false ? ` · interstate (${cd.state})` : "";
+        const interstate = cd.same_state === false ? ` Lives in ${cd.state} (would travel).` : "";
         return {
           id: `reassign:${cd.id}`,
           kind: "reassign",
-          label: `Reassign to ${cd.name}`,
-          detail: `${cd.rate} · ${cd.util}% current load${interstate}. ${prof.bio || ""}`.trim(),
+          label: `Give the job to ${cd.name}`,
+          detail: `Free these dates. Costs ${cd.rate}, ${cd.util}% booked right now.${interstate} ${prof.bio || ""}`.trim(),
           recommended: i === 0,
           resource: { ...cd, bio: prof.bio, skills: prof.skills, recommended: i === 0 },
         };
@@ -729,8 +745,8 @@ async function startServer() {
         actions.push({
           id: `shift:${reassignTask.id}:14`,
           kind: "accept_delay",
-          label: "Accept a 14-day delay instead",
-          detail: `Keep ${c.resource} on both jobs — push the conflicting task out 14 working days. Downstream tasks cascade automatically.`,
+          label: "Push one job back 2 weeks instead",
+          detail: `Keep ${c.resource} on both jobs and move the second one 2 weeks later. Tasks that wait on it move too.`,
           delayDays: 14,
         });
       }
@@ -740,14 +756,14 @@ async function startServer() {
         category: "conflict",
         severity: "critical",
         taskIds: conflictTasks.map(t => t.id),
-        title: `${c.resource} is booked on two jobs at once`,
+        title: `${c.resource} is booked on two jobs at the same time`,
         projectName: projNames.join(" + ") || (reassignTask ? projectNameFor(reassignTask.projectId) : ""),
         what: (c.overlapPairs && c.overlapPairs.length)
-          ? c.overlapPairs.map((p: any) => `${p.taskA} (${p.datesA}) clashes with ${p.taskB} (${p.datesB})`).join("; ")
+          ? c.overlapPairs.map((p: any) => `${p.taskA} and ${p.taskB} overlap (${p.datesA}).`).join(" ")
           : c.desc,
         impact: candidates.length
-          ? "Whichever job isn't covered will slip, delaying every task that waits on it."
-          : `No other ${c.trade} is free for these dates — accepting a short delay is the only safe option.`,
+          ? "One of the two jobs won't get done on time, and everything waiting on it slips too."
+          : `No other ${c.trade} is free for these dates — pushing one job back is the only safe choice.`,
         suggestedActions: actions,
       });
     }
@@ -767,8 +783,8 @@ async function startServer() {
       const actions: any[] = [{
         id: `shift:${worst.id}:10`,
         kind: "extend_deadline",
-        label: "Re-baseline & approve a 2-week extension",
-        detail: `Shift the overdue task forward 10 working days. Dependent tasks cascade. Clears the overdue flag.`,
+        label: "Give it 2 more weeks",
+        detail: `Move the late job 2 weeks later and clear the red flag. Jobs that wait on it move too.`,
         delayDays: 10,
         recommended: true,
       }];
@@ -780,8 +796,8 @@ async function startServer() {
           actions.push({
             id: `reassign:${cands[0].id}`,
             kind: "reassign",
-            label: `Bring in ${cands[0].name} to recover`,
-            detail: `${cands[0].rate} · ${cands[0].util}% load. ${prof.bio || ""}`.trim(),
+            label: `Bring in ${cands[0].name} to catch up`,
+            detail: `Costs ${cands[0].rate}, ${cands[0].util}% booked. ${prof.bio || ""}`.trim(),
             resource: { ...cands[0], bio: prof.bio, skills: prof.skills },
           });
         }
@@ -791,10 +807,10 @@ async function startServer() {
         category: "late",
         severity: "high",
         taskIds: [worst.id],
-        title: `${projectNameFor(pid)} is running late`,
+        title: `${projectNameFor(pid)} is behind schedule`,
         projectName: projectNameFor(pid),
-        what: `${worst.name} was due ${worst.end} — now ${daysLate} day${daysLate !== 1 ? "s" : ""} overdue${assignee ? ` (assigned: ${assignee.name})` : ""}.`,
-        impact: project ? `Every day past plan adds LD exposure of about A$${(project.ldRatePerDay || 0).toLocaleString()}.` : "Downstream tasks are blocked until this finishes.",
+        what: `${worst.name} was due ${worst.end} — it's ${daysLate} day${daysLate !== 1 ? "s" : ""} late${assignee ? ` (${assignee.name}'s job)` : ""}.`,
+        impact: project ? `Every late day costs about A$${(project.ldRatePerDay || 0).toLocaleString()} in penalties.` : "Nothing after this can start until it's done.",
         suggestedActions: actions,
       });
     }
@@ -811,8 +827,8 @@ async function startServer() {
         actions.push({
           id: `shift:${child.id}:3`,
           kind: "extend_deadline",
-          label: "Add a 3-day buffer before the handover",
-          detail: `Delays the next task 3 working days so there's breathing room after the handover. Removes the tight-schedule risk.`,
+          label: "Add 3 days of breathing room",
+          detail: `Start the next job 3 days later so there's a gap. Removes the risk of a pile-up.`,
           delayDays: 3,
           recommended: true,
         });
@@ -820,8 +836,8 @@ async function startServer() {
       actions.push({
         id: `shift:${f.id}:-2`,
         kind: "extend_deadline",
-        label: "Start the earlier task sooner",
-        detail: `Pulls the earlier task forward 2 working days to open up a safety gap before the handover.`,
+        label: "Start the first job 2 days earlier",
+        detail: `Bring the earlier job forward 2 days to open up a safety gap.`,
         delayDays: -2,
       });
       problems.push({
@@ -829,10 +845,10 @@ async function startServer() {
         category: "fragile",
         severity: "medium",
         taskIds: [f.id],
-        title: `Tight handover on ${f.name}`,
+        title: `No gap between two jobs on ${f.name}`,
         projectName: projectNameFor(parent.projectId),
         what: f.desc,
-        impact: "If the earlier task slips even a day, the next trade can't start — a hidden chain reaction.",
+        impact: "If the first job runs even 1 day over, the next one can't start. Easy to miss.",
         suggestedActions: actions,
       });
     }
@@ -846,24 +862,24 @@ async function startServer() {
         category: "weather",
         severity: "high",
         taskIds: weatherTasks.map(t => t.id),
-        title: `Severe weather threatens ${weatherTasks.length} task(s) this week`,
+        title: `Bad weather could stop ${weatherTasks.length} job(s) this week`,
         projectName: Array.from(new Set(weatherTasks.map(t => projectNameFor(t.projectId)))).join(" + "),
-        what: `BOM forecasts heavy rain and storms (Wed–Fri). Affected: ${weatherTasks.map(t => t.name).join("; ")}.`,
-        impact: "Outdoor works in this window risk rework, safety stand-downs, and unclaimed delay.",
+        what: `Rain and storms forecast this week. Outdoor jobs at risk: ${weatherTasks.map(t => t.name).join("; ")}.`,
+        impact: "Working through the storm risks redoing work, sending crews home, and lost time you can't claim.",
         suggestedActions: [
           {
             id: `shiftmany:${ids}:5`,
             kind: "extend_deadline",
-            label: "Reschedule affected works past the storm",
-            detail: "Move the exposed tasks 5 working days later so they fall in clear weather.",
+            label: "Move these jobs past the storm",
+            detail: "Push the outdoor jobs 5 days later so they land in clear weather.",
             delayDays: 5,
             recommended: true,
           },
           {
             id: `shiftmany:${ids}:7`,
             kind: "extend_deadline",
-            label: "Lodge an Extension of Time & extend the programme",
-            detail: "Treat the storm window as an EOT event and extend affected tasks by 7 working days.",
+            label: "Claim the lost time and extend",
+            detail: "Log the storm as an official delay and move the jobs 7 days later.",
             delayDays: 7,
           },
         ],
@@ -928,6 +944,51 @@ async function startServer() {
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err?.message || "Failed to resolve problem" });
     }
+  });
+
+  // ── DEMO CONTROLS ───────────────────────────────────────────────────────
+  // Drives the live "no issue → issue → resolved" story for the walkthrough.
+  // Simulate: a new job lands on Ben so he's booked on two jobs at once.
+  // Reset:    put that job back on its spare hand → everything on track again.
+  const DEMO_TASK_ID = "TSK-P2-03";   // Victoria Harbour basement formwork
+  const DEMO_BEN_ID = "r1";           // Ben Nguyen (gets double-booked)
+  const DEMO_SPARE_ID = "r9";         // Wayne Roberts (clean owner of the task)
+
+  app.post("/api/v1/demo/simulate", (_req, res) => {
+    const db = dbInstance;
+    const t = db.tasks.find(x => x.id === DEMO_TASK_ID);
+    if (t) {
+      t.assigneeId = DEMO_BEN_ID;
+      t.start = "2026-06-03";
+      t.end = "2026-06-09";
+      t.durationDays = 5;
+      t.percent_complete = 0;
+      t.status = "scheduled";
+    }
+    runConflictDetection();
+    db.save();
+    res.json({ success: true, ...buildProblemsResponse() });
+  });
+
+  app.post("/api/v1/demo/reset", (_req, res) => {
+    const db = dbInstance;
+    // Put the new job back on the spare hand.
+    const t = db.tasks.find(x => x.id === DEMO_TASK_ID);
+    if (t) {
+      t.assigneeId = DEMO_SPARE_ID;
+      t.start = "2026-06-01";
+      t.end = "2026-06-09";
+      t.durationDays = 7;
+      t.percent_complete = 0;
+      t.status = "scheduled";
+    }
+    // Ensure Ben still owns his original Level-4 pour even if it was reassigned
+    // away during a resolve, so the baseline is fully restored.
+    const ben01 = db.tasks.find(x => x.id === "TSK-P1-01");
+    if (ben01) ben01.assigneeId = DEMO_BEN_ID;
+    runConflictDetection();
+    db.save();
+    res.json({ success: true, ...buildProblemsResponse() });
   });
 
   // POST /api/v1/projects/import — bulk import projects (CSV rows or a sample set)

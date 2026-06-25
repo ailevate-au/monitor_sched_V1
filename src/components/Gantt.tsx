@@ -610,8 +610,8 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
       const hardConflicts = conflictData?.metrics?.hardConflicts ?? conflictData?.length ?? 0;
       setSavingMsg(
         hardConflicts > 0
-          ? `Saved. ${hardConflicts} manpower conflict(s) detected — check Conflicts Hub.`
-          : "Programme saved successfully."
+          ? `Saved. ${hardConflicts} person${hardConflicts > 1 ? "s are" : " is"} booked twice — check Problems.`
+          : "Saved."
       );
       window.setTimeout(() => setSavingMsg(null), 4000);
     } catch (err) {
@@ -1328,7 +1328,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
           savedTask: editingTask,
         },
       }));
-      setSavingMsg("Task update added to draft — review conflicts, then save programme.");
+      setSavingMsg("Change saved as a draft — check for clashes, then Save.");
       window.setTimeout(() => setSavingMsg(null), 3500);
       return;
     }
@@ -1366,7 +1366,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
       ...prev,
       [tempId]: { kind: "create", payload },
     }));
-    setSavingMsg("New task added to draft — review conflicts, then save programme.");
+    setSavingMsg("New job saved as a draft — check for clashes, then Save.");
     window.setTimeout(() => setSavingMsg(null), 3500);
   };
 
@@ -1442,7 +1442,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
             <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.redDark }}>
-                {groupedDraftConflicts.length} scheduling conflict{groupedDraftConflicts.length > 1 ? "s" : ""} — not saved
+                {groupedDraftConflicts.length} clash{groupedDraftConflicts.length > 1 ? "es" : ""} — same person booked twice, not saved yet
               </span>
               <span style={{ fontSize: 12, color: C.text, marginLeft: 8 }}>
                 {groupedDraftConflicts.map(([, cs]) => cs[0].resourceName).join(" · ")}
@@ -1474,7 +1474,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                 return (
                   <div key={resourceId} style={{ background: C.white, borderRadius: 10, border: `1px solid #FECACA`, padding: "12px 14px" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: C.redDark, marginBottom: 6 }}>
-                      {primary.resourceName} — scheduling conflict
+                      {primary.resourceName} — booked on two jobs at once
                     </div>
                     {conflicts.map((c, idx) => (
                       <div key={idx} style={{ fontSize: 12, color: C.text, marginBottom: 4 }}>

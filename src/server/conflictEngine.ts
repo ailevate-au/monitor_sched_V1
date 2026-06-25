@@ -14,6 +14,16 @@ import { resourceWouldOverlapTask, getConflictedResourceIds } from "../lib/gantt
 
 const UTIL_WINDOW_WORKING_DAYS = 20;
 
+// The demo is pinned to a fixed "now" so the scenario is stable no matter what
+// the real calendar date is. Everything (weather, dashboard, late detection)
+// aligns to 2 Jun 2026.
+const SCENARIO_TODAY = "2026-06-02";
+function scenarioNow(): Date {
+  const d = new Date(SCENARIO_TODAY);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 function resolveStateForTask(task: Task): string {
   const db = dbInstance;
   const project = db.projects.find(p => p.id === task.projectId);
@@ -54,8 +64,7 @@ function calculateResourceUtil(
 ): number {
   if (allocations.length === 0) return 0;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = scenarioNow();
   const windowEnd = addWorkingDays(today, UTIL_WINDOW_WORKING_DAYS - 1, stateStr);
   const assignedDays = countAssignedWorkingDaysInWindow(allocations, today, windowEnd, stateStr);
   const util = Math.round((assignedDays / UTIL_WINDOW_WORKING_DAYS) * 100);
@@ -114,8 +123,7 @@ export function runConflictDetection(): void {
   const activeTasks = db.tasks;
   const conflictsList: Conflict[] = [];
   const fragileTasks: FragileTaskSummary[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = scenarioNow();
 
   for (const t of activeTasks) {
     if (t.status !== "completed" && (t.percent_complete ?? 0) < 100) {

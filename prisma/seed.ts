@@ -91,7 +91,9 @@ async function main() {
         status: t.status,
         dependencyType: "FS",
         lagDays: 0,
-        percentComplete: t.status === "inprogress" ? 40 : t.id === "TSK-001" ? 15 : 0,
+        percentComplete:
+          (t as any).percent_complete ??
+          (t.status === "completed" ? 100 : t.status === "inprogress" ? 40 : 0),
       },
     });
   }

@@ -10,6 +10,8 @@ import {
   ChevronDown,
   ChevronUp,
   CalendarDays,
+  Zap,
+  RotateCcw,
 } from "lucide-react";
 import {
   Problem,
@@ -60,6 +62,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
   const [resolvedIds, setResolvedIds] = useState<Record<string, string>>({});
   const [pending, setPending]     = useState<{ problem: Problem; action: ProblemAction } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [demoBusy, setDemoBusy]   = useState(false);
   // Cards start expanded; user can collapse the suggested-fixes section per card
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -113,6 +116,20 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
       .catch(() => { setSubmitting(false); setPending(null); alert("Network error while resolving."); });
   };
 
+  // Demo controls — drive the live "no issue → issue → resolved" story.
+  const runDemo = (path: "simulate" | "reset") => {
+    setDemoBusy(true);
+    fetch(`/api/v1/demo/${path}`, { method: "POST" })
+      .then(r => r.json())
+      .then(res => {
+        setDemoBusy(false);
+        setResolvedIds({});
+        if (res && res.problems) setData(parseProblemsResponse(res));
+        else load();
+      })
+      .catch(() => { setDemoBusy(false); load(); });
+  };
+
   const { problems, summary } = data;
 
   // Exact Gantt task sets behind the KPI counts (a problem can cover several
@@ -133,50 +150,61 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
   return (
     <div>
       {/* Header */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 3 }}>
-          {summary.total > 0
-            ? `${summary.total} thing${summary.total > 1 ? "s" : ""} need${summary.total > 1 ? "" : "s"} your attention`
-            : "Everything is on track"}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 3 }}>
+            {summary.total > 0
+              ? `${summary.total} thing${summary.total > 1 ? "s" : ""} need${summary.total > 1 ? "" : "s"} you`
+              : "Everything's on track"}
+          </div>
+          <div style={{ fontSize: 12.5, color: C.gray }}>
+            {summary.total > 0
+              ? `${summary.projectsAffected} of ${summary.projectsTotal} projects have a problem. Pick a fix for each one.`
+              : "No clashes, no late jobs, nothing to worry about."}
+          </div>
         </div>
-        <div style={{ fontSize: 12.5, color: C.gray }}>
-          {summary.total > 0
-            ? `Across ${summary.projectsAffected} of ${summary.projectsTotal} active projects. Each issue below has a recommended fix — pick one and confirm.`
-            : "No conflicts, delays, or weather risks detected across your portfolio."}
-        </div>
+        {/* Demo control: only shown when there ARE problems (reset). The clean
+            state shows the Simulate button in the empty state below. */}
+        {summary.total > 0 && (
+          <DemoButton kind="reset" busy={demoBusy} onClick={() => runDemo("reset")} />
+        )}
       </div>
 
-      {/* KPI strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, marginBottom: 20 }}>
-        <KpiCard
-          label="Needs Attention"
-          value={`${summary.total}`}
-          valueColor={summary.total > 0 ? C.red : C.greenDark}
-          sub="Need a decision"
-          onClick={onNav && summary.total > 0
-            ? () => onNav("gantt", undefined, allProblemTaskIds.length > 0 ? { ganttTaskIds: allProblemTaskIds } : { ganttStatus: "problems" })
-            : undefined}
-          actionLabel="View in Timeline"
-        />
-        <KpiCard
-          label="Double-Bookings"
-          value={`${summary.critical}`}
-          valueColor={summary.critical > 0 ? C.redDark : C.greenDark}
-          sub="Same person, two jobs at once"
-          onClick={onNav && summary.critical > 0
-            ? () => onNav("gantt", undefined, criticalTaskIds.length > 0 ? { ganttTaskIds: criticalTaskIds } : { ganttStatus: "conflict" })
-            : undefined}
-          actionLabel="View in Timeline"
-        />
-        <KpiCard label="Projects Affected" value={`${summary.projectsAffected}`} valueColor={C.amber}                                        sub={`of ${summary.projectsTotal} active`} />
-      </div>
+      {/* KPI strip — one clear number, plus two supporting */}
+      {summary.total > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, marginBottom: 20 }}>
+          <KpiCard
+            label="Total Issues"
+            value={`${summary.total}`}
+            valueColor={summary.total > 0 ? C.red : C.greenDark}
+            sub="Everything that needs you"
+            onClick={onNav && summary.total > 0
+              ? () => onNav("gantt", undefined, allProblemTaskIds.length > 0 ? { ganttTaskIds: allProblemTaskIds } : { ganttStatus: "problems" })
+              : undefined}
+            actionLabel="See on Timeline"
+          />
+          <KpiCard
+            label="Urgent"
+            value={`${summary.critical}`}
+            valueColor={summary.critical > 0 ? C.redDark : C.greenDark}
+            sub="Same person, two jobs at once"
+            onClick={onNav && summary.critical > 0
+              ? () => onNav("gantt", undefined, criticalTaskIds.length > 0 ? { ganttTaskIds: criticalTaskIds } : { ganttStatus: "conflict" })
+              : undefined}
+            actionLabel="See on Timeline"
+          />
+          <KpiCard label="Projects Hit" value={`${summary.projectsAffected}`} valueColor={C.amber} sub={`of ${summary.projectsTotal} running`} />
+        </div>
+      )}
 
-      {/* Empty state */}
+      {/* Empty state — clean portfolio + the demo trigger */}
       {problems.length === 0 && (
         <div style={{ padding: "44px 20px", textAlign: "center", background: C.white, borderRadius: 12, border: `0.5px solid ${C.grayLight}` }}>
-          <div style={{ fontSize: 38, marginBottom: 10 }}>🎉</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 6 }}>No open problems</div>
-          <div style={{ fontSize: 12.5, color: C.gray }}>Your portfolio is conflict-free and on schedule.</div>
+          <div style={{ fontSize: 38, marginBottom: 10 }}>✅</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Everything's on track</div>
+          <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 20 }}>No clashes, no late jobs. Nothing needs you right now.</div>
+          <DemoButton kind="simulate" busy={demoBusy} onClick={() => runDemo("simulate")} big />
+          <div style={{ fontSize: 11, color: C.gray, marginTop: 10 }}>For the demo: drops a real problem onto the schedule so you can fix it.</div>
         </div>
       )}
 
@@ -291,6 +319,30 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
         />
       )}
     </div>
+  );
+}
+
+function DemoButton({ kind, busy, onClick, big }: { kind: "simulate" | "reset"; busy: boolean; onClick: () => void; big?: boolean }) {
+  const isSim = kind === "simulate";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      title={isSim ? "Demo: add a problem to the schedule" : "Demo: clear everything back to normal"}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 7,
+        padding: big ? "11px 22px" : "7px 13px",
+        fontSize: big ? 13.5 : 12, fontWeight: 700, borderRadius: 9,
+        border: isSim ? "none" : `1px solid ${C.grayLight}`,
+        background: isSim ? C.blue : C.white,
+        color: isSim ? C.white : C.gray,
+        cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1,
+      }}
+    >
+      {isSim ? <Zap size={big ? 16 : 14} /> : <RotateCcw size={14} />}
+      {busy ? "Working…" : isSim ? "Simulate a problem" : "Reset to clean"}
+    </button>
   );
 }
 

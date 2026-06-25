@@ -126,24 +126,23 @@ export const RESOURCE_PROFILES: Record<string, { bio: string; skills: string[] }
   r16: { bio: "HSE officer, SA. Retail + heritage redevelopment experience.",                   skills: ["Heritage site safety", "Public-interface controls", "Audits"] },
 };
 
-// 26 tasks across 3 active projects
-// INTENDED CONFLICTS (only these two):
-//   Ben Nguyen (r1): TSK-P1-01 p1 Jun 1–7  ↔  TSK-P2-03 p2 Jun 1–9   → double-booked
-//   Tom Kowalski(r4): TSK-P2-02 p2 Jun 2–20 ↔  TSK-P3-01 p3 Jun 1–19  → double-booked
-// All other resources have non-overlapping task dates.
-// Ben is also packed in p1 with 2 back-to-back formwork tasks showing a busy schedule.
-// James has 2 sequential structural tasks in p1 with a 1-day buffer (fragile).
+// 26 tasks across 3 active projects.
+// CLEAN BASELINE: this seed has NO conflicts, NO overdue, NO tight handovers and
+// NO weather risk — a fresh boot shows "Everything on track" (0 issues).
+// The demo problem is injected on demand by POST /api/v1/demo/simulate, which
+// reassigns TSK-P2-03 to Ben (r1) so it overlaps his TSK-P1-01 → one double-booking.
+// POST /api/v1/demo/reset puts it back to Wayne (r9) → 0 issues again.
 export const DEFAULT_TASKS = [
 
   // ─── PARRAMATTA SQUARE — TOWER C (p1) ───────────────────────────────────
-  // Ben: 2 formwork tasks packed back-to-back + CONFLICT in p2
-  { id: "TSK-P1-01", projectId: "p1", name: "Formwork Pour — Level 4",            assigneeId: "r1",  tradeRequired: "Formwork Foreman",     start: "2026-06-01", end: "2026-06-07", durationDays: 5,  dependencies: "-",        status: "conflict",   percent_complete: 40 },
-  { id: "TSK-P1-02", projectId: "p1", name: "Formwork Pour — Level 5",            assigneeId: "r1",  tradeRequired: "Formwork Foreman",     start: "2026-06-10", end: "2026-06-15", durationDays: 5,  dependencies: "TSK-P1-01", status: "scheduled",  percent_complete: 0  },
-  // James: 2 structural tasks with 1-day gap (fragile buffer)
-  { id: "TSK-P1-03", projectId: "p1", name: "Structural Steel Frame — Level 4",   assigneeId: "r2",  tradeRequired: "Structural Foreman",   start: "2026-06-08", end: "2026-06-22", durationDays: 11, dependencies: "TSK-P1-01", status: "scheduled",  percent_complete: 0  },
-  { id: "TSK-P1-04", projectId: "p1", name: "Structural Steel Frame — Level 5",   assigneeId: "r2",  tradeRequired: "Structural Foreman",   start: "2026-06-23", end: "2026-07-05", durationDays: 9,  dependencies: "TSK-P1-03", status: "fragile",    percent_complete: 0  },
+  // Ben: 3 spread-out formwork tasks, no overlaps
+  { id: "TSK-P1-01", projectId: "p1", name: "Formwork Pour — Level 4",            assigneeId: "r1",  tradeRequired: "Formwork Foreman",     start: "2026-06-01", end: "2026-06-07", durationDays: 5,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P1-02", projectId: "p1", name: "Formwork Pour — Level 5",            assigneeId: "r1",  tradeRequired: "Formwork Foreman",     start: "2026-06-12", end: "2026-06-17", durationDays: 5,  dependencies: "TSK-P1-01", status: "scheduled",  percent_complete: 0  },
+  // James: 2 structural tasks with a comfortable gap (not a tight handover)
+  { id: "TSK-P1-03", projectId: "p1", name: "Structural Steel Frame — Level 4",   assigneeId: "r2",  tradeRequired: "Structural Foreman",   start: "2026-06-11", end: "2026-06-25", durationDays: 11, dependencies: "TSK-P1-01", status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P1-04", projectId: "p1", name: "Structural Steel Frame — Level 5",   assigneeId: "r2",  tradeRequired: "Structural Foreman",   start: "2026-06-30", end: "2026-07-10", durationDays: 9,  dependencies: "TSK-P1-03", status: "scheduled",  percent_complete: 0  },
   // Wayne: concrete pour completed in late May — keeps him FREE in June so he is
-  // the recommended same-state replacement for Ben's double-booking.
+  // the recommended same-state replacement when Ben's double-booking is simulated.
   { id: "TSK-P1-05", projectId: "p1", name: "Concrete Pour — Basement B3",        assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-05-20", end: "2026-05-26", durationDays: 5,  dependencies: "-",        status: "completed",  percent_complete: 100 },
   // Sam: QS cost report in p1 (Jun 10–21, then free for p2 Jul+)
   { id: "TSK-P1-06", projectId: "p1", name: "Cost Report & Variation Assessment", assigneeId: "r7",  tradeRequired: "Quantity Surveyor",    start: "2026-06-10", end: "2026-06-21", durationDays: 9,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
@@ -153,36 +152,36 @@ export const DEFAULT_TASKS = [
   { id: "TSK-P1-08", projectId: "p1", name: "HSE Site Audit — Q2",                assigneeId: "r8",  tradeRequired: "HSE Officer",          start: "2026-06-16", end: "2026-06-17", durationDays: 2,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
   // Unassigned: waterproofing open slot
   { id: "TSK-P1-09", projectId: "p1", name: "External Waterproofing — Tower C",   assigneeId: null,  tradeRequired: "Interior Foreman",     start: "2026-07-01", end: "2026-07-13", durationDays: 9,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
-  // Ben again in p1 after conflict resolves (Jun 29 — no overlap with anything)
+  // Ben again in p1 (Jun 29 — no overlap with anything)
   { id: "TSK-P1-10", projectId: "p1", name: "Formwork Strip & Prep — Level 6",    assigneeId: "r1",  tradeRequired: "Formwork Foreman",     start: "2026-06-29", end: "2026-07-08", durationDays: 8,  dependencies: "TSK-P1-02", status: "scheduled",  percent_complete: 0  },
 
   // ─── VICTORIA HARBOUR — STAGE 2 (p2) ────────────────────────────────────
-  // Matt: excavation (overdue), then site works — all in p2 only
-  { id: "TSK-P2-01", projectId: "p2", name: "Excavation Works — Zone B",          assigneeId: "r3",  tradeRequired: "Site Manager",         start: "2026-05-12", end: "2026-05-28", durationDays: 13, dependencies: "-",        status: "overdue",    percent_complete: 85 },
-  { id: "TSK-P2-02", projectId: "p2", name: "Piling Works — North Sector",        assigneeId: "r4",  tradeRequired: "Piling Subcontractor", start: "2026-06-02", end: "2026-06-20", durationDays: 15, dependencies: "TSK-P2-01", status: "conflict",  percent_complete: 10 },
-  // Ben: CONFLICT — also on TSK-P1-01 same dates
-  { id: "TSK-P2-03", projectId: "p2", name: "Formwork — Basement Level B1",       assigneeId: "r1",  tradeRequired: "Formwork Foreman",     start: "2026-06-01", end: "2026-06-09", durationDays: 7,  dependencies: "-",        status: "conflict",   percent_complete: 30 },
-  // Matt continues p2 site management (Jun 5 — after excavation stalls, sequential)
+  // Matt: excavation done, then site works — all in p2 only
+  { id: "TSK-P2-01", projectId: "p2", name: "Excavation Works — Zone B",          assigneeId: "r3",  tradeRequired: "Site Manager",         start: "2026-05-12", end: "2026-05-28", durationDays: 13, dependencies: "-",        status: "completed",  percent_complete: 100 },
+  { id: "TSK-P2-02", projectId: "p2", name: "Piling Works — North Sector",        assigneeId: "r4",  tradeRequired: "Piling Subcontractor", start: "2026-06-02", end: "2026-06-20", durationDays: 15, dependencies: "TSK-P2-01", status: "scheduled",  percent_complete: 0  },
+  // Wayne (clean): basement formwork. Demo simulate reassigns this to Ben → clash.
+  { id: "TSK-P2-03", projectId: "p2", name: "Formwork — Basement Level B1",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-06-01", end: "2026-06-09", durationDays: 7,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
+  // Matt continues p2 site management (Jun 5 — after excavation, sequential)
   { id: "TSK-P2-04", projectId: "p2", name: "Site Dewatering & Rock Breaking",    assigneeId: "r3",  tradeRequired: "Site Manager",         start: "2026-06-05", end: "2026-06-20", durationDays: 12, dependencies: "TSK-P2-01", status: "inprogress", percent_complete: 25 },
-  // James: structural p2 — starts Jul 21, after his p1 finishes Jul 5
+  // James: structural p2 — starts Jul 21, after his p1 finishes Jul 10
   { id: "TSK-P2-05", projectId: "p2", name: "Structural Frame — Level 1 & 2",     assigneeId: "r2",  tradeRequired: "Structural Foreman",   start: "2026-07-21", end: "2026-08-07", durationDays: 14, dependencies: "TSK-P2-02", status: "scheduled",  percent_complete: 0  },
-  // Wayne: concrete slab p2 — Jun 23, after his p1 finishes Jun 5
-  { id: "TSK-P2-06", projectId: "p2", name: "Concrete Slab — Ground Floor",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-06-23", end: "2026-07-05", durationDays: 9,  dependencies: "TSK-P2-02", status: "scheduled",  percent_complete: 0  },
+  // Wayne: concrete slab p2 — Jun 26, comfortably after piling finishes (Jun 20)
+  { id: "TSK-P2-06", projectId: "p2", name: "Concrete Slab — Ground Floor",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-06-26", end: "2026-07-08", durationDays: 9,  dependencies: "TSK-P2-02", status: "scheduled",  percent_complete: 0  },
   // Sam: waterproofing p2 — Jul 7, after his p1 QS finishes Jun 21
   { id: "TSK-P2-07", projectId: "p2", name: "Waterproofing — Basement Slab",      assigneeId: "r7",  tradeRequired: "Quantity Surveyor",    start: "2026-07-07", end: "2026-07-18", durationDays: 9,  dependencies: "TSK-P2-02", status: "scheduled",  percent_complete: 0  },
   // Yuni: programme coordination p2 (Jun 3–28 only, then p3 Jul 7+)
   { id: "TSK-P2-08", projectId: "p2", name: "Programme Reporting — June",         assigneeId: "r10", tradeRequired: "Project Coordinator",  start: "2026-06-03", end: "2026-06-28", durationDays: 20, dependencies: "-",        status: "inprogress", percent_complete: 10 },
 
   // ─── SOUTHBANK RESIDENCES — T1 (p3) ─────────────────────────────────────
-  // Tom: CONFLICT — also on TSK-P2-02 same dates
-  { id: "TSK-P3-01", projectId: "p3", name: "Piling — Main Core",                 assigneeId: "r4",  tradeRequired: "Piling Subcontractor", start: "2026-06-01", end: "2026-06-19", durationDays: 15, dependencies: "-",        status: "conflict",   percent_complete: 15 },
+  // Tom: piling main core — shifted to Jun 23 so it no longer overlaps his p2 piling
+  { id: "TSK-P3-01", projectId: "p3", name: "Piling — Main Core",                 assigneeId: "r4",  tradeRequired: "Piling Subcontractor", start: "2026-06-23", end: "2026-07-13", durationDays: 15, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
   // Rachel: HSE induction p3 (completed May 29–Jun 2, before p1 audit Jun 16)
   { id: "TSK-P3-02", projectId: "p3", name: "HSE Induction — New Trades",         assigneeId: "r8",  tradeRequired: "HSE Officer",          start: "2026-05-29", end: "2026-06-02", durationDays: 3,  dependencies: "-",        status: "completed",  percent_complete: 100},
   // Anika: services p3 only (Jun 5–22, then Jul 1–14 — all in p3)
   { id: "TSK-P3-03", projectId: "p3", name: "Services Rough-in — Ground Level",   assigneeId: "r5",  tradeRequired: "Services Coordinator", start: "2026-06-05", end: "2026-06-22", durationDays: 14, dependencies: "-",        status: "inprogress", percent_complete: 20 },
   { id: "TSK-P3-04", projectId: "p3", name: "Hydraulic Services — Level 1 & 2",  assigneeId: "r5",  tradeRequired: "Services Coordinator", start: "2026-07-01", end: "2026-07-14", durationDays: 10, dependencies: "TSK-P3-03", status: "scheduled",  percent_complete: 0  },
-  // Wayne: concrete podium p3 — Jul 14, after his p2 finishes Jul 5
-  { id: "TSK-P3-05", projectId: "p3", name: "Concrete Pour — Podium Level",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-07-14", end: "2026-07-24", durationDays: 9,  dependencies: "TSK-P3-01", status: "scheduled",  percent_complete: 0  },
+  // Wayne: concrete podium p3 — Jul 20, comfortably after piling (Jul 13) and his p2 slab (Jul 5)
+  { id: "TSK-P3-05", projectId: "p3", name: "Concrete Pour — Podium Level",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-07-20", end: "2026-07-30", durationDays: 9,  dependencies: "TSK-P3-01", status: "scheduled",  percent_complete: 0  },
   // Chris: fitout p3 — Aug 4, after his p1 finishes Aug 2
   { id: "TSK-P3-06", projectId: "p3", name: "Internal Works — Level 1",           assigneeId: "r6",  tradeRequired: "Interior Foreman",     start: "2026-08-04", end: "2026-08-20", durationDays: 13, dependencies: "TSK-P3-05", status: "scheduled",  percent_complete: 0  },
   // Sam: scaffold p3 — Jul 28, after his p2 finishes Jul 18

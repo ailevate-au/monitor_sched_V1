@@ -23,15 +23,16 @@ export function getBOMForecast(): WeatherDay[] {
     return cachedForecast;
   }
 
-  // Pre-configured forecast aligned with 2026-06-02
+  // Pre-configured forecast aligned with 2026-06-02. Clean baseline: a clear week,
+  // so no task is flagged at weather risk. (A storm scenario can be layered in later.)
   const forecast: WeatherDay[] = [
-    { date: "Mon 2 Jun", dateStr: "2026-06-02", icon: "☀️", temp: "24°C", desc: "Clear", risk: "ok", impact: "✓ Full day" },
-    { date: "Tue 3 Jun", dateStr: "2026-06-03", icon: "⛅", temp: "22°C", desc: "Partly cloudy", risk: "ok", impact: "✓ Full day" },
-    { date: "Wed 4 Jun", dateStr: "2026-06-04", icon: "🌧️", temp: "17°C", desc: "Heavy rain", risk: "warn", impact: "⚠ Reduced ops" },
-    { date: "Thu 5 Jun", dateStr: "2026-06-05", icon: "⛈️", temp: "15°C", desc: "Storm · 40mm", risk: "danger", impact: "✕ Site closure" },
-    { date: "Fri 6 Jun", dateStr: "2026-06-06", icon: "🌦️", temp: "18°C", desc: "Showers", risk: "warn", impact: "⚠ Reduced ops" },
-    { date: "Sat 7 Jun", dateStr: "2026-06-07", icon: "🌤️", temp: "21°C", desc: "Clearing", risk: "ok", impact: "✓ Full day" },
-    { date: "Sun 8 Jun", dateStr: "2026-06-08", icon: "☀️", temp: "23°C", desc: "Fine", risk: "ok", impact: "✓ Full day" }
+    { date: "Mon 2 Jun", dateStr: "2026-06-02", icon: "☀️", temp: "24°C", desc: "Clear",         risk: "ok", impact: "✓ Full day" },
+    { date: "Tue 3 Jun", dateStr: "2026-06-03", icon: "☀️", temp: "23°C", desc: "Sunny",         risk: "ok", impact: "✓ Full day" },
+    { date: "Wed 4 Jun", dateStr: "2026-06-04", icon: "⛅", temp: "22°C", desc: "Partly cloudy", risk: "ok", impact: "✓ Full day" },
+    { date: "Thu 5 Jun", dateStr: "2026-06-05", icon: "⛅", temp: "21°C", desc: "Partly cloudy", risk: "ok", impact: "✓ Full day" },
+    { date: "Fri 6 Jun", dateStr: "2026-06-06", icon: "🌤️", temp: "22°C", desc: "Mostly fine",   risk: "ok", impact: "✓ Full day" },
+    { date: "Sat 7 Jun", dateStr: "2026-06-07", icon: "☀️", temp: "23°C", desc: "Fine",          risk: "ok", impact: "✓ Full day" },
+    { date: "Sun 8 Jun", dateStr: "2026-06-08", icon: "☀️", temp: "24°C", desc: "Fine",          risk: "ok", impact: "✓ Full day" }
   ];
 
   cachedForecast = forecast;

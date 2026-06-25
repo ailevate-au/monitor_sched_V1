@@ -51,6 +51,7 @@ export default function ScreenWeather() {
   const [forecast, setForecast] = useState<ForecastDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [weatherAlertText, setWeatherAlertText] = useState("");
+  const [severe, setSevere] = useState(false);
   const [affectedTasks, setAffectedTasks] = useState<AffectedTask[]>([]);
   const [rescheduleTask, setRescheduleTask] = useState<AffectedTask | null>(null);
   const [newDays, setNewDays] = useState("3");
@@ -64,6 +65,7 @@ export default function ScreenWeather() {
         if (data.weatherAlert) {
           setForecast(data.weatherAlert.forecast || []);
           setWeatherAlertText(data.weatherAlert.text);
+          setSevere(data.weatherAlert.severity === "warning");
         }
       })
       .catch(err => console.error("Error loading weather forecast:", err));
@@ -115,7 +117,7 @@ export default function ScreenWeather() {
       .then(() => {
         setRescheduleTask(null);
         loadWeatherData();
-        alert(`Successfully re-scheduled and compensated task ${rescheduleTask.id} by ${offset} working days.`);
+        alert(`Done. ${rescheduleTask.id} moved ${offset} day${offset !== 1 ? "s" : ""} later and the lost time is claimed.`);
       })
       .catch(err => console.error("Error applying weather compensation:", err));
   };
@@ -138,15 +140,20 @@ export default function ScreenWeather() {
         <KpiCard label="Weather Warning Days" value={`${warningDays + dangerDays} days`} valueColor={C.amber} sub="Flagged automatically on your schedule" />
       </div>
 
-      {weatherAlertText && (
+      {severe ? (
         <div style={{ background: C.redBg, border: `0.5px solid #FECACA`, borderRadius: 12, padding: "16px 20px", marginBottom: 16, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.redDark, fontWeight: 600 }}>
             <span style={{ fontSize: 18 }}>🚨</span>
-            <span>Severe Weather Alert</span>
+            <span>Bad weather coming</span>
           </div>
           <p style={{ fontSize: 12.5, color: C.redDark, margin: 0, lineHeight: 1.5 }}>
-            {weatherAlertText}. Concrete pours, crane and rigging work, and excavations should be paused, or logged as an Extension of Time (EOT) claim, to avoid contract penalties.
+            {weatherAlertText} Outdoor work like concrete pours, crane lifts and digging may need to stop. You can move those jobs to a clear day, or claim the lost time so it doesn't count against you.
           </p>
+        </div>
+      ) : (
+        <div style={{ background: C.greenBg, border: `0.5px solid #BBF7D0`, borderRadius: 12, padding: "14px 20px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>☀️</span>
+          <span style={{ fontSize: 12.5, color: C.greenDark, fontWeight: 600 }}>{weatherAlertText || "Clear week ahead — no weather risk to site work."}</span>
         </div>
       )}
 
@@ -210,16 +217,16 @@ export default function ScreenWeather() {
         </Card>
 
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>Weather Delays & Extension of Time (EOT)</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>Claiming back rain days</div>
           <p style={{ fontSize: 12, color: C.gray, lineHeight: 1.5, margin: "0 0 12px 0" }}>
-            Under standard commercial construction contracts (e.g., AS 4000-1997 Clause 34.2), the builder is entitled to claim cost-compensated Extensions of Time (EOT) when works are disrupted by wet weather beyond average historical meteorological averages.
+            When bad weather stops outdoor work, your contract usually lets you claim that lost time — so the delay doesn't count against you or cost you penalties.
           </p>
           <div style={{ background: "#F1F5F9", borderRadius: 8, padding: 12, borderLeft: `3px solid ${C.blue}` }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.text }}>Contractual Process for Sarah Hughes:</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.text }}>How to claim it:</div>
             <ul style={{ fontSize: 11, color: C.gray, margin: "6px 0 0 16px", padding: 0, lineHeight: 1.4 }}>
-              <li>Record daily precipitation and wind gusts in site diary</li>
-              <li>Re-schedule the affected task forward on the programme timeline</li>
-              <li>Submit auditable baseline comparison reports to Superintendent</li>
+              <li>Note the rain and wind in the site diary each day</li>
+              <li>Move the affected job to a later, clear day</li>
+              <li>Send the proof to the client's rep for sign-off</li>
             </ul>
           </div>
         </Card>
@@ -276,13 +283,13 @@ export default function ScreenWeather() {
       {rescheduleTask && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15,31,61,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99 }}>
           <Card style={{ width: 360, padding: 22 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Weather Delay & EOT Tool</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Move this job past the rain</div>
             <div style={{ fontSize: 12, color: C.gray, marginBottom: 10 }}>
-              Adjusting scheduled dates for: <strong style={{ color: C.text }}>{rescheduleTask.id} — {rescheduleTask.name}</strong>
+              Moving: <strong style={{ color: C.text }}>{rescheduleTask.id} — {rescheduleTask.name}</strong>
             </div>
 
             <div style={{ background: C.amberBg, border: `0.5px solid #FCD34D`, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: C.amber, marginBottom: 14 }}>
-              * Under AS 4000 (clause 34.2), this records the weather delay as approved extra days, reducing your Liquidated Damages (LD) exposure.
+              This logs the rain days as an approved delay, so they don't count against you or trigger penalties.
             </div>
 
             <div style={{ marginBottom: 14 }}>
@@ -296,7 +303,7 @@ export default function ScreenWeather() {
             </div>
 
             <div style={{ display: "flex", gap: 8 }}>
-              <Btn primary onClick={handleApplyReschedule}>Compensate & Reschedule</Btn>
+              <Btn primary onClick={handleApplyReschedule}>Move & claim the time</Btn>
               <Btn onClick={() => setRescheduleTask(null)}>Cancel</Btn>
             </div>
           </Card>
