@@ -187,14 +187,34 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
 
       {/* YOUR PROJECTS — collapsible card; each project expands to its jobs */}
       <Card style={{ padding: 0 }}>
-        <button
-          type="button"
-          onClick={() => setProjectsOpen(o => !o)}
-          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "none", border: "none", cursor: "pointer" }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.navy }}>Your Projects <span style={{ color: C.gray, fontWeight: 600 }}>· {activeProjects.length}</span></span>
-          <span style={{ fontSize: 13, color: C.gray, transform: projectsOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px" }}>
+          <button
+            type="button"
+            onClick={() => setProjectsOpen(o => !o)}
+            style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+          >
+            <span style={{ fontSize: 13, color: C.gray, transform: projectsOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.navy }}>Your Projects <span style={{ color: C.gray, fontWeight: 600 }}>· {activeProjects.length}</span></span>
+          </button>
+          {projectsOpen && expanded.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded(new Set())}
+              style={{ fontSize: 11, fontWeight: 600, color: C.gray, background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}
+            >
+              Collapse all
+            </button>
+          )}
+          {projectsOpen && expanded.size === 0 && activeProjects.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded(new Set(activeProjects.map(p => p.id)))}
+              style={{ fontSize: 11, fontWeight: 600, color: C.gray, background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}
+            >
+              Expand all
+            </button>
+          )}
+        </div>
 
         {projectsOpen && (
           <div style={{ padding: "0 18px 14px" }}>

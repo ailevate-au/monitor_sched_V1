@@ -624,14 +624,49 @@ export function buildSmartRecommendations(
   );
 
   const seen = new Set<string>();
-  return options
+  const deduped = options
     .filter((option) => {
       if (seen.has(option.id)) return false;
       seen.add(option.id);
       return true;
     })
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+    .slice(0, 4);
+
+  // Always add a "push 2 weeks" fallback — matches the same option shown in the Problems hub.
+  const insight = buildConflictConstraintInsight(conflict, tasks, pendingById);
+  const adjustTaskId = insight?.suggestedAdjustTaskId || conflict.taskBId;
+  const adjustTask = tasks.find((t) => t.id === adjustTaskId);
+  const anchorTaskId = insight?.suggestedAnchorTaskId || conflict.taskAId;
+  const anchorTask = tasks.find((t) => t.id === anchorTaskId);
+  const pushId = `push14-${adjustTaskId}`;
+  if (adjustTask && !deduped.find((o) => o.id === pushId)) {
+    const currentResource = resources.find((r) => r.id === conflict.resourceId);
+    const push14Start = shiftIsoDate(adjustTask.start, 14);
+    const push14End = shiftIsoDate(adjustTask.end, 14);
+    const costImpact = attachProjectImpact(
+      buildCostImpactForReschedule(adjustTask, currentResource),
+      tasks, resources, adjustTask, projects, tasks
+    );
+    deduped.push({
+      kind: "reschedule",
+      id: pushId,
+      taskId: adjustTaskId,
+      taskName: taskShortName(adjustTask),
+      anchorTaskId,
+      anchorTaskName: anchorTask ? taskShortName(anchorTask) : "",
+      anchorReasons: insight?.taskA.reasons || [],
+      headline: `Push one job back 2 weeks instead`,
+      detail: `Shift "${taskShortName(adjustTask)}" 2 weeks later. Tasks waiting on it move too.`,
+      start: push14Start,
+      end: push14End,
+      tags: ["+14d shift", "Same person"],
+      score: 55,
+      costImpact,
+    });
+  }
+
+  return deduped;
 }
 
 function appendOptionsForDirection(

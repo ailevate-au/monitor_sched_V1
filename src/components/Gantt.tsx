@@ -1513,7 +1513,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                           {recommendations.map((rec, idx) => (
                             <div key={rec.id} style={{ padding: "10px 12px", borderRadius: 8, border: `1px solid ${idx === 0 ? C.green : C.grayLight}`, background: idx === 0 ? C.greenBg : C.white }}>
                               <div style={{ fontSize: 10.5, fontWeight: 700, color: idx === 0 ? C.greenDark : C.gray, marginBottom: 4 }}>
-                                {idx === 0 ? "Best fix" : `Option ${idx + 1}`} · {rec.kind === "reschedule" ? "Reschedule dates" : "Swap person"}
+                                {idx === 0 ? "Best fix" : `Option ${idx + 1}`} · {rec.id.startsWith("push14") ? "Push 2 weeks" : rec.kind === "reschedule" ? "Move dates" : "Give job to someone else"}
                               </div>
                               <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text, marginBottom: 2 }}>{rec.headline}</div>
                               <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.45, marginBottom: 8 }}>{rec.detail}</div>
