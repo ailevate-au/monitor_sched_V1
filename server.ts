@@ -7,7 +7,7 @@ import ExcelJS from "exceljs";
 import { dbInstance } from "./src/server/db";
 import { runConflictDetection, computeCascade, getConflictHubPayload, getReplacementCandidates } from "./src/server/conflictEngine";
 import { RESOURCE_PROFILES } from "./src/server/seedData";
-import { getBOMForecast } from "./src/server/bomWeather";
+import { getBOMForecast, setStormScenario } from "./src/server/bomWeather";
 import {
   getMastersBundle,
   getMasterList,
@@ -948,23 +948,26 @@ async function startServer() {
 
   // ── DEMO CONTROLS ───────────────────────────────────────────────────────
   // Drives the live "no issue → issue → resolved" story for the walkthrough.
-  // Simulate: a new job lands on Ben so he's booked on two jobs at once.
-  // Reset:    put that job back on its spare hand → everything on track again.
-  const DEMO_TASK_ID = "TSK-P2-03";   // Victoria Harbour basement formwork
-  const DEMO_BEN_ID = "r1";           // Ben Nguyen (gets double-booked)
-  const DEMO_SPARE_ID = "r9";         // Wayne Roberts (clean owner of the task)
+  // Simulate: a fresh batch of work lands and the portfolio sprouts the full set
+  //   of problems (two double-bookings, a late job, a tight handover, a storm).
+  // Reset:    put everything back to the clean baseline → "Everything's on track".
+  const setTask = (id: string, patch: Record<string, any>) => {
+    const t = dbInstance.tasks.find(x => x.id === id);
+    if (t) Object.assign(t, patch);
+  };
 
   app.post("/api/v1/demo/simulate", (_req, res) => {
     const db = dbInstance;
-    const t = db.tasks.find(x => x.id === DEMO_TASK_ID);
-    if (t) {
-      t.assigneeId = DEMO_BEN_ID;
-      t.start = "2026-06-03";
-      t.end = "2026-06-09";
-      t.durationDays = 5;
-      t.percent_complete = 0;
-      t.status = "scheduled";
-    }
+    // 1) Ben double-booked — new basement formwork clashes with his Level-4 pour
+    setTask("TSK-P2-03", { assigneeId: "r1", start: "2026-06-03", end: "2026-06-09", durationDays: 5, percent_complete: 0, status: "scheduled" });
+    // 2) Tom double-booked — main-core piling pulled back to clash with his north piling
+    setTask("TSK-P3-01", { assigneeId: "r4", start: "2026-06-01", end: "2026-06-19", durationDays: 15, percent_complete: 0, status: "scheduled" });
+    // 3) A job running late — excavation stalled at 85%, past its end date
+    setTask("TSK-P2-01", { percent_complete: 85, status: "overdue" });
+    // 4) A tight handover — Level-5 steel pulled up against Level-4 finishing
+    setTask("TSK-P1-04", { start: "2026-06-26", end: "2026-07-08", durationDays: 9 });
+    // 5) A storm hits mid-week
+    setStormScenario(true);
     runConflictDetection();
     db.save();
     res.json({ success: true, ...buildProblemsResponse() });
@@ -972,20 +975,14 @@ async function startServer() {
 
   app.post("/api/v1/demo/reset", (_req, res) => {
     const db = dbInstance;
-    // Put the new job back on the spare hand.
-    const t = db.tasks.find(x => x.id === DEMO_TASK_ID);
-    if (t) {
-      t.assigneeId = DEMO_SPARE_ID;
-      t.start = "2026-06-01";
-      t.end = "2026-06-09";
-      t.durationDays = 7;
-      t.percent_complete = 0;
-      t.status = "scheduled";
-    }
+    setTask("TSK-P2-03", { assigneeId: "r9", start: "2026-06-01", end: "2026-06-09", durationDays: 7, percent_complete: 0, status: "scheduled" });
+    setTask("TSK-P3-01", { assigneeId: "r4", start: "2026-06-23", end: "2026-07-13", durationDays: 15, percent_complete: 0, status: "scheduled" });
+    setTask("TSK-P2-01", { percent_complete: 100, status: "completed" });
+    setTask("TSK-P1-04", { start: "2026-06-30", end: "2026-07-10", durationDays: 9 });
+    setStormScenario(false);
     // Ensure Ben still owns his original Level-4 pour even if it was reassigned
     // away during a resolve, so the baseline is fully restored.
-    const ben01 = db.tasks.find(x => x.id === "TSK-P1-01");
-    if (ben01) ben01.assigneeId = DEMO_BEN_ID;
+    setTask("TSK-P1-01", { assigneeId: "r1" });
     runConflictDetection();
     db.save();
     res.json({ success: true, ...buildProblemsResponse() });

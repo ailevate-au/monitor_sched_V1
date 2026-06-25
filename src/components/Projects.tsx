@@ -42,6 +42,10 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
+  // Real issue categories per project name (from the same source as Problems hub)
+  const [issuesByProject, setIssuesByProject] = useState<Record<string, Set<string>>>({});
+  const [totalIssues, setTotalIssues] = useState(0);
+  const [demoBusy, setDemoBusy] = useState(false);
 
   // New Project State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -79,6 +83,24 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   const [projectRates, setProjectRates] = useState<{ [resourceId: string]: string }>({});
   const [isSavingRates, setIsSavingRates] = useState(false);
 
+  const loadIssues = () => {
+    fetch("/api/v1/problems")
+      .then(res => res.json())
+      .then(data => {
+        const map: Record<string, Set<string>> = {};
+        for (const p of data.problems || []) {
+          for (const name of String(p.projectName || "").split(" + ")) {
+            const key = name.trim();
+            if (!key) continue;
+            (map[key] ||= new Set()).add(p.category);
+          }
+        }
+        setIssuesByProject(map);
+        setTotalIssues(data.summary?.total ?? 0);
+      })
+      .catch(() => {});
+  };
+
   const loadProjectsAndResources = () => {
     setLoading(true);
     Promise.all([
@@ -94,11 +116,23 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
         console.error("Error loading projects and resources:", err);
         setLoading(false);
       });
+    loadIssues();
   };
 
   useEffect(() => {
     loadProjectsAndResources();
   }, []);
+
+  // Demo controls — issues come from importing/changing work, so the trigger
+  // lives here next to Import. Simulate drops the problem set onto the schedule;
+  // Reset clears it. Both refresh the live issue badges.
+  const runDemo = (path: "simulate" | "reset") => {
+    setDemoBusy(true);
+    fetch(`/api/v1/demo/${path}`, { method: "POST" })
+      .then(res => res.json())
+      .then(() => { setDemoBusy(false); loadIssues(); })
+      .catch(() => setDemoBusy(false));
+  };
 
   const handleAddProject = () => {
     if (!name.trim() || !contractor.trim()) {
@@ -236,6 +270,30 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
         <KpiCard label="Retention Held (5%)" value={`A$${totalRetention.toFixed(2)}M`} sub="Held under standard AS 4000-1997" />
       </div>
 
+      {/* Demo control strip — create or clear the problem scenario from here */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, padding: "12px 16px", borderRadius: 12, border: `1px solid ${totalIssues > 0 ? "#FECACA" : C.grayLight}`, background: totalIssues > 0 ? C.redBg : "#F8FAFC", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: totalIssues > 0 ? C.redDark : C.text }}>
+            {totalIssues > 0
+              ? `New work created ${totalIssues} problem${totalIssues > 1 ? "s" : ""} across your projects`
+              : "Everything's on track"}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.gray, marginTop: 2 }}>
+            {totalIssues > 0
+              ? "Open Problems to see each one and how to fix it."
+              : "Bring in new work to see how FlowIQ catches problems the moment they appear."}
+          </div>
+        </div>
+        {totalIssues > 0 ? (
+          <>
+            <Btn small onClick={() => onNav?.("problems")}>See Problems →</Btn>
+            <Btn small danger onClick={() => runDemo("reset")} disabled={demoBusy}>{demoBusy ? "Working…" : "↺ Reset to clean"}</Btn>
+          </>
+        ) : (
+          <Btn primary small onClick={() => runDemo("simulate")} disabled={demoBusy}>{demoBusy ? "Working…" : "⚡ Bring in new work (demo)"}</Btn>
+        )}
+      </div>
+
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
         <span style={{ fontSize:12, fontWeight:600, color:C.gray, textTransform:"uppercase", letterSpacing:"0.05em" }}>Active Projects</span>
         <div style={{ display: "flex", gap: 8 }}>
@@ -245,8 +303,11 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       </div>
 
       {projects.map(p => {
-        const hasConflicts = p.id === "p1" || p.id === "p2";
-        const hasFragile = p.id === "p1" || p.id === "p3";
+        const cats = issuesByProject[p.name] || new Set<string>();
+        const hasConflicts = cats.has("conflict");
+        const hasFragile = cats.has("fragile");
+        const hasLate = cats.has("late");
+        const hasWeather = cats.has("weather");
         const marginVal = p.id === "p1" ? 11.2 : p.id === "p2" ? 13.8 : p.id === "p3" ? 16.2 : 14.1;
 
         // Count how many overrides are active on this project
@@ -267,8 +328,9 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
               </div>
               <div style={{ display:"flex", gap:5, flexWrap:"wrap", justifyContent:"flex-end" }}>
                 {hasConflicts && <StatusBadge status="conflict" />}
+                {hasLate && <StatusBadge status="overdue" />}
                 {hasFragile && <StatusBadge status="fragile" />}
-                {p.weatherRisk && <StatusBadge status="weather" />}
+                {hasWeather && <StatusBadge status="weather" />}
                 <StatusBadge status={p.status === "PRACTICAL_COMPLETION" ? "practical" : "active"} />
               </div>
             </div>

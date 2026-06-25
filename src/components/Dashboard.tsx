@@ -115,14 +115,20 @@ export const Btn = ({ children, primary, small, danger, onClick, style, disabled
   </button>
 );
 
+const PROBLEM_TASK_STATUSES = new Set(["conflict", "overdue", "weather", "fragile"]);
+
 export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void }) {
   const [stats, setStats] = useState<any>(null);
   const [projects, setProjects] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [projectsOpen, setProjectsOpen] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const load = () => {
       fetch("/api/v1/dashboard").then(r => r.json()).then(setStats).catch(() => {});
       fetch("/api/v1/projects").then(r => r.json()).then(d => { if (Array.isArray(d)) setProjects(d); }).catch(() => {});
+      fetch("/api/v1/tasks").then(r => r.json()).then(d => { if (Array.isArray(d)) setTasks(d); }).catch(() => {});
     };
     load();
     const t = setInterval(load, 8000);
@@ -135,35 +141,37 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
 
   const issues = stats.totalIssues ?? 0;
   const activeProjects = projects.filter(p => p.status === "ACTIVE");
+  const toggleProject = (id: string) =>
+    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   return (
-    <div style={{ maxWidth: 980 }}>
+    <div>
       {/* STATUS BANNER — one glance: are we ok or not? */}
       {issues > 0 ? (
-        <div style={{ background: C.redBg, border: `1px solid #FECACA`, borderRadius: 12, padding: "16px 20px", marginBottom: 16, display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 42, height: 42, borderRadius: "50%", background: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0, border: `1px solid #FECACA` }}>⚠️</div>
+        <div style={{ background: C.redBg, border: `1px solid #FECACA`, borderRadius: 12, padding: "18px 22px", marginBottom: 16, display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0, border: `1px solid #FECACA` }}>⚠️</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: C.redDark, marginBottom: 2 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.redDark, marginBottom: 2 }}>
               {issues} thing{issues > 1 ? "s" : ""} need{issues > 1 ? "" : "s"} you
             </div>
             <div style={{ fontSize: 12.5, color: C.text }}>Open Problems to see what's wrong and how to fix it.</div>
           </div>
-          <Btn primary onClick={() => onNav("problems")} style={{ flexShrink: 0, padding: "9px 18px", fontSize: 12.5, fontWeight: 700 }}>
+          <Btn primary onClick={() => onNav("problems")} style={{ flexShrink: 0, padding: "10px 20px", fontSize: 13, fontWeight: 700 }}>
             Fix now →
           </Btn>
         </div>
       ) : (
-        <div style={{ background: C.greenBg, border: `1px solid #BBF7D0`, borderRadius: 12, padding: "16px 20px", marginBottom: 16, display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 42, height: 42, borderRadius: "50%", background: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0, border: `1px solid #BBF7D0` }}>✅</div>
+        <div style={{ background: C.greenBg, border: `1px solid #BBF7D0`, borderRadius: 12, padding: "18px 22px", marginBottom: 16, display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0, border: `1px solid #BBF7D0` }}>✅</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: C.greenDark, marginBottom: 2 }}>Everything's on track</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.greenDark, marginBottom: 2 }}>Everything's on track</div>
             <div style={{ fontSize: 12.5, color: C.text }}>No clashes, no late jobs across your projects.</div>
           </div>
         </div>
       )}
 
-      {/* FOUR SIMPLE NUMBERS */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10, marginBottom: 16 }}>
+      {/* FOUR SIMPLE NUMBERS — stretch full width */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 16 }}>
         <KpiCard label="Projects Running" value={`${stats.activeProjectsCount}`} sub="Live right now" />
         <KpiCard label="On Track" value={`${stats.onProgrammePct}%`} valueColor={C.green} sub="Jobs going to plan" />
         <KpiCard
@@ -177,25 +185,59 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
         <KpiCard label="Days Without Injury" value={`${stats.whsLtiFreeDays}`} valueColor={C.greenDark} sub="Safe on site" />
       </div>
 
-      {/* YOUR PROJECTS — simple health list */}
-      <Card>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.navy, marginBottom: 12 }}>Your Projects</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {activeProjects.map(p => (
-            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 4px", borderBottom: `0.5px solid ${C.grayLight}` }}>
-              <span style={{ width: 9, height: 9, borderRadius: "50%", background: C.green, flexShrink: 0 }} />
-              <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-              <span style={{ fontSize: 11.5, color: C.gray, flexShrink: 0 }}>{p.location}</span>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: C.gray, width: 42, textAlign: "right", flexShrink: 0 }}>{p.progress}%</span>
-            </div>
-          ))}
-          {activeProjects.length === 0 && (
-            <div style={{ fontSize: 12, color: C.gray, padding: "8px 4px" }}>No running projects.</div>
-          )}
-        </div>
-        <button type="button" onClick={() => onNav("projects")} style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-          See all projects →
+      {/* YOUR PROJECTS — collapsible card; each project expands to its jobs */}
+      <Card style={{ padding: 0 }}>
+        <button
+          type="button"
+          onClick={() => setProjectsOpen(o => !o)}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "none", border: "none", cursor: "pointer" }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.navy }}>Your Projects <span style={{ color: C.gray, fontWeight: 600 }}>· {activeProjects.length}</span></span>
+          <span style={{ fontSize: 13, color: C.gray, transform: projectsOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
         </button>
+
+        {projectsOpen && (
+          <div style={{ padding: "0 18px 14px" }}>
+            {activeProjects.map(p => {
+              const open = expanded.has(p.id);
+              const ptasks = tasks.filter(t => t.projectId === p.id);
+              const hasIssue = ptasks.some(t => PROBLEM_TASK_STATUSES.has(t.status));
+              return (
+                <div key={p.id} style={{ borderTop: `0.5px solid ${C.grayLight}` }}>
+                  <button
+                    type="button"
+                    onClick={() => toggleProject(p.id)}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 4px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+                  >
+                    <span style={{ fontSize: 11, color: C.gray, width: 12, transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
+                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: hasIssue ? C.red : C.green, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                    <span style={{ fontSize: 11.5, color: C.gray, flexShrink: 0 }}>{p.location}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: C.gray, width: 42, textAlign: "right", flexShrink: 0 }}>{p.progress}%</span>
+                  </button>
+                  {open && (
+                    <div style={{ padding: "0 4px 10px 34px", display: "flex", flexDirection: "column", gap: 6 }}>
+                      {ptasks.length === 0 && <div style={{ fontSize: 11.5, color: C.gray }}>No jobs scheduled yet.</div>}
+                      {ptasks.map(t => (
+                        <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
+                          <span style={{ flex: 1, color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
+                          <span style={{ color: C.gray, flexShrink: 0, whiteSpace: "nowrap" }}>{t.start} → {t.end}</span>
+                          <StatusBadge status={t.status} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {activeProjects.length === 0 && (
+              <div style={{ fontSize: 12, color: C.gray, padding: "8px 4px" }}>No running projects.</div>
+            )}
+            <button type="button" onClick={() => onNav("projects")} style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+              See all projects →
+            </button>
+          </div>
+        )}
       </Card>
 
       {/* WEATHER — one line */}

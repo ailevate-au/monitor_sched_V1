@@ -62,7 +62,6 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
   const [resolvedIds, setResolvedIds] = useState<Record<string, string>>({});
   const [pending, setPending]     = useState<{ problem: Problem; action: ProblemAction } | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [demoBusy, setDemoBusy]   = useState(false);
   // Cards start expanded; user can collapse the suggested-fixes section per card
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -116,20 +115,6 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
       .catch(() => { setSubmitting(false); setPending(null); alert("Network error while resolving."); });
   };
 
-  // Demo controls — drive the live "no issue → issue → resolved" story.
-  const runDemo = (path: "simulate" | "reset") => {
-    setDemoBusy(true);
-    fetch(`/api/v1/demo/${path}`, { method: "POST" })
-      .then(r => r.json())
-      .then(res => {
-        setDemoBusy(false);
-        setResolvedIds({});
-        if (res && res.problems) setData(parseProblemsResponse(res));
-        else load();
-      })
-      .catch(() => { setDemoBusy(false); load(); });
-  };
-
   const { problems, summary } = data;
 
   // Exact Gantt task sets behind the KPI counts (a problem can cover several
@@ -163,10 +148,15 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
               : "No clashes, no late jobs, nothing to worry about."}
           </div>
         </div>
-        {/* Demo control: only shown when there ARE problems (reset). The clean
-            state shows the Simulate button in the empty state below. */}
-        {summary.total > 0 && (
-          <DemoButton kind="reset" busy={demoBusy} onClick={() => runDemo("reset")} />
+        {summary.total > 0 && onNav && (
+          <button
+            type="button"
+            onClick={() => onNav("projects")}
+            title="Issues are created from the Projects tab"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", fontSize: 12, fontWeight: 600, borderRadius: 9, border: `1px solid ${C.grayLight}`, background: C.white, color: C.gray, cursor: "pointer" }}
+          >
+            <RotateCcw size={14} /> Manage in Projects
+          </button>
         )}
       </div>
 
@@ -197,14 +187,22 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
         </div>
       )}
 
-      {/* Empty state — clean portfolio + the demo trigger */}
+      {/* Empty state — clean portfolio. Issues are created from Projects. */}
       {problems.length === 0 && (
         <div style={{ padding: "44px 20px", textAlign: "center", background: C.white, borderRadius: 12, border: `0.5px solid ${C.grayLight}` }}>
           <div style={{ fontSize: 38, marginBottom: 10 }}>✅</div>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Everything's on track</div>
-          <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 20 }}>No clashes, no late jobs. Nothing needs you right now.</div>
-          <DemoButton kind="simulate" busy={demoBusy} onClick={() => runDemo("simulate")} big />
-          <div style={{ fontSize: 11, color: C.gray, marginTop: 10 }}>For the demo: drops a real problem onto the schedule so you can fix it.</div>
+          <div style={{ fontSize: 12.5, color: C.gray, marginBottom: 18 }}>No clashes, no late jobs. Nothing needs you right now.</div>
+          {onNav && (
+            <button
+              type="button"
+              onClick={() => onNav("projects")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 22px", fontSize: 13.5, fontWeight: 700, borderRadius: 9, border: "none", background: C.blue, color: C.white, cursor: "pointer" }}
+            >
+              <Zap size={16} /> Bring in new work
+            </button>
+          )}
+          <div style={{ fontSize: 11, color: C.gray, marginTop: 10 }}>New work — an import or a schedule change — is where problems come from. Add some on the Projects tab to see it live.</div>
         </div>
       )}
 
@@ -319,30 +317,6 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
         />
       )}
     </div>
-  );
-}
-
-function DemoButton({ kind, busy, onClick, big }: { kind: "simulate" | "reset"; busy: boolean; onClick: () => void; big?: boolean }) {
-  const isSim = kind === "simulate";
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      title={isSim ? "Demo: add a problem to the schedule" : "Demo: clear everything back to normal"}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 7,
-        padding: big ? "11px 22px" : "7px 13px",
-        fontSize: big ? 13.5 : 12, fontWeight: 700, borderRadius: 9,
-        border: isSim ? "none" : `1px solid ${C.grayLight}`,
-        background: isSim ? C.blue : C.white,
-        color: isSim ? C.white : C.gray,
-        cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1,
-      }}
-    >
-      {isSim ? <Zap size={big ? 16 : 14} /> : <RotateCcw size={14} />}
-      {busy ? "Working…" : isSim ? "Simulate a problem" : "Reset to clean"}
-    </button>
   );
 }
 
