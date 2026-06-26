@@ -161,15 +161,6 @@ export default function FlowIQApp() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  // The Owner is an overseer — land them on Problems (their decision queue),
-  // not the operational dashboard. Runs once when the session becomes available.
-  useEffect(() => {
-    if (isAuthenticated && user?.role === "Owner" && typeof window !== "undefined" && window.location.pathname === "/") {
-      navigate("problems");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user]);
-
   const ICON_SIZE = 16;
   const navItems = [
     { id:"dashboard", label:"Overview",           icon:<Home size={ICON_SIZE} />,         group:"Overview"    },
