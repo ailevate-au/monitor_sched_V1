@@ -24,6 +24,13 @@ export interface ChangeSet {
   warningsAtConfirm: string[];
   reverted: boolean;
   revertedAt?: string;
+  /**
+   * Plain-language summary of the change. Used for entries that aren't a date
+   * move — e.g. a PM marking a job "complete" or "in progress". When present it
+   * replaces the move-count label in the UI; entries with no `moves` aren't
+   * revertable (nothing to roll back).
+   */
+  summary?: string;
 }
 
 export interface ChangeHistoryStore {

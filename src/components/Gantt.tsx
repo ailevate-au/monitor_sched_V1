@@ -1497,7 +1497,6 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                   return { taskId: t.id, name: t.name, fromStart: b.start, fromEnd: b.end, toStart: t.start, toEnd: t.end };
                 })
                 .filter((m): m is NonNullable<typeof m> => m !== null);
-              if (moves.length === 0) return;
               const cs: ChangeSet = {
                 id: makeChangeSetId(),
                 createdAt: new Date().toISOString(),
@@ -1506,6 +1505,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
                 mode: moves.length > 1 ? "full" : "none",
                 delayWorkingDays: delayDays,
                 moves,
+                summary: `Marked delayed by ${delayDays} working day${delayDays === 1 ? "" : "s"}`,
                 warningsAtConfirm:
                   (res.newIssues ?? 0) > 0 ? [`Created ${res.newIssues} new issue${res.newIssues > 1 ? "s" : ""}`] : [],
                 reverted: false,
@@ -1514,6 +1514,26 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
               setChangeSets(changeHistory.list());
             })
             .catch(() => {});
+        } else {
+          // Plain status change (no date move) — still log it so every status
+          // change shows up in Change History.
+          const statusLabel =
+            pmStatus === "complete" ? "Marked complete"
+            : pmStatus === "in_progress" ? "Marked in progress"
+            : "Marked not started";
+          changeHistory.add({
+            id: makeChangeSetId(),
+            createdAt: new Date().toISOString(),
+            anchorTaskId: task.id,
+            anchorTaskName: taskDisplayName(task),
+            mode: "none",
+            delayWorkingDays: 0,
+            moves: [],
+            summary: statusLabel,
+            warningsAtConfirm: [],
+            reverted: false,
+          });
+          setChangeSets(changeHistory.list());
         }
         loadAllData();
       })

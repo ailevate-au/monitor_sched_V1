@@ -141,20 +141,24 @@ export default function ChangeHistoryTab({
                       color: C.purple,
                     }}
                   >
-                    {MODE_LABEL[cs.mode]}{cs.delayWorkingDays > 0 ? ` · +${cs.delayWorkingDays} days` : ""}
+                    {cs.summary
+                      ? cs.summary
+                      : `${MODE_LABEL[cs.mode]}${cs.delayWorkingDays > 0 ? ` · +${cs.delayWorkingDays} days` : ""}`}
                   </span>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      padding: "1px 7px",
-                      borderRadius: 20,
-                      background: C.blueLight,
-                      color: C.blue,
-                    }}
-                  >
-                    {cs.moves.length} task{cs.moves.length === 1 ? "" : "s"} moved
-                  </span>
+                  {cs.moves.length > 0 && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        padding: "1px 7px",
+                        borderRadius: 20,
+                        background: C.blueLight,
+                        color: C.blue,
+                      }}
+                    >
+                      {cs.moves.length} task{cs.moves.length === 1 ? "" : "s"} moved
+                    </span>
+                  )}
                   {cs.reverted && (
                     <span
                       style={{
@@ -196,23 +200,25 @@ export default function ChangeHistoryTab({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => toggle(cs.id)}
-                style={{
-                  padding: "5px 10px",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  borderRadius: 6,
-                  border: `1px solid ${C.grayLight}`,
-                  background: C.white,
-                  color: C.textMuted,
-                  cursor: "pointer",
-                }}
-              >
-                {expanded[cs.id] ? "Hide ▲" : "Details ▼"}
-              </button>
-              {!cs.reverted && (
+              {cs.moves.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => toggle(cs.id)}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: `1px solid ${C.grayLight}`,
+                    background: C.white,
+                    color: C.textMuted,
+                    cursor: "pointer",
+                  }}
+                >
+                  {expanded[cs.id] ? "Hide ▲" : "Details ▼"}
+                </button>
+              )}
+              {!cs.reverted && cs.moves.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setConfirming(isConfirming ? null : cs.id)}
