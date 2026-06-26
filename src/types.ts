@@ -129,6 +129,8 @@ export interface FragileTaskSummary {
   trade: string;
   bufferDays: number;
   desc: string;
+  /** The tight successor job a "breathing room" fix should push out. */
+  childId?: string;
 }
 
 export interface ConflictHubResponse {

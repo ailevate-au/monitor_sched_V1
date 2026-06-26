@@ -114,7 +114,9 @@ function getResourceViewBarColor(task: Task): string {
 }
 
 function taskDisplayName(task: Task): string {
-  return (task.name || "").split(" — ")[0] || "Unnamed Task";
+  // Show the full job name (e.g. "Concrete Slab — Ground Floor"), not just the
+  // part before the dash. Bars clip with an ellipsis if they're too short.
+  return task.name || "Unnamed Task";
 }
 
 /** Small per-project weather indicator (the project's own state, not Sydney). */

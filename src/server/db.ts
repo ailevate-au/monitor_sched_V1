@@ -78,6 +78,7 @@ export class Datastore {
     trade: string;
     bufferDays: number;
     desc: string;
+    childId?: string;
   }> = [];
   private ready = false;
 

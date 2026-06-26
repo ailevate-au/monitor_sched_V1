@@ -930,7 +930,12 @@ async function startServer() {
     for (const f of (worstFragile ? [worstFragile] : [])) {
       const parent = db.tasks.find(t => t.id === f.id);
       if (!parent) continue;
-      const child = db.tasks.find(t => (t.dependencies || "").split(",").map(d => d.trim()).includes(f.id) && t.assigneeId);
+      // Use the exact tight successor detection flagged (falls back to the first
+      // assigned dependent) so the "breathing room" fix shifts the job the
+      // problem actually names.
+      const child =
+        (f.childId ? db.tasks.find(t => t.id === f.childId) : undefined) ||
+        db.tasks.find(t => (t.dependencies || "").split(",").map(d => d.trim()).includes(f.id) && t.assigneeId);
       const actions: any[] = [];
       if (child) {
         actions.push({

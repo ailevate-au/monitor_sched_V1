@@ -227,6 +227,7 @@ export function runConflictDetection(): void {
 
     let fragileBufferDays: number | null = null;
     let fragileDesc = "";
+    let fragileChildId: string | null = null;
     if (t.assigneeId) {
       for (const child of children) {
         const childState = resolveStateForTask(child);
@@ -237,6 +238,7 @@ export function runConflictDetection(): void {
         if (buffer <= 1 && (fragileBufferDays === null || buffer < fragileBufferDays)) {
           fragileBufferDays = buffer;
           fragileDesc = `Only ${Math.max(buffer, 0)} working day buffer before "${child.name}" starts.`;
+          fragileChildId = child.id; // the exact tight child a fix should shift
         }
       }
     }
@@ -250,6 +252,7 @@ export function runConflictDetection(): void {
         trade: assignee?.trade || t.tradeRequired,
         bufferDays: fragileBufferDays,
         desc: fragileDesc,
+        childId: fragileChildId ?? undefined,
       });
     }
   }
