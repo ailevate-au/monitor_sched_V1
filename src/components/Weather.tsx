@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, KpiCard, StatusBadge, Btn } from "./Dashboard";
+import { Sun, AlertTriangle } from "lucide-react";
+import { WeatherGlyph } from "../lib/weatherIcon";
 
 const C = {
   blue:       "#1A5FA8",
@@ -91,8 +93,8 @@ export default function ScreenWeather() {
           setSevere(danger + warn > 0);
           setWeatherAlertText(
             danger + warn > 0
-              ? `Rain or storms forecast in ${STATE_CITY[state] || state} this week — some outdoor work may be affected.`
-              : `Clear week ahead in ${STATE_CITY[state] || state} — no weather risk to site work.`
+              ? `Rain or storms forecast in ${STATE_CITY[state] || state} this week. Some outdoor work may be affected.`
+              : `Clear week ahead in ${STATE_CITY[state] || state}. No weather risk to site work.`
           );
         }
       })
@@ -180,8 +182,8 @@ export default function ScreenWeather() {
         </div>
       ) : (
         <div style={{ background: C.greenBg, border: `0.5px solid #BBF7D0`, borderRadius: 12, padding: "14px 20px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 18 }}>☀️</span>
-          <span style={{ fontSize: 12.5, color: C.greenDark, fontWeight: 600 }}>{weatherAlertText || "Clear week ahead — no weather risk to site work."}</span>
+          <Sun size={18} color={C.amber} style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 12.5, color: C.greenDark, fontWeight: 600 }}>{weatherAlertText || "Clear week ahead. No weather risk to site work."}</span>
         </div>
       )}
 
@@ -189,7 +191,7 @@ export default function ScreenWeather() {
       <Card style={{ padding: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
-            7-Day Weather Forecast — {STATE_CITY[stateSel] || stateSel} {stateSel} (Bureau of Meteorology)
+            7-Day Weather Forecast: {STATE_CITY[stateSel] || stateSel} {stateSel} (Bureau of Meteorology)
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.gray }}>
             Location
@@ -212,7 +214,7 @@ export default function ScreenWeather() {
               borderRadius: 10, padding: 14, textTransform: "none", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", minHeight: 185
             }}>
               <div>
-                <span style={{ fontSize: 26, display: "block", marginBottom: 6 }}>{d.icon}</span>
+                <span style={{ display: "block", marginBottom: 6 }}><WeatherGlyph icon={d.icon} size={26} color={d.risk === "danger" ? C.redDark : d.risk === "warn" ? C.amber : C.blue} /></span>
                 <span style={{ fontSize:11, fontWeight:600, color:C.gray, textTransform: "uppercase", display: "block", marginBottom: 4 }}>{d.date}</span>
                 <span style={{ fontSize:15, fontWeight:600, color:C.text, display: "block" }}>{d.temp}</span>
               </div>
@@ -263,7 +265,7 @@ export default function ScreenWeather() {
         <Card>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>Claiming back rain days</div>
           <p style={{ fontSize: 12, color: C.gray, lineHeight: 1.5, margin: "0 0 12px 0" }}>
-            When bad weather stops outdoor work, your contract usually lets you claim that lost time — so the delay doesn't count against you or cost you penalties.
+            When bad weather stops outdoor work, your contract usually lets you claim that lost time, so the delay doesn't count against you or cost you penalties.
           </p>
           <div style={{ background: "#F1F5F9", borderRadius: 8, padding: 12, borderLeft: `3px solid ${C.blue}` }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: C.text }}>How to claim it:</div>
@@ -302,7 +304,7 @@ export default function ScreenWeather() {
                   <tr key={t.id}>
                     <td style={{ padding: "10px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontFamily: "monospace", color: C.gray }}>{t.id}</td>
                     <td style={{ padding: "10px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontWeight: 500 }}>{t.projectName}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: C.redDark }}>⚠ {t.name}</td>
+                    <td style={{ padding: "10px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: C.redDark }}><span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><AlertTriangle size={12} /> {t.name}</span></td>
                     <td style={{ padding: "10px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: C.text }}>{t.assignee}</td>
                     <td style={{ padding: "10px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: C.gray, whiteSpace: "nowrap" }}>{t.start} to {t.end}</td>
                     <td style={{ padding: "10px 12px", borderBottom: `0.5px solid ${C.grayLight}` }}>{t.durationDays} working days</td>
@@ -329,7 +331,7 @@ export default function ScreenWeather() {
           <Card style={{ width: 360, padding: 22 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Move this job past the rain</div>
             <div style={{ fontSize: 12, color: C.gray, marginBottom: 10 }}>
-              Moving: <strong style={{ color: C.text }}>{rescheduleTask.id} — {rescheduleTask.name}</strong>
+              Moving: <strong style={{ color: C.text }}>{rescheduleTask.id} · {rescheduleTask.name}</strong>
             </div>
 
             <div style={{ background: C.amberBg, border: `0.5px solid #FCD34D`, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: C.amber, marginBottom: 14 }}>

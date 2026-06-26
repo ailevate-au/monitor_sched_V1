@@ -210,7 +210,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
       {/* Empty state — clean portfolio. Issues are created from Projects. */}
       {problems.length === 0 && (
         <div style={{ padding: "44px 20px", textAlign: "center", background: C.white, borderRadius: 12, border: `0.5px solid ${C.grayLight}` }}>
-          <div style={{ fontSize: 38, marginBottom: 10 }}>✅</div>
+          <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}><CheckCircle2 size={40} color={C.green} /></div>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Everything's on track</div>
           <div style={{ fontSize: 12.5, color: C.gray }}>No clashes, no late jobs. Nothing needs you right now.</div>
         </div>
@@ -239,7 +239,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
               <div style={{ padding: "18px 18px", background: C.greenBg, display: "flex", alignItems: "center", gap: 10 }}>
                 <CheckCircle2 size={22} color={C.green} />
                 <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: C.greenDark }}>Resolved — {p.title}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: C.greenDark }}>Resolved: {p.title}</div>
                   <div style={{ fontSize: 12, color: C.greenDark }}>{resolved}</div>
                 </div>
               </div>
@@ -294,7 +294,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
                     }}
                   >
                     <span style={{ fontSize: 11.5, fontWeight: 600, color: C.gray, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      Suggested fixes — pick one
+                      Suggested fixes (pick one)
                     </span>
                     {fixesCollapsed
                       ? <ChevronDown size={15} color={C.gray} />
@@ -412,7 +412,7 @@ function ConfirmModal({
           <div style={{ fontSize: 12, color: C.gray, lineHeight: 1.5 }}>{action.detail}</div>
           {r && (
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: `0.5px solid ${C.grayLight}`, fontSize: 11.5, color: C.text }}>
-              <div><strong>{r.name}</strong> — {r.trade} · {r.rate} · {r.util}% load</div>
+              <div><strong>{r.name}</strong> · {r.trade} · {r.rate} · {r.util}% load</div>
               {r.bio && <div style={{ color: C.gray, marginTop: 3 }}>{r.bio}</div>}
               {r.skills && r.skills.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>

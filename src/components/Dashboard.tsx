@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
+import { AlertTriangle, Zap, CloudRain, Check, AlertCircle, Sun, CheckCircle2 } from "lucide-react";
 
 const C = {
   navy:       "#0F1F3D",
@@ -25,29 +26,29 @@ const C = {
 };
 
 export const StatusBadge = ({ status }: { status: string }) => {
-  const map: { [key: string]: { bg: string; color: string; label: string; icon: string | null } } = {
-    conflict:   { bg: C.redBg,    color: C.redDark,  label: "Conflict",     icon: "⚠" },
-    fragile:    { bg: C.amberBg,  color: C.amber,    label: "Tight Gap",    icon: "⚡" },
-    weather:    { bg: "#EFF6FF",  color: "#1D4ED8",  label: "Weather Risk", icon: "🌧" },
-    overdue:    { bg: C.redBg,    color: C.redDark,  label: "Overdue",      icon: "🔴" },
+  const map: { [key: string]: { bg: string; color: string; label: string; icon: React.ReactNode } } = {
+    conflict:   { bg: C.redBg,    color: C.redDark,  label: "Conflict",     icon: <AlertTriangle size={11} /> },
+    fragile:    { bg: C.amberBg,  color: C.amber,    label: "Tight Gap",    icon: <Zap size={11} /> },
+    weather:    { bg: "#EFF6FF",  color: "#1D4ED8",  label: "Weather Risk", icon: <CloudRain size={11} /> },
+    overdue:    { bg: C.redBg,    color: C.redDark,  label: "Overdue",      icon: <AlertCircle size={11} /> },
     inprogress: { bg: C.blueLight,color: C.blue,     label: "In Progress",  icon: null },
-    completed:  { bg: C.greenBg,  color: C.greenDark,label: "Completed",    icon: "✓" },
+    completed:  { bg: C.greenBg,  color: C.greenDark,label: "Completed",    icon: <Check size={11} /> },
     scheduled:  { bg: C.bgSecond, color: C.gray,     label: "Scheduled",    icon: null },
     active:     { bg: C.blueLight,color: C.blue,     label: "Active",       icon: null },
     practical:  { bg: "#F0EEFF",  color: "#4A3DB0",  label: "Practical Completion", icon: null },
     pending:    { bg: C.amberBg,  color: C.amber,    label: "Pending Cert.",icon: null },
-    certified:  { bg: C.greenBg,  color: C.greenDark,label: "Certified",    icon: "✓" },
+    certified:  { bg: C.greenBg,  color: C.greenDark,label: "Certified",    icon: <Check size={11} /> },
     released:   { bg: "#F0EEFF",  color: "#4A3DB0",  label: "Retention Released", icon: null },
     ok:         { bg: C.greenBg,  color: C.greenDark,label: "On Schedule",  icon: null },
   };
   const s = map[status] || map.scheduled;
   return (
     <span style={{
-      display:"inline-flex", alignItems:"center", gap:3,
+      display:"inline-flex", alignItems:"center", gap:4,
       fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:8,
       background:s.bg, color:s.color, whiteSpace:"nowrap",
     }}>
-      {s.icon && <span style={{fontSize:10}}>{s.icon}</span>}
+      {s.icon}
       {s.label}
     </span>
   );
@@ -174,7 +175,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
       {/* STATUS BANNER — one glance: are we ok or not? */}
       {issues > 0 ? (
         <div style={{ background: C.redBg, border: `1px solid #FECACA`, borderRadius: 12, padding: "18px 22px", marginBottom: 16, display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0, border: `1px solid #FECACA` }}>⚠️</div>
+          <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.white, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: `1px solid #FECACA` }}><AlertTriangle size={24} color={C.red} /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.redDark, marginBottom: 2 }}>
               {issues} thing{issues > 1 ? "s" : ""} need{issues > 1 ? "" : "s"} you
@@ -187,7 +188,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
         </div>
       ) : (
         <div style={{ background: C.greenBg, border: `1px solid #BBF7D0`, borderRadius: 12, padding: "18px 22px", marginBottom: 16, display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0, border: `1px solid #BBF7D0` }}>✅</div>
+          <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.white, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: `1px solid #BBF7D0` }}><CheckCircle2 size={24} color={C.green} /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.greenDark, marginBottom: 2 }}>Everything's on track</div>
             <div style={{ fontSize: 12.5, color: C.text }}>No clashes, no late jobs across your projects.</div>
@@ -294,7 +295,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
 
       {/* WEATHER — one line */}
       <Card style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ fontSize: 22 }}>{stats.weatherAlert?.severity === "warning" ? "🌧️" : "☀️"}</span>
+        {stats.weatherAlert?.severity === "warning" ? <CloudRain size={22} color={C.blue} /> : <Sun size={22} color={C.amber} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>This week's weather</div>
           <div style={{ fontSize: 11.5, color: C.gray }}>{stats.weatherAlert?.text}</div>

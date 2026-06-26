@@ -233,8 +233,8 @@ async function startServer() {
         severity: stormDays > 0 ? "warning" : "ok",
         title: "Weather",
         text: stormDays > 0
-          ? "Rain or storms forecast this week — some outdoor work may be affected."
-          : "Clear week ahead — no weather risk to site work.",
+          ? "Rain or storms forecast this week. Some outdoor work may be affected."
+          : "Clear week ahead. No weather risk to site work.",
         forecast: weather
       }
     });
@@ -835,9 +835,9 @@ async function startServer() {
         projectName: projNames.join(" + ") || (reassignTask ? projectNameFor(reassignTask.projectId) : ""),
         // Name both jobs with their project + dates so a cross-project clash is obvious.
         what: conflictTasks.length >= 2
-          ? `${c.resource} is needed on ${conflictTasks.length} jobs at once${crossProject ? " — on different projects" : ""}: ${conflictTasks.map(t => `"${jobLabelFor(t)}" (${t.start} – ${t.end})`).join(" and ")}.`
+          ? `${c.resource} is needed on ${conflictTasks.length} jobs at once${crossProject ? " (on different projects)" : ""}: ${conflictTasks.map(t => `"${jobLabelFor(t)}" (${t.start} to ${t.end})`).join(" and ")}.`
           : c.desc,
-        impact: "The same person can't be on two jobs at once — one of them will slip unless you fix it.",
+        impact: "The same person can't be on two jobs at once. One of them will slip unless you fix it.",
         suggestedActions: actions,
       });
     }
@@ -871,7 +871,7 @@ async function startServer() {
         taskIds: [t.id],
         title: `No one is assigned to "${jobLabelFor(t)}"`,
         projectName: projectNameFor(t.projectId),
-        what: `"${t.name}" (${t.start} – ${t.end}) needs a ${t.tradeRequired}, but nobody is on it yet.`,
+        what: `"${t.name}" (${t.start} to ${t.end}) needs a ${t.tradeRequired}, but nobody is on it yet.`,
         impact: "Nobody is doing this job yet, so it can't start.",
         suggestedActions: actions,
       });
@@ -918,7 +918,7 @@ async function startServer() {
         taskIds: [worst.id],
         title: `${projectNameFor(pid)} is behind schedule`,
         projectName: projectNameFor(pid),
-        what: `"${jobLabelFor(worst)}" was due ${worst.end} — it's ${daysLate} day${daysLate !== 1 ? "s" : ""} late${assignee ? ` (${assignee.name}'s job)` : ""}.`,
+        what: `"${jobLabelFor(worst)}" was due ${worst.end}, now ${daysLate} day${daysLate !== 1 ? "s" : ""} late${assignee ? ` (${assignee.name}'s job)` : ""}.`,
         impact: "This job is already late, so the jobs after it are waiting too.",
         suggestedActions: actions,
       });

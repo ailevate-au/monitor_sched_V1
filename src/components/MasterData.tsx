@@ -6,6 +6,7 @@ import {
   MasterTabId,
   MASTER_TAB_META,
 } from "../types/masters";
+import { DollarSign, Map, Building2, Hammer, Building } from "lucide-react";
 
 const C = {
   navy: "#0F1F3D",
@@ -25,12 +26,12 @@ const C = {
 
 type TabCounts = Record<MasterTabId, { active: number; total: number }>;
 
-const TABS: { id: MasterTabId; icon: string }[] = [
-  { id: "cost_categories", icon: "💰" },
-  { id: "states", icon: "🗺️" },
-  { id: "sectors", icon: "🏗️" },
-  { id: "trades", icon: "🔨" },
-  { id: "companies", icon: "🏢" },
+const TABS: { id: MasterTabId; icon: React.ReactNode }[] = [
+  { id: "cost_categories", icon: <DollarSign size={14} /> },
+  { id: "states", icon: <Map size={14} /> },
+  { id: "sectors", icon: <Building2 size={14} /> },
+  { id: "trades", icon: <Hammer size={14} /> },
+  { id: "companies", icon: <Building size={14} /> },
 ];
 
 function CostCategoriesPanel({ onRegistryChange }: { onRegistryChange?: () => void }) {
@@ -642,7 +643,7 @@ export default function ScreenMasterData({ initialTab = "cost_categories" }: { i
                   background: selected ? C.blueLight : "transparent",
                 }}
               >
-                <span>{tab.icon}</span>
+                <span style={{ display: "inline-flex", alignItems: "center" }}>{tab.icon}</span>
                 <span style={{ flex: 1, lineHeight: 1.3 }}>{m.title}</span>
                 {counts !== undefined && (
                   <span

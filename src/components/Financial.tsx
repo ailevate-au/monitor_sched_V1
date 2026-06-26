@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Project, ProgressClaim } from "../types";
 import { KpiCard, Card, StatusBadge, Btn, SectionHeader } from "./Dashboard";
+import { RefreshCw } from "lucide-react";
 
 const C = {
   blue:       "#1A5FA8",
@@ -757,7 +758,7 @@ export default function ScreenFinancial() {
           <span title={exportDisabledTooltip}>
             <Btn small disabled={isDev} onClick={() => exportFinancialReport("Excel")}>{`Export Excel (${exportScopeLabel})`}</Btn>
           </span>
-          <Btn small onClick={loadFinancialData}>↻ Refresh</Btn>
+          <Btn small onClick={loadFinancialData}><span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><RefreshCw size={13} /> Refresh</span></Btn>
           <span style={{ fontSize: 10.5, color: C.gray, marginLeft: "auto" }}>
             {filteredProjects.length} of {projList.length} projects
           </span>

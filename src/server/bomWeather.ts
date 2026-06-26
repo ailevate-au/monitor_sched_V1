@@ -65,13 +65,13 @@ function clearWeek(state: string): WeatherDay[] {
 function stormWeek(state: string): WeatherDay[] {
   const base = STATE_BASE[state] || DEFAULT_BASE;
   const pattern: Array<{ icon: string; desc: string; risk: WeatherDay["risk"]; impact: string; precip: string; wind: string; dTemp: number }> = [
-    { icon: "☀️", desc: "Clear",        risk: "ok",     impact: "✓ Full day",      precip: "0mm",  wind: "10 km/h", dTemp: 2 },
-    { icon: "⛅", desc: "Partly cloudy", risk: "ok",     impact: "✓ Full day",      precip: "2mm",  wind: "14 km/h", dTemp: 0 },
-    { icon: "🌧️", desc: "Heavy rain",    risk: "warn",   impact: "⚠ Reduced ops",   precip: "32mm", wind: "28 km/h", dTemp: -5 },
-    { icon: "⛈️", desc: "Storm · 40mm",  risk: "danger", impact: "✕ Site closure",  precip: "40mm", wind: "48 km/h", dTemp: -7 },
-    { icon: "🌦️", desc: "Showers",       risk: "warn",   impact: "⚠ Reduced ops",   precip: "12mm", wind: "30 km/h", dTemp: -4 },
-    { icon: "🌤️", desc: "Clearing",      risk: "ok",     impact: "✓ Full day",      precip: "3mm",  wind: "18 km/h", dTemp: -1 },
-    { icon: "☀️", desc: "Fine",          risk: "ok",     impact: "✓ Full day",      precip: "0mm",  wind: "12 km/h", dTemp: 1 },
+    { icon: "☀️", desc: "Clear",        risk: "ok",     impact: "Full day",      precip: "0mm",  wind: "10 km/h", dTemp: 2 },
+    { icon: "⛅", desc: "Partly cloudy", risk: "ok",     impact: "Full day",      precip: "2mm",  wind: "14 km/h", dTemp: 0 },
+    { icon: "🌧️", desc: "Heavy rain",    risk: "warn",   impact: "Reduced ops",   precip: "32mm", wind: "28 km/h", dTemp: -5 },
+    { icon: "⛈️", desc: "Storm, 40mm",  risk: "danger", impact: "Site closure",  precip: "40mm", wind: "48 km/h", dTemp: -7 },
+    { icon: "🌦️", desc: "Showers",       risk: "warn",   impact: "Reduced ops",   precip: "12mm", wind: "30 km/h", dTemp: -4 },
+    { icon: "🌤️", desc: "Clearing",      risk: "ok",     impact: "Full day",      precip: "3mm",  wind: "18 km/h", dTemp: -1 },
+    { icon: "☀️", desc: "Fine",          risk: "ok",     impact: "Full day",      precip: "0mm",  wind: "12 km/h", dTemp: 1 },
   ];
   return DATES.map((d, i) => ({
     ...d,

@@ -66,7 +66,7 @@ Notes:
 
 ## Resetting demo data
 
-**In the app (preferred):** Go to the **Projects** tab and click **↺ Reset to clean**. Clears all manual changes (dragged tasks, PM delays, new work) and returns to 0 issues. No restart needed.
+**In the app (preferred):** Go to the **Projects** tab and click **Reset to clean**. Clears all manual changes (dragged tasks, PM delays, new work) and returns to 0 issues. No restart needed.
 
 **From the terminal** (full DB wipe + reseed):
 

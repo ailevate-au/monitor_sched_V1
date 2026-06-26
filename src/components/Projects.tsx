@@ -6,6 +6,9 @@ import { AppNavigate } from "../types/masters";
 import { LabelWithInfo } from "./InfoTip";
 import { useAuth } from "../lib/auth";
 import { visibleProjects as scopeProjects } from "../lib/auth";
+import { Zap, RotateCcw, Calendar, DollarSign, Download, Plus } from "lucide-react";
+
+const iconRow = { display: "inline-flex", alignItems: "center", gap: 6 } as const;
 
 const C = {
   navy:       "#0F1F3D",
@@ -305,18 +308,18 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
         {totalIssues > 0 ? (
           <>
             <Btn small onClick={() => onNav?.("problems")}>See Problems →</Btn>
-            <Btn small danger onClick={() => runDemo("reset")} disabled={demoBusy}>{demoBusy ? "Working…" : "↺ Reset to clean"}</Btn>
+            <Btn small danger onClick={() => runDemo("reset")} disabled={demoBusy}>{demoBusy ? "Working…" : <span style={iconRow}><RotateCcw size={13} /> Reset to clean</span>}</Btn>
           </>
         ) : (
-          <Btn primary small onClick={() => runDemo("simulate")} disabled={demoBusy}>{demoBusy ? "Working…" : "⚡ Bring in new work (demo)"}</Btn>
+          <Btn primary small onClick={() => runDemo("simulate")} disabled={demoBusy}>{demoBusy ? "Working…" : <span style={iconRow}><Zap size={13} /> Bring in new work</span>}</Btn>
         )}
       </div>
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
         <span style={{ fontSize:12, fontWeight:600, color:C.gray, textTransform:"uppercase", letterSpacing:"0.05em" }}>Active Projects</span>
         <div style={{ display: "flex", gap: 8 }}>
-          <Btn small onClick={() => { setShowImportModal(true); setImportMsg(null); }}>⤓ Import Projects</Btn>
-          <Btn primary small onClick={() => setShowAddModal(true)}>+ New Project Contract</Btn>
+          <Btn small onClick={() => { setShowImportModal(true); setImportMsg(null); }}><span style={iconRow}><Download size={13} /> Import projects</span></Btn>
+          <Btn primary small onClick={() => setShowAddModal(true)}><span style={iconRow}><Plus size={13} /> New project</span></Btn>
         </div>
       </div>
 
@@ -354,8 +357,8 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
             </div>
             <div style={{ display:"flex", gap:20, fontSize:11, color:C.gray, marginBottom:10, flexWrap:"wrap", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                <span>📅 Prog. Baseline: {p.pcStartDate} to {p.pcEndDate}</span>
-                <span>💰 A${p.finalContractSum.toFixed(1)}M contract sum</span>
+                <span style={iconRow}><Calendar size={12} /> {p.pcStartDate} to {p.pcEndDate}</span>
+                <span style={iconRow}><DollarSign size={12} /> A${p.finalContractSum.toFixed(1)}M contract</span>
                 <span style={{ color: p.overBudget ? C.red : C.green }}>
                   {p.overBudget ? "↓" : "↑"} Gross Margin: {marginVal}%
                 </span>
@@ -383,7 +386,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
         <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(15,31,61,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:99 }}>
           <div style={{ background:C.white, borderRadius:12, width: 420, padding: 22, border:`0.5px solid ${C.grayLight}`, boxShadow: "0 10px 25px rgba(0,0,0,0.1)", maxHeight: "95vh", overflowY: "auto" }}>
             <div style={{ fontSize:14, fontWeight:600, color:C.text, marginBottom:4 }}>Add New Project</div>
-            <div style={{ fontSize:11, color:C.gray, marginBottom:16 }}>Enter the key contract details — you can update costs and dates later.</div>
+            <div style={{ fontSize:11, color:C.gray, marginBottom:16 }}>Enter the key contract details. You can update costs and dates later.</div>
 
             {/* Row 1: Name */}
             <div style={{ marginBottom:10 }}>
@@ -553,7 +556,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
             <div style={{ background: C.blueLight, border: `1px solid ${C.blueMid}55`, borderRadius: 10, padding: "12px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: C.blue }}>Quick start</div>
-                <div style={{ fontSize: 11, color: C.gray }}>Adds 2 sample projects instantly — great for a demo.</div>
+                <div style={{ fontSize: 11, color: C.gray }}>Adds 2 sample projects instantly. Great for a demo.</div>
               </div>
               <Btn primary small disabled={importing} onClick={() => runImport({ sample: true }, "sample set")}>
                 {importing ? "Importing…" : "Load sample set"}

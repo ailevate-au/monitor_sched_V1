@@ -43,55 +43,6 @@ export const DEFAULT_PROJECTS = [
     ldRatePerDay: 41000, pcStartDate: "2026-05-01", pcEndDate: "2026-12-20",
     retentionPercent: 5.0, status: "ACTIVE", progress: 18, weatherRisk: false, overBudget: false,
   },
-  {
-    id: "p4", name: "North Ryde Business Park — S1", type: "Commercial fitout",
-    location: "North Ryde NSW", contractor: "Built", state: "NSW",
-    originalContractSum: 24.0, finalContractSum: 24.0, plannedCost: 20.0, actualCost: 20.6,
-    ldRatePerDay: 24000, pcStartDate: "2025-01-01", pcEndDate: "2025-05-15",
-    retentionPercent: 5.0, status: "PRACTICAL_COMPLETION", progress: 100, weatherRisk: false, overBudget: false,
-  },
-  {
-    id: "p5", name: "Newcastle Foreshore — Mixed Use", type: "Mixed-use development",
-    location: "Newcastle NSW", contractor: "Hansen Yuncken", state: "NSW",
-    originalContractSum: 47.0, finalContractSum: 47.0, plannedCost: 39.0, actualCost: 12.1,
-    ldRatePerDay: 47000, pcStartDate: "2026-06-15", pcEndDate: "2027-02-28",
-    retentionPercent: 5.0, status: "ACTIVE", progress: 22, weatherRisk: false, overBudget: false,
-  },
-  {
-    id: "p6", name: "Geelong Health Precinct — Stage 1", type: "Health & institutional",
-    location: "Geelong VIC", contractor: "Kane Constructions", state: "VIC",
-    originalContractSum: 62.0, finalContractSum: 62.0, plannedCost: 51.0, actualCost: 9.4,
-    ldRatePerDay: 62000, pcStartDate: "2026-07-01", pcEndDate: "2027-06-30",
-    retentionPercent: 5.0, status: "ACTIVE", progress: 12, weatherRisk: false, overBudget: false,
-  },
-  {
-    id: "p7", name: "Gold Coast Light Rail — Depot", type: "Infrastructure",
-    location: "Southport QLD", contractor: "John Holland", state: "QLD",
-    originalContractSum: 88.0, finalContractSum: 88.0, plannedCost: 74.0, actualCost: 18.0,
-    ldRatePerDay: 88000, pcStartDate: "2026-06-20", pcEndDate: "2027-08-15",
-    retentionPercent: 5.0, status: "ACTIVE", progress: 15, weatherRisk: false, overBudget: false,
-  },
-  {
-    id: "p8", name: "Canberra Civic Tower", type: "Commercial office",
-    location: "Civic ACT", contractor: "Construction Control", state: "ACT",
-    originalContractSum: 53.0, finalContractSum: 53.0, plannedCost: 44.0, actualCost: 6.2,
-    ldRatePerDay: 53000, pcStartDate: "2026-08-01", pcEndDate: "2027-09-30",
-    retentionPercent: 5.0, status: "ACTIVE", progress: 8, weatherRisk: false, overBudget: false,
-  },
-  {
-    id: "p9", name: "Perth Riverside Apartments", type: "High-density residential",
-    location: "East Perth WA", contractor: "Multiplex", state: "WA",
-    originalContractSum: 39.0, finalContractSum: 39.0, plannedCost: 33.0, actualCost: 0.0,
-    ldRatePerDay: 39000, pcStartDate: "2026-09-01", pcEndDate: "2027-07-31",
-    retentionPercent: 5.0, status: "PLANNING", progress: 0, weatherRisk: false, overBudget: false,
-  },
-  {
-    id: "p10", name: "Adelaide Central Markets — Redevelopment", type: "Retail & commercial",
-    location: "Adelaide SA", contractor: "Sarah Constructions", state: "SA",
-    originalContractSum: 31.0, finalContractSum: 31.0, plannedCost: 26.0, actualCost: 4.3,
-    ldRatePerDay: 31000, pcStartDate: "2026-07-15", pcEndDate: "2027-05-31",
-    retentionPercent: 5.0, status: "ACTIVE", progress: 10, weatherRisk: false, overBudget: false,
-  },
 ];
 
 // 10 resources — 2 in conflict (Ben and Tom), rest available at varying load
@@ -138,7 +89,7 @@ export const RESOURCE_PROFILES: Record<string, { bio: string; skills: string[] }
   r16: { bio: "HSE officer, SA. Retail + heritage redevelopment experience.",                   skills: ["Heritage site safety", "Public-interface controls", "Audits"] },
 };
 
-// 26 tasks across 3 active projects.
+// 27 tasks across 3 active projects (Parramatta, Victoria Harbour, Southbank).
 // CLEAN BASELINE: this seed has NO conflicts, NO overdue, NO tight handovers and
 // NO weather risk — a fresh boot shows "Everything on track" (0 issues).
 // The demo problem is injected on demand by POST /api/v1/demo/simulate, which
@@ -202,25 +153,6 @@ export const DEFAULT_TASKS = [
   { id: "TSK-P3-08", projectId: "p3", name: "Subcontractor Coordination — Q3",    assigneeId: "r10", tradeRequired: "Project Coordinator",  start: "2026-07-07", end: "2026-08-01", durationDays: 20, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
   // Anika: fire services (assigned so the clean baseline has 0 unassigned jobs)
   { id: "TSK-P3-09", projectId: "p3", name: "Fire Services Rough-in — L1 & L2",  assigneeId: "r5",  tradeRequired: "Services Coordinator", start: "2026-07-21", end: "2026-08-04", durationDays: 11, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
-
-  // ─── NEWCASTLE FORESHORE (p5) — healthy, no problems ────────────────────
-  { id: "TSK-P5-01", projectId: "p5", name: "Site Establishment & Early Works",  assigneeId: "r11", tradeRequired: "Site Manager",         start: "2026-07-06", end: "2026-07-17", durationDays: 10, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
-  { id: "TSK-P5-02", projectId: "p5", name: "Structural Frame — Podium",         assigneeId: "r13", tradeRequired: "Structural Foreman",   start: "2026-07-20", end: "2026-08-07", durationDays: 14, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
-
-  // ─── GEELONG HEALTH PRECINCT (p6) — healthy ─────────────────────────────
-  { id: "TSK-P6-01", projectId: "p6", name: "Services Rough-in — Ward Block",    assigneeId: "r12", tradeRequired: "Services Coordinator", start: "2026-08-03", end: "2026-08-21", durationDays: 15, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
-
-  // ─── GOLD COAST LIGHT RAIL DEPOT (p7) — healthy ─────────────────────────
-  { id: "TSK-P7-01", projectId: "p7", name: "Cost Plan & QS Set-up",             assigneeId: "r14", tradeRequired: "Quantity Surveyor",    start: "2026-07-13", end: "2026-07-24", durationDays: 10, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
-
-  // ─── CANBERRA CIVIC TOWER (p8) — healthy ────────────────────────────────
-  { id: "TSK-P8-01", projectId: "p8", name: "Formwork Deck — Level 1",           assigneeId: "r15", tradeRequired: "Formwork Foreman",     start: "2026-09-01", end: "2026-09-14", durationDays: 10, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
-
-  // ─── PERTH RIVERSIDE (p9) — planning, healthy ───────────────────────────
-  { id: "TSK-P9-01", projectId: "p9", name: "HSE Management Plan",               assigneeId: "r16", tradeRequired: "HSE Officer",          start: "2026-08-17", end: "2026-08-21", durationDays: 5,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
-
-  // ─── ADELAIDE CENTRAL MARKETS (p10) — healthy ───────────────────────────
-  { id: "TSK-P10-01", projectId: "p10", name: "Variation Assessment — Heritage", assigneeId: "r14", tradeRequired: "Quantity Surveyor",    start: "2026-08-10", end: "2026-08-21", durationDays: 10, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
 ];
 
 export const DEFAULT_CLAIMS = [
@@ -231,7 +163,6 @@ export const DEFAULT_CLAIMS = [
   { id: "cl4", claimNumber: "PC-004", projectId: "p2", project: "Victoria Harbour",    period: "May 2026", claimedAmount: "A$2.6M", certifiedAmount: "A$2.5M", claimedVal: 2600000, certifiedVal: 2500000, retentionVal: 125000, dueDate: "2026-06-15", status: "certified", costCategoryId: "cc3", costCategoryName: "Materials"       },
   { id: "cl3", claimNumber: "PC-003", projectId: "p3", project: "Southbank Res.",      period: "May 2026", claimedAmount: "A$1.8M", certifiedAmount: "A$1.8M", claimedVal: 1800000, certifiedVal: 1800000, retentionVal: 90000,  dueDate: "2026-06-10", status: "certified", costCategoryId: "cc4", costCategoryName: "Plant & Equipment"},
   { id: "cl2", claimNumber: "PC-002", projectId: "p2", project: "Victoria Harbour",    period: "Apr 2026", claimedAmount: "A$2.2M", certifiedAmount: "A$2.2M", claimedVal: 2200000, certifiedVal: 2200000, retentionVal: 110000, dueDate: "2026-05-20", status: "certified", costCategoryId: "cc2", costCategoryName: "Subcontractors"  },
-  { id: "cl1", claimNumber: "PC-001", projectId: "p4", project: "North Ryde BP",       period: "Apr 2026", claimedAmount: "A$4.6M", certifiedAmount: "A$4.6M", claimedVal: 4600000, certifiedVal: 4600000, retentionVal: 0,      dueDate: "2026-05-01", status: "released",  costCategoryId: "cc1", costCategoryName: "Labour"          },
 ];
 
 export const DEFAULT_ALERTS = [

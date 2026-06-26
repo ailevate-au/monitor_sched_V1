@@ -92,11 +92,11 @@ export default function ChangeHistoryTab({
           <History size={32} color={C.gray} />
         </div>
         <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-          No confirmed adjustments yet
+          No changes yet
         </div>
         <div style={{ fontSize: 12 }}>
-          Use <strong>⏱ Adjust Timeline</strong> to preview and confirm a delay. Confirmed changes
-          appear here and can be undone.
+          Move a job, change a date, or mark one delayed. Every change shows up here, and you can
+          undo it.
         </div>
       </div>
     );
@@ -141,7 +141,7 @@ export default function ChangeHistoryTab({
                       color: C.purple,
                     }}
                   >
-                    {MODE_LABEL[cs.mode]} · +{cs.delayWorkingDays} wd
+                    {MODE_LABEL[cs.mode]}{cs.delayWorkingDays > 0 ? ` · +${cs.delayWorkingDays} days` : ""}
                   </span>
                   <span
                     style={{

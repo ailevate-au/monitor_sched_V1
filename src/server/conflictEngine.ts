@@ -200,7 +200,7 @@ export function runConflictDetection(): void {
         resource: r.name,
         trade: r.trade,
         rate: r.rate,
-        desc: `${r.name} cannot be used — assigned to overlapping tasks: ${overlapSummary}. Current load: ${r.util}%.`,
+        desc: `${r.name} is already on overlapping jobs: ${overlapSummary}. Current load: ${r.util}%.`,
         utilPercent: r.util,
         overlapPairs,
         reasonSummary: `${r.name} is double-booked on ${overlapPairs.length} overlapping task pair(s).`,

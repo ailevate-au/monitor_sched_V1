@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { HardHat, Calendar, AlertTriangle } from "lucide-react";
 
 const C = {
   navy:       "#0F1F3D",
@@ -105,7 +106,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
       <div style={{ background: C.navy, color: C.white, borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }}>
         <div>
           <div style={{ fontSize: 11, color: "#93C5FD", fontWeight: 700, letterSpacing: "0.05em" }}>SIGNED IN AS</div>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>👷 Ben Nguyen</div>
+          <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><HardHat size={15} /> Ben Nguyen</div>
           <div style={{ fontSize: 10, opacity: 0.85 }}>Formwork Foreman · NSW Region</div>
         </div>
         <button 
@@ -163,8 +164,8 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
 
                   {/* Dates & Progression info */}
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.gray, marginBottom: 12 }}>
-                    <span>📅 Dates: {t.start} to {t.end}</span>
-                    <span>📈 Progress: {t.percent_complete}%</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Calendar size={12} /> {t.start} to {t.end}</span>
+                    <span>Progress: {t.percent_complete}%</span>
                   </div>
 
                   {/* Operational controls */}
@@ -194,10 +195,10 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
                       <button 
                         disabled={updatingId === t.id}
                         onClick={() => handleReportBehind(t.id)}
-                        style={{ padding: "6px 10px", fontSize: 11, background: C.redBg, color: C.red, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}
+                        style={{ padding: "6px 10px", fontSize: 11, background: C.redBg, color: C.red, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}
                         title="Tell your manager this job is running behind"
                       >
-                        ⚠️ Report a Delay
+                        <AlertTriangle size={12} /> Report a delay
                       </button>
                     )}
                   </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Resource, Project } from "../types";
 import { KpiCard, Card, Btn } from "./Dashboard";
+import { Search, AlertTriangle, FileText } from "lucide-react";
 import { useMasters } from "../hooks/useMasters";
 import { AppNavigate } from "../types/masters";
 
@@ -336,7 +337,7 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
             <div style={{ position: "relative", minWidth: 220 }}>
               <input 
                 type="text" 
-                placeholder="🔍 Search by name..."
+                placeholder="Search by name..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 style={{
@@ -350,7 +351,7 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
                   outline: "none"
                 }}
               />
-              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: C.gray }}>👤</span>
+              <Search size={13} color={C.gray} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)" }} />
             </div>
 
             {/* Trade Selection Filter */}
@@ -433,7 +434,7 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
                 {isExpanded && (
                   <div style={{ padding: "18px 24px", borderTop: `1px solid ${C.grayLight}`, background: "#F1F5F9" }}>
                     <div style={{ fontSize: 12.5, fontWeight: 700, color: C.navy, marginBottom: 12, display: "flex", gap: 6, alignItems: "center" }}>
-                      <span>📄 Detail Card & Site Allowances Config ({r.name})</span>
+                      <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><FileText size={14} /> Detail Card & Site Allowances Config ({r.name})</span>
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginBottom: 16 }}>
@@ -703,8 +704,8 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
             />
 
             {importError && (
-              <div style={{ color:C.red, fontSize:11.5, fontWeight:600, marginBottom:10 }}>
-                ⚠️ {importError}
+              <div style={{ color:C.red, fontSize:11.5, fontWeight:600, marginBottom:10, display:"inline-flex", alignItems:"center", gap:5 }}>
+                <AlertTriangle size={12} /> {importError}
               </div>
             )}
 
