@@ -125,12 +125,14 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
   const [tasks, setTasks] = useState<any[]>([]);
   const [projectsOpen, setProjectsOpen] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [problems, setProblems] = useState<any[]>([]);
 
   useEffect(() => {
     const load = () => {
       fetch("/api/v1/dashboard").then(r => r.json()).then(setStats).catch(() => {});
       fetch("/api/v1/projects").then(r => r.json()).then(d => { if (Array.isArray(d)) setAllProjects(d); }).catch(() => {});
       fetch("/api/v1/tasks").then(r => r.json()).then(d => { if (Array.isArray(d)) setTasks(d); }).catch(() => {});
+      fetch("/api/v1/problems").then(r => r.json()).then(d => { if (Array.isArray(d?.problems)) setProblems(d.problems); }).catch(() => {});
     };
     load();
     const t = setInterval(load, 8000);
@@ -141,10 +143,29 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
     return <div style={{ padding: 20, color: C.gray }}>Loading…</div>;
   }
 
-  const issues = stats.totalIssues ?? 0;
-  // PMs only see their own projects in the list below.
+  // PMs only see their own projects — so the four numbers must match the scoped
+  // list, not the whole portfolio. Owner/Admin keep the global server stats.
+  const isPM = user?.role === "PM";
   const projects = scopeProjects(user, allProjects);
   const activeProjects = projects.filter(p => p.status === "ACTIVE");
+
+  const scopedIds = new Set(projects.map(p => p.id));
+  const activeIds = new Set(activeProjects.map(p => p.id));
+  const scopedNames = new Set(projects.map(p => p.name));
+  const scopedTasks = isPM ? tasks.filter((t: any) => scopedIds.has(t.projectId)) : tasks;
+  const scopedProblems = isPM
+    ? problems.filter(p => String(p.projectName || "").split(" + ").every(n => scopedNames.has(n.trim())))
+    : problems;
+
+  const liveScoped = scopedTasks.filter((t: any) => t.status !== "completed" && (t.percent_complete ?? 0) < 100);
+  const okScoped = liveScoped.filter((t: any) => !["conflict", "overdue", "weather", "fragile"].includes(t.status)).length;
+
+  const issues = isPM ? scopedProblems.length : (stats.totalIssues ?? 0);
+  const activeCount = isPM ? activeProjects.length : stats.activeProjectsCount;
+  const onTrackPct = isPM ? (liveScoped.length ? Math.round((okScoped / liveScoped.length) * 100) : 100) : stats.onProgrammePct;
+  const unassignedNum = isPM
+    ? scopedTasks.filter((t: any) => !t.assigneeId && t.status !== "completed" && activeIds.has(t.projectId)).length
+    : (stats.unassignedCount ?? 0);
   const toggleProject = (id: string) =>
     setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -176,8 +197,8 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
 
       {/* FOUR SIMPLE NUMBERS — stretch full width */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 16 }}>
-        <KpiCard label="Projects Running" value={`${stats.activeProjectsCount}`} sub="Live right now" />
-        <KpiCard label="On Track" value={`${stats.onProgrammePct}%`} valueColor={C.green} sub="Jobs going to plan" />
+        <KpiCard label="Projects Running" value={`${activeCount}`} sub="Live right now" />
+        <KpiCard label="On Track" value={`${onTrackPct}%`} valueColor={C.green} sub="Jobs going to plan" />
         <KpiCard
           label="Total Issues"
           value={`${issues}`}
@@ -188,9 +209,9 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
         />
         <KpiCard
           label="Unassigned Jobs"
-          value={`${stats.unassignedCount ?? 0}`}
-          valueColor={(stats.unassignedCount ?? 0) > 0 ? C.red : C.greenDark}
-          sub={(stats.unassignedCount ?? 0) > 0 ? "Need someone assigned" : "All jobs staffed"}
+          value={`${unassignedNum}`}
+          valueColor={unassignedNum > 0 ? C.red : C.greenDark}
+          sub={unassignedNum > 0 ? "Need someone assigned" : "All jobs staffed"}
           onClick={() => onNav("problems")}
           actionLabel="Open Problems"
         />

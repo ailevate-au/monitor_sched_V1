@@ -825,6 +825,7 @@ async function startServer() {
         });
       }
 
+      const crossProject = projNames.length > 1;
       problems.push({
         id: `prob-conflict-${c.resourceId}`,
         category: "conflict",
@@ -832,8 +833,9 @@ async function startServer() {
         taskIds: conflictTasks.map(t => t.id),
         title: `${c.resource} is booked on two jobs at the same time`,
         projectName: projNames.join(" + ") || (reassignTask ? projectNameFor(reassignTask.projectId) : ""),
-        what: (c.overlapPairs && c.overlapPairs.length)
-          ? c.overlapPairs.map((p: any) => `${p.taskA} and ${p.taskB} overlap (${p.datesA}).`).join(" ")
+        // Name both jobs with their project + dates so a cross-project clash is obvious.
+        what: conflictTasks.length >= 2
+          ? `${c.resource} is needed on ${conflictTasks.length} jobs at once${crossProject ? " — on different projects" : ""}: ${conflictTasks.map(t => `"${jobLabelFor(t)}" (${t.start} – ${t.end})`).join(" and ")}.`
           : c.desc,
         impact: "The same person can't be on two jobs at once — one of them will slip unless you fix it.",
         suggestedActions: actions,
