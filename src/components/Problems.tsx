@@ -273,7 +273,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
                   {onNav && (
                     <button
                       type="button"
-                      onClick={() => onNav("gantt")}
+                      onClick={() => onNav("gantt", undefined, (p.taskIds && p.taskIds.length > 0) ? { ganttTaskIds: p.taskIds, ganttFocusLabel: p.title } : undefined)}
                       style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}
                     >
                       <CalendarDays size={12} /> View in Timeline

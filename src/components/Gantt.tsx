@@ -30,7 +30,7 @@ import {
 import { changeHistory, makeChangeSetId, type ChangeSet } from "../lib/changeHistory";
 import TimelineAdjustPanel from "./TimelineAdjustPanel";
 import ChangeHistoryTab from "./ChangeHistoryTab";
-import { Timer, Users, FolderKanban, HardHat, History, RotateCcw, AlertTriangle, CloudRain, Check, Inbox, Plus, Pencil, Clock, Play, RefreshCw } from "lucide-react";
+import { Timer, Users, FolderKanban, HardHat, History, RotateCcw, AlertTriangle, CloudRain, Check, Inbox, Plus, Pencil, Clock, Play, RefreshCw, Filter } from "lucide-react";
 import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
 import { WeatherGlyph } from "../lib/weatherIcon";
 
@@ -277,7 +277,7 @@ function MultiSelectDropdown({
 /** Task statuses that count as an open "problem" surfaced in the Problems hub. */
 const PROBLEM_STATUSES = new Set(["conflict", "fragile", "overdue", "weather"]);
 
-export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { onNav?: AppNavigate; initialStatus?: string | null; initialTaskIds?: string[] | null }) {
+export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, initialFocusLabel }: { onNav?: AppNavigate; initialStatus?: string | null; initialTaskIds?: string[] | null; initialFocusLabel?: string | null }) {
   const { user } = useAuth();
   const isPM = user?.role === "PM";
   const { masters } = useMasters(true);
@@ -373,9 +373,12 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState(initialStatus || "all");
   const [filterTrade, setFilterTrade] = useState("all");
-  // When arriving from a Problems-hub KPI, focus on the exact tasks behind those
-  // problems. Empty = no task-level focus. Cleared via the "Clear filters" button.
+  // When arriving from a Problem, focus the Timeline on the project(s) that
+  // problem involves. `focusTaskIds` are the exact jobs behind it; we show their
+  // whole projects (see `focusProjectIdSet`). `focusLabel` names the problem in
+  // the banner. Cleared via "Show all projects".
   const [focusTaskIds, setFocusTaskIds] = useState<string[]>(initialTaskIds || []);
+  const [focusLabel, setFocusLabel] = useState<string | null>(initialFocusLabel || null);
 
   const CW = 40; // Column (day) width in px
   const MIN_LEFT_COL_WIDTH = 240;
@@ -1066,10 +1069,27 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
   const renderSourceTasks = adjustActive && adjustMoves.length > 0 ? adjustSimTasks : displayTasks;
 
   const focusTaskIdSet = useMemo(() => new Set(focusTaskIds), [focusTaskIds]);
+  // The projects a focused problem touches — we show those whole projects, not
+  // just the two clashing bars, so the surrounding jobs give context.
+  const focusProjectIdSet = useMemo(() => {
+    if (focusTaskIdSet.size === 0) return new Set<string>();
+    const byId = new Map(scopedTasks.map((t) => [t.id, t]));
+    const ids = new Set<string>();
+    for (const tid of focusTaskIds) {
+      const t = byId.get(tid);
+      if (t) ids.add(t.projectId);
+    }
+    return ids;
+  }, [focusTaskIds, focusTaskIdSet, scopedTasks]);
+  const focusProjectNames = useMemo(() => {
+    const names = projects.filter((p) => focusProjectIdSet.has(p.id)).map((p) => p.name.split(" —")[0]);
+    return Array.from(new Set(names));
+  }, [projects, focusProjectIdSet]);
   const filteredTasks = useMemo(() => {
     const q = filterSearch.trim().toLowerCase();
     return renderSourceTasks.filter((t) => {
-      if (focusTaskIdSet.size > 0 && !focusTaskIdSet.has(t.id)) return false;
+      // Project-level focus: keep every job on the focused problem's project(s).
+      if (focusProjectIdSet.size > 0 && !focusProjectIdSet.has(t.projectId)) return false;
       if (filterProjects.length > 0 && !filterProjects.includes(t.project || "")) return false;
       if (filterStatus === "problems") {
         if (!PROBLEM_STATUSES.has(t.status || "")) return false;
@@ -1085,7 +1105,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
       }
       return true;
     });
-  }, [renderSourceTasks, focusTaskIdSet, filterProjects, filterStatus, filterTrade, filterResources, filterSearch]);
+  }, [renderSourceTasks, focusProjectIdSet, filterProjects, filterStatus, filterTrade, filterResources, filterSearch]);
 
   const tradeFilterOptions = useMemo(() => {
     const set = new Set<string>();
@@ -1412,6 +1432,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
 
   const clearFilters = () => {
     setFocusTaskIds([]);
+    setFocusLabel(null);
     setFilterProjects([]);
     setFilterResources([]);
     setFilterStatus("all");
@@ -1719,6 +1740,26 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
 
   return (
     <div>
+      {/* Focus banner — arrived from a Problem's "View in Timeline". Shows only
+          the project(s) that problem touches, with a one-click way back to all. */}
+      {focusProjectIdSet.size > 0 && (
+        <div style={{ marginBottom: 12, borderRadius: 12, border: `1px solid #BFDBFE`, background: C.blueLight, padding: "11px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <Filter size={16} color={C.blue} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1, minWidth: 200, fontSize: 12.5, color: C.navy, fontWeight: 600 }}>
+            {focusLabel ? `Showing only the project${focusProjectNames.length > 1 ? "s" : ""} for this problem: "${focusLabel}".` : "Showing only the flagged projects."}
+            {focusProjectNames.length > 0 && (
+              <span style={{ fontWeight: 400, color: C.textMuted }}> {focusProjectNames.join(" + ")}. Other projects are hidden.</span>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={clearFilters}
+            style={{ flexShrink: 0, padding: "6px 14px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "none", background: C.blue, color: C.white, cursor: "pointer" }}
+          >
+            Show all projects
+          </button>
+        </div>
+      )}
       {/* PM cascade note — a "Delayed" change just rippled across the portfolio */}
       {pmCascadeNote && (
         <div style={{ marginBottom: 12, borderRadius: 12, border: `1px solid ${pmCascadeNote.newIssues > 0 ? "#FCD34D" : "#BBF7D0"}`, background: pmCascadeNote.newIssues > 0 ? C.amberBg : C.greenBg, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -2002,19 +2043,6 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
           ))}
         </select>
           </>
-        )}
-        {focusTaskIds.length > 0 && (
-          <span
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "6px 10px", fontSize: 11.5, fontWeight: 600,
-              borderRadius: 8, background: C.blueLight, color: C.blue,
-              border: `0.5px solid #BFDBFE`,
-            }}
-            title="Showing only the tasks behind the problems you came from"
-          >
-            Focused on {focusTaskIds.length} flagged task{focusTaskIds.length !== 1 ? "s" : ""}
-          </span>
         )}
         {hasActiveFilters && (
           <button

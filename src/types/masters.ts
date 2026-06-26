@@ -8,6 +8,8 @@ export interface NavOptions {
   ganttStatus?: string;
   /** When navigating to the Gantt, focus it on this exact set of task IDs. */
   ganttTaskIds?: string[];
+  /** Plain-language label for what the Gantt is focused on (e.g. a problem title). */
+  ganttFocusLabel?: string;
 }
 
 export type AppNavigate = (screen: string, masterTab?: MasterTabId, options?: NavOptions) => void;
