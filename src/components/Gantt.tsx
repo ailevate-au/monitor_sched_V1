@@ -33,6 +33,34 @@ import ChangeHistoryTab from "./ChangeHistoryTab";
 import { Timer, Users, FolderKanban, HardHat, History, RotateCcw } from "lucide-react";
 import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
 
+// One-level undo snapshot of committed tasks, persisted so the "Undo last change"
+// button survives leaving the Timeline and coming back (and a page refresh).
+type UndoSnapshot = {
+  label: string;
+  tasks: Array<{ id: string; start: string; end: string; assigneeId: string | null; durationDays: number; percent_complete: number }>;
+};
+const UNDO_STORAGE_KEY = "flowiq.timeline.undoSnapshot";
+function readUndoSnapshot(): UndoSnapshot | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(UNDO_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && Array.isArray(parsed.tasks) ? (parsed as UndoSnapshot) : null;
+  } catch {
+    return null;
+  }
+}
+function writeUndoSnapshot(snap: UndoSnapshot | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (snap) window.localStorage.setItem(UNDO_STORAGE_KEY, JSON.stringify(snap));
+    else window.localStorage.removeItem(UNDO_STORAGE_KEY);
+  } catch {
+    /* quota / private mode — undo is best-effort */
+  }
+}
+
 const C = {
   navy:       "#0F1F3D",
   blue:       "#1A5FA8",
@@ -265,8 +293,13 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds }: { 
   // surfaces ALL issue types on the schedule, not just unsaved clashes.
   const [openProblems, setOpenProblems] = useState<any[]>([]);
   // One-level undo: snapshot of the committed tasks taken just before a save,
-  // so a change that creates clashes can be reverted in one click.
-  const [undoSnapshot, setUndoSnapshot] = useState<{ label: string; tasks: Array<{ id: string; start: string; end: string; assigneeId: string | null; durationDays: number; percent_complete: number }> } | null>(null);
+  // so a change that creates clashes can be reverted in one click. Persisted to
+  // localStorage so the "Undo last change" button survives navigating away from
+  // the Timeline and back (React state alone would reset on unmount).
+  const [undoSnapshot, setUndoSnapshot] = useState<UndoSnapshot | null>(() => readUndoSnapshot());
+  useEffect(() => {
+    writeUndoSnapshot(undoSnapshot);
+  }, [undoSnapshot]);
 
   // Modal / Editing form State
   const [editingTask, setEditingTask] = useState<Task | null>(null);

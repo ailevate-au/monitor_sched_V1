@@ -133,7 +133,15 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
     setDemoBusy(true);
     fetch(`/api/v1/demo/${path}`, { method: "POST" })
       .then(res => res.json())
-      .then(() => { setDemoBusy(false); loadIssues(); })
+      .then(() => {
+        setDemoBusy(false);
+        // A clean reset rebuilds the seed, so any pending Timeline "Undo last
+        // change" snapshot is now stale — drop it so the button clears too.
+        if (path === "reset") {
+          try { window.localStorage.removeItem("flowiq.timeline.undoSnapshot"); } catch { /* best-effort */ }
+        }
+        loadIssues();
+      })
       .catch(() => setDemoBusy(false));
   };
 
