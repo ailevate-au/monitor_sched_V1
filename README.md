@@ -63,3 +63,17 @@ Notes:
 - Seed data: [`src/server/seedData.ts`](src/server/seedData.ts)
 - DB file: `prisma/dev.db` (gitignored; path is relative to `schema.prisma`, so use `DATABASE_URL=file:./dev.db`)
 - Reset and reseed: `npm run db:reset`
+
+## Resetting demo data
+
+**In the app (preferred):** Go to the **Projects** tab and click **↺ Reset to clean**. Clears all manual changes (dragged tasks, PM delays, new work) and returns to 0 issues. No restart needed.
+
+**From the terminal** (full DB wipe + reseed):
+
+```powershell
+# Stop the dev server first (Ctrl+C), then:
+npm run db:reset   # drops schema, recreates, reseeds clean 10-project scenario
+npm run dev
+```
+
+> **Do not** just delete `prisma/dev.db` on its own — that drops the schema and the next `npm run dev` will crash with `table does not exist`. Always use `npm run db:reset` (or `npm run db:push` then `npm run dev` to recreate the schema without wiping the file).
