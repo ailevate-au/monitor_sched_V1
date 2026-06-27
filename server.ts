@@ -1018,6 +1018,31 @@ async function startServer() {
     res.json(buildProblemsResponse());
   });
 
+  // Programme settings (demo scheduling knobs, in-memory). Today this is just the
+  // tight-handover control: an on/off toggle and the working-day buffer under which
+  // a handover counts as "tight". Changing it re-runs detection and returns the
+  // refreshed feed so the UI updates live.
+  app.get("/api/v1/settings", (_req, res) => {
+    res.json(dbInstance.settings);
+  });
+
+  app.put("/api/v1/settings", (req, res) => {
+    const db = dbInstance;
+    const th = (req.body || {}).tightHandover || {};
+    if (typeof th.enabled === "boolean") {
+      db.settings.tightHandover.enabled = th.enabled;
+    }
+    if (th.thresholdDays !== undefined) {
+      const n = parseInt(th.thresholdDays, 10);
+      if (!Number.isNaN(n)) {
+        db.settings.tightHandover.thresholdDays = Math.min(10, Math.max(0, n));
+      }
+    }
+    runConflictDetection();
+    db.save();
+    res.json({ success: true, settings: db.settings, ...buildProblemsResponse() });
+  });
+
   app.post("/api/v1/problems/:id/resolve", (req, res) => {
     const db = dbInstance;
     const { id } = req.params;
@@ -1078,21 +1103,21 @@ async function startServer() {
 
   app.post("/api/v1/demo/simulate", (_req, res) => {
     const db = dbInstance;
-    // 1) Ben double-booked — new basement formwork clashes with his Level-4 pour
+    // 1) Ben double-booked — basement formwork reassigned onto his Level-4 pour week
     setTask("TSK-P2-03", { assigneeId: "r1", start: "2026-06-03", end: "2026-06-09", durationDays: 5, percent_complete: 0, status: "scheduled" });
     // 2) Tom double-booked — main-core piling pulled back to clash with his north piling
     setTask("TSK-P3-01", { assigneeId: "r4", start: "2026-06-01", end: "2026-06-19", durationDays: 15, percent_complete: 0, status: "scheduled" });
     // 3) A job running late — excavation stalled at 85%, past its end date
     setTask("TSK-P2-01", { percent_complete: 85, status: "overdue" });
-    // 4) A tight handover — Level-5 steel pulled up against Level-4 finishing
-    setTask("TSK-P1-04", { start: "2026-06-26", end: "2026-07-08", durationDays: 9 });
+    // 4) A tight handover — Chris's fitout pulled up hard against the steel frame finishing
+    setTask("TSK-P1-04", { start: "2026-06-29", end: "2026-07-17", durationDays: 14 });
     // 5) A storm hits mid-week (NSW only — Parramatta is exposed, interstate jobs aren't).
-    //    Pull a clean NSW job into the storm window so the weather risk surfaces
-    //    on a job that isn't already a clash.
+    //    Pull a clean NSW job (Sam's cost report) into the storm window so the weather
+    //    risk surfaces on a job that isn't already a clash.
     setStormScenario(true);
-    setTask("TSK-P1-06", { start: "2026-06-03", end: "2026-06-09", durationDays: 5 });
-    // 6) A job with nobody assigned — the new batch left the HSE audit unstaffed
-    setTask("TSK-P1-08", { assigneeId: null });
+    setTask("TSK-P1-03", { start: "2026-06-03", end: "2026-06-09", durationDays: 5 });
+    // 6) A job with nobody assigned — the new batch left Southbank's services rough-in unstaffed
+    setTask("TSK-P3-02", { assigneeId: null });
     runConflictDetection();
     db.save();
     res.json({ success: true, ...buildProblemsResponse() });

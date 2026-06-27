@@ -64,6 +64,11 @@ export class Datastore {
   costCategories: CostCategory[] = [];
   masters: MastersBundle = getDefaultMasters();
   alerts: any[] = [];
+  // Demo scheduling knobs (in-memory; default on boot). `tightHandover.enabled`
+  // turns the fragile/tight-handover problem type on/off; `thresholdDays` is the
+  // minimum acceptable working-day buffer — a handover is flagged when the gap is
+  // strictly LESS than this (default 3 → flags gaps of 0/1/2 working days).
+  settings = { tightHandover: { enabled: true, thresholdDays: 3 } };
   undoStack: Array<{ targetId: string; prevAssigneeId: string | null }> = [];
   conflictResolutionLog: Array<{ resourceId: string; resolvedAt: string; undone: boolean }> = [];
   conflictMetrics = {

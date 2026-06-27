@@ -2,7 +2,8 @@
  * Conflict and Cascade Engine mimicking background workers.
  * Rules:
  * - Hard conflict: Same manpower assigned to tasks with overlapping dates.
- * - Fragile spot: Working day buffer between task end and next dependent is <= 1 day.
+ * - Fragile spot: working-day buffer between a task end and its next dependent is
+ *   under the configurable tight-handover threshold (db.settings.tightHandover).
  * - Cascade logic: Shifts all downstream dependent tasks recursively using working days.
  */
 
@@ -215,7 +216,14 @@ export function runConflictDetection(): void {
     }
   }
 
+  // Tight-handover detection is a configurable demo knob: skip it entirely when
+  // disabled, and treat a handover as "tight" when its working-day buffer is
+  // strictly under the configured threshold (default 3).
+  const { enabled: tightHandoverEnabled, thresholdDays: tightHandoverThreshold } =
+    db.settings.tightHandover;
+
   for (const t of activeTasks) {
+    if (!tightHandoverEnabled) break;
     if (t.status === "completed" || (t.percent_complete ?? 0) >= 100) continue;
 
     const children = activeTasks.filter(
@@ -235,7 +243,7 @@ export function runConflictDetection(): void {
         const childStart = new Date(child.start);
         const lag = child.lag_days || 0;
         const buffer = getWorkingDaysBetween(tEnd, childStart, childState) - 1 - lag;
-        if (buffer <= 1 && (fragileBufferDays === null || buffer < fragileBufferDays)) {
+        if (buffer < tightHandoverThreshold && (fragileBufferDays === null || buffer < fragileBufferDays)) {
           fragileBufferDays = buffer;
           fragileDesc = `Only ${Math.max(buffer, 0)} working day buffer before "${child.name}" starts.`;
           fragileChildId = child.id; // the exact tight child a fix should shift
@@ -243,7 +251,7 @@ export function runConflictDetection(): void {
       }
     }
 
-    if (fragileBufferDays !== null && fragileBufferDays <= 1) {
+    if (fragileBufferDays !== null && fragileBufferDays < tightHandoverThreshold) {
       const assignee = db.resources.find(r => r.id === t.assigneeId);
       fragileTasks.push({
         id: t.id,
@@ -373,15 +381,19 @@ export function computeCascade(
         anchorDate = new Date(parent.end);
       }
 
-      const newStart = step > 0 ? addWorkingDays(anchorDate, step, stateStr) : anchorDate;
-      const prevStartStr = child.start;
-      child.start = newStart.toISOString().slice(0, 10);
+      const requiredStart = step > 0 ? addWorkingDays(anchorDate, step, stateStr) : anchorDate;
+      const currentStart = new Date(child.start);
 
-      const childDuration = child.durationDays || 1;
-      const newEnd = addWorkingDays(newStart, childDuration - 1, stateStr);
-      child.end = newEnd.toISOString().slice(0, 10);
-
-      if (child.start !== prevStartStr) {
+      // Only ever push a dependent LATER — never pull it earlier. This preserves
+      // each job's planned slack: a delay (or a "push back"/"extend" fix) shifts a
+      // successor only when the parent's new end would actually overrun it. Stops
+      // the old behaviour where every dependent was snapped back-to-back with its
+      // parent (which manufactured spurious clashes and 0-buffer tight handovers).
+      if (requiredStart > currentStart) {
+        child.start = requiredStart.toISOString().slice(0, 10);
+        const childDuration = child.durationDays || 1;
+        const newEnd = addWorkingDays(requiredStart, childDuration - 1, stateStr);
+        child.end = newEnd.toISOString().slice(0, 10);
         cascadeQueue.push(child.id);
       }
     }
