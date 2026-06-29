@@ -132,17 +132,33 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
       .catch(() => { setSubmitting(false); setPending(null); alert("Network error while resolving."); });
   };
 
-  // For a PM, drop any problem that touches a project they don't own (a problem
-  // can span two projects via "A + B"). The Owner sees everything.
-  const visibleProblems = (isPM && myProjectNames)
-    ? data.problems.filter(p => p.projectName.split(" + ").every(n => myProjectNames.has(n.trim())))
-    : data.problems;
-  const problems = visibleProblems;
+  // For a PM, split problems three ways by which project(s) each one touches
+  // (a problem can span two projects via "A + B"):
+  //   - fully theirs   → fixable cards (they manage every project involved)
+  //   - partly theirs  → a read-only notice: a change of theirs clashed into a
+  //     project they DON'T manage; only the owner can see + resolve it
+  //   - none theirs    → hidden (not their concern)
+  // The Owner sees everything as fixable cards.
+  const splitProjects = (name: string) => name.split(" + ").map(n => n.trim());
+  let problems = data.problems;
+  let crossProblems: Problem[] = [];
+  if (isPM && myProjectNames) {
+    const owned: Problem[] = [];
+    const cross: Problem[] = [];
+    for (const p of data.problems) {
+      const parts = splitProjects(p.projectName);
+      const ownedCount = parts.filter(n => myProjectNames.has(n)).length;
+      if (ownedCount === parts.length) owned.push(p);
+      else if (ownedCount > 0) cross.push(p);
+    }
+    problems = owned;
+    crossProblems = cross;
+  }
   const summary = (isPM && myProjectNames)
     ? {
-        total: visibleProblems.length,
-        critical: visibleProblems.filter(p => p.severity === "critical").length,
-        projectsAffected: new Set(visibleProblems.flatMap(p => p.projectName.split(" + ").map(n => n.trim()))).size,
+        total: problems.length,
+        critical: problems.filter(p => p.severity === "critical").length,
+        projectsAffected: new Set(problems.flatMap(p => splitProjects(p.projectName))).size,
         projectsTotal: myProjectNames.size,
       }
     : data.summary;
@@ -170,11 +186,15 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 3 }}>
             {summary.total > 0
               ? `${summary.total} thing${summary.total > 1 ? "s" : ""} need${summary.total > 1 ? "" : "s"} you`
+              : crossProblems.length > 0
+              ? "Nothing here for you to fix"
               : "Everything's on track"}
           </div>
           <div style={{ fontSize: 12.5, color: C.gray }}>
             {summary.total > 0
               ? `${summary.projectsAffected} of ${summary.projectsTotal} projects have a problem. Pick a fix for each one.`
+              : crossProblems.length > 0
+              ? "But one of your changes affected another project — see below."
               : "No clashes, no late jobs, nothing to worry about."}
           </div>
         </div>
@@ -207,8 +227,32 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
         </div>
       )}
 
-      {/* Empty state — clean portfolio. Issues are created from Projects. */}
-      {problems.length === 0 && (
+      {/* PM blind-spot notice — a change of theirs clashed into a project they
+          don't manage. Read-only: only the owner can see the detail and fix it. */}
+      {isPM && crossProblems.length > 0 && (
+        <div style={{ padding: "16px 18px", background: C.amberBg, borderRadius: 12, border: `1px solid #FCD34D`, marginBottom: 14, display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <TriangleAlert size={20} color={C.amber} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: C.amber, marginBottom: 4 }}>
+              A change of yours affected another project
+            </div>
+            <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55 }}>
+              {crossProblems.length} problem{crossProblems.length > 1 ? "s" : ""} now {crossProblems.length > 1 ? "involve" : "involves"} a
+              project you don't manage. You can't fix {crossProblems.length > 1 ? "them" : "it"} from here — the owner can see the
+              details and will resolve {crossProblems.length > 1 ? "them" : "it"}.
+            </div>
+            {crossProblems.map(p => (
+              <div key={p.id} style={{ fontSize: 11.5, color: C.text, padding: "7px 11px", background: C.white, borderRadius: 8, border: `0.5px solid #FDE68A`, marginTop: 8 }}>
+                <strong>{p.title}</strong>
+                <span style={{ color: C.gray }}> · {p.projectName}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state — only when there is genuinely nothing (no fixable, none cross-project). */}
+      {problems.length === 0 && crossProblems.length === 0 && (
         <div style={{ padding: "44px 20px", textAlign: "center", background: C.white, borderRadius: 12, border: `0.5px solid ${C.grayLight}` }}>
           <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}><CheckCircle2 size={40} color={C.green} /></div>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Everything's on track</div>

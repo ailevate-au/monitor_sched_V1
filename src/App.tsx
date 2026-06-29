@@ -126,14 +126,37 @@ export default function FlowIQApp() {
   const [expensesCount, setExpensesCount] = useState(0);
 
   const fetchLiveBadges = () => {
-    // Sync the Problems badge with the live open-problem count
-    fetch("/api/v1/problems")
-      .then(res => res.json())
-      .then(data => {
-        const { summary } = parseProblemsResponse(data);
-        setConflictsCount(summary.total);
-      })
-      .catch(() => {});
+    // Sync the Problems badge with the live open-problem count.
+    // A PM only counts problems that involve one of THEIR projects (including a
+    // cross-project clash where one side is theirs), so the badge matches what
+    // the Problems page shows them — not the whole portfolio.
+    if (user?.role === "PM" && user?.email) {
+      Promise.all([
+        fetch("/api/v1/problems").then(r => r.json()),
+        fetch("/api/v1/projects").then(r => r.json()),
+      ])
+        .then(([pData, rows]) => {
+          const { problems } = parseProblemsResponse(pData);
+          const mine = new Set(
+            (Array.isArray(rows) ? rows : [])
+              .filter((p: any) => p.managerEmail === user.email)
+              .map((p: any) => p.name)
+          );
+          const involved = problems.filter(p =>
+            p.projectName.split(" + ").some(n => mine.has(n.trim()))
+          );
+          setConflictsCount(involved.length);
+        })
+        .catch(() => {});
+    } else {
+      fetch("/api/v1/problems")
+        .then(res => res.json())
+        .then(data => {
+          const { summary } = parseProblemsResponse(data);
+          setConflictsCount(summary.total);
+        })
+        .catch(() => {});
+    }
 
     // Sync project expenses badge count
     fetch("/api/v1/claims")
@@ -150,7 +173,7 @@ export default function FlowIQApp() {
     fetchLiveBadges();
     const interval = setInterval(fetchLiveBadges, 8000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user?.role, user?.email]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

@@ -800,7 +800,9 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
 
       setSavingMsg(
         hardConflicts > 0
-          ? `Saved. ${hardConflicts} person${hardConflicts > 1 ? "s are" : " is"} booked twice. Check Problems.`
+          ? (isPM
+              ? `Saved. Your change created ${hardConflicts} clash${hardConflicts > 1 ? "es" : ""}. Any on a project you don't manage won't show in your Problems — the owner will see ${hardConflicts > 1 ? "them" : "it"}.`
+              : `Saved. ${hardConflicts} person${hardConflicts > 1 ? "s are" : " is"} booked twice. Check Problems.`)
           : "Saved."
       );
       window.setTimeout(() => setSavingMsg(null), 4000);
