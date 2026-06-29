@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ScreenDashboard from "./components/Dashboard";
 import ScreenProjects from "./components/Projects";
 import ScreenWeather from "./components/Weather";
@@ -174,6 +174,21 @@ export default function FlowIQApp() {
     const interval = setInterval(fetchLiveBadges, 8000);
     return () => clearInterval(interval);
   }, [user?.role, user?.email]);
+
+  // Every fresh sign-in lands on Overview, for every user. The app component
+  // stays mounted across logout → login, so without this the previous session's
+  // screen (and URL) would carry over. We only reset on the false → true flip,
+  // so a page refresh on a deep link still works.
+  const prevAuthRef = useRef(isAuthenticated);
+  useEffect(() => {
+    if (isAuthenticated && !prevAuthRef.current) {
+      setScreen("dashboard");
+      if (typeof window !== "undefined" && window.location.pathname !== "/") {
+        window.history.pushState({}, "", "/");
+      }
+    }
+    prevAuthRef.current = isAuthenticated;
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

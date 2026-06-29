@@ -21,6 +21,7 @@ import {
 } from "../types";
 import { KpiCard } from "./Dashboard";
 import { AppNavigate } from "../types/masters";
+import { changeHistory, makeChangeSetId } from "../lib/changeHistory";
 
 const C = {
   navy: "#0F1F3D",
@@ -102,31 +103,82 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
       .catch(() => {});
   }, [isPM, user?.email]);
 
+  // After a fix is applied, write a Change History entry so the resolution is
+  // auditable on the Timeline — a reassign has no date moves (logged as a plain
+  // summary), a push-back moves tasks (logged with the moves + an Undo).
+  const logResolutionToHistory = (
+    problem: Problem,
+    action: ProblemAction,
+    beforeById: Map<string, { start: string; end: string }>
+  ) => {
+    fetch("/api/v1/dashboard/tasks")
+      .then(r => r.json())
+      .then((after: any[]) => {
+        const list = Array.isArray(after) ? after : [];
+        const moves = list
+          .map((t: any) => {
+            const b = beforeById.get(t.id);
+            if (!b || (b.start === t.start && b.end === t.end)) return null;
+            return { taskId: t.id, name: t.name, fromStart: b.start, fromEnd: b.end, toStart: t.start, toEnd: t.end };
+          })
+          .filter((m): m is NonNullable<typeof m> => m !== null);
+        const maxPush = moves.length
+          ? Math.max(0, ...moves.map(m => Math.round((+new Date(m.toStart) - +new Date(m.fromStart)) / 86400000)))
+          : 0;
+        const anchorId = (problem.taskIds && problem.taskIds[0]) || (moves[0]?.taskId ?? "");
+        const anchorName = list.find((t: any) => anchorId && t.id === anchorId)?.name || problem.title;
+        changeHistory.add({
+          id: makeChangeSetId(),
+          createdAt: new Date().toISOString(),
+          anchorTaskId: anchorId,
+          anchorTaskName: anchorName,
+          mode: moves.length > 1 ? "full" : "none",
+          delayWorkingDays: maxPush,
+          moves,
+          summary: `Resolved: ${action.label}`,
+          warningsAtConfirm: [],
+          reverted: false,
+        });
+      })
+      .catch(() => {});
+  };
+
   const confirmResolve = () => {
     if (!pending) return;
     setSubmitting(true);
     const { problem, action } = pending;
-    fetch(`/api/v1/problems/${problem.id}/resolve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ actionId: action.id }),
-    })
+
+    // Snapshot task dates before the fix so we can log exactly what moved.
+    fetch("/api/v1/dashboard/tasks")
       .then(r => r.json())
-      .then(res => {
+      .then((before: any[]) => {
+        const beforeById = new Map(
+          (Array.isArray(before) ? before : []).map((t: any) => [t.id, { start: t.start, end: t.end }])
+        );
+        return fetch(`/api/v1/problems/${problem.id}/resolve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ actionId: action.id }),
+        })
+          .then(r => r.json())
+          .then(res => ({ res, beforeById }));
+      })
+      .then(({ res, beforeById }) => {
         setSubmitting(false);
         setPending(null);
-        if (res.success) {
-          setResolvedIds(m => ({ ...m, [problem.id]: action.label }));
-          if (res.problems) {
-            setTimeout(() => {
-              setData(parseProblemsResponse(res));
-              setResolvedIds(m => { const next = { ...m }; delete next[problem.id]; return next; });
-            }, 1400);
-          } else {
-            setTimeout(load, 1400);
-          }
-        } else {
+        if (!res.success) {
           alert(res.error || "Could not resolve this problem.");
+          return;
+        }
+        logResolutionToHistory(problem, action, beforeById);
+        setResolvedIds(m => ({ ...m, [problem.id]: action.label }));
+        if (res.problems) {
+          setTimeout(() => {
+            setData(parseProblemsResponse(res));
+            setResolvedIds(m => { const next = { ...m }; delete next[problem.id]; return next; });
+          }, 2800);
+        } else {
+          setTimeout(load, 2800);
         }
       })
       .catch(() => { setSubmitting(false); setPending(null); alert("Network error while resolving."); });
