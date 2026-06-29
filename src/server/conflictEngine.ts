@@ -2,7 +2,8 @@
  * Conflict and Cascade Engine mimicking background workers.
  * Rules:
  * - Hard conflict: Same manpower assigned to tasks with overlapping dates.
- * - Fragile spot: Working day buffer between task end and next dependent is <= 1 day.
+ * - Fragile spot: working-day buffer between a task end and its next dependent is
+ *   under the configurable tight-handover threshold (db.settings.tightHandover).
  * - Cascade logic: Shifts all downstream dependent tasks recursively using working days.
  */
 
@@ -13,6 +14,16 @@ import type { ConflictMetrics, FragileTaskSummary } from "../types";
 import { resourceWouldOverlapTask, getConflictedResourceIds } from "../lib/ganttDraft";
 
 const UTIL_WINDOW_WORKING_DAYS = 20;
+
+// The demo is pinned to a fixed "now" so the scenario is stable no matter what
+// the real calendar date is. Everything (weather, dashboard, late detection)
+// aligns to 2 Jun 2026.
+const SCENARIO_TODAY = "2026-06-02";
+function scenarioNow(): Date {
+  const d = new Date(SCENARIO_TODAY);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 function resolveStateForTask(task: Task): string {
   const db = dbInstance;
@@ -54,15 +65,14 @@ function calculateResourceUtil(
 ): number {
   if (allocations.length === 0) return 0;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = scenarioNow();
   const windowEnd = addWorkingDays(today, UTIL_WINDOW_WORKING_DAYS - 1, stateStr);
   const assignedDays = countAssignedWorkingDaysInWindow(allocations, today, windowEnd, stateStr);
   const util = Math.round((assignedDays / UTIL_WINDOW_WORKING_DAYS) * 100);
   return Math.max(0, util);
 }
 
-function deriveExecutionStatus(task: Task, today: Date): Task["status"] {
+function deriveExecutionStatus(task: Task, today: Date, deadlineWarnEnabled: boolean): Task["status"] {
   if ((task.percent_complete ?? 0) >= 100) return "completed";
 
   const start = new Date(task.start);
@@ -70,7 +80,14 @@ function deriveExecutionStatus(task: Task, today: Date): Task["status"] {
   start.setHours(0, 0, 0, 0);
   end.setHours(0, 0, 0, 0);
 
-  if (end < today && (task.percent_complete ?? 0) < 100) return "overdue";
+  const incomplete = (task.percent_complete ?? 0) < 100;
+  // "Behind schedule": the live end has run past the must-finish-by deadline.
+  // Opt-in (db.settings.deadlineWarnings) so it never disturbs the clean baseline,
+  // where every job's end equals its deadline. ISO date strings compare correctly.
+  const missesDeadline =
+    deadlineWarnEnabled && incomplete && !!task.deadline && task.end > task.deadline;
+
+  if ((end < today && incomplete) || missesDeadline) return "overdue";
   if (start <= today && end >= today) return "inprogress";
   if (end < today) return "completed";
   return "scheduled";
@@ -114,8 +131,7 @@ export function runConflictDetection(): void {
   const activeTasks = db.tasks;
   const conflictsList: Conflict[] = [];
   const fragileTasks: FragileTaskSummary[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = scenarioNow();
 
   for (const t of activeTasks) {
     if (t.status !== "completed" && (t.percent_complete ?? 0) < 100) {
@@ -192,7 +208,7 @@ export function runConflictDetection(): void {
         resource: r.name,
         trade: r.trade,
         rate: r.rate,
-        desc: `${r.name} cannot be used — assigned to overlapping tasks: ${overlapSummary}. Current load: ${r.util}%.`,
+        desc: `${r.name} is already on overlapping jobs: ${overlapSummary}. Current load: ${r.util}%.`,
         utilPercent: r.util,
         overlapPairs,
         reasonSummary: `${r.name} is double-booked on ${overlapPairs.length} overlapping task pair(s).`,
@@ -207,7 +223,14 @@ export function runConflictDetection(): void {
     }
   }
 
+  // Tight-handover detection is a configurable demo knob: skip it entirely when
+  // disabled, and treat a handover as "tight" when its working-day buffer is
+  // strictly under the configured threshold (default 3).
+  const { enabled: tightHandoverEnabled, thresholdDays: tightHandoverThreshold } =
+    db.settings.tightHandover;
+
   for (const t of activeTasks) {
+    if (!tightHandoverEnabled) break;
     if (t.status === "completed" || (t.percent_complete ?? 0) >= 100) continue;
 
     const children = activeTasks.filter(
@@ -219,6 +242,7 @@ export function runConflictDetection(): void {
 
     let fragileBufferDays: number | null = null;
     let fragileDesc = "";
+    let fragileChildId: string | null = null;
     if (t.assigneeId) {
       for (const child of children) {
         const childState = resolveStateForTask(child);
@@ -226,14 +250,15 @@ export function runConflictDetection(): void {
         const childStart = new Date(child.start);
         const lag = child.lag_days || 0;
         const buffer = getWorkingDaysBetween(tEnd, childStart, childState) - 1 - lag;
-        if (buffer <= 1 && (fragileBufferDays === null || buffer < fragileBufferDays)) {
+        if (buffer < tightHandoverThreshold && (fragileBufferDays === null || buffer < fragileBufferDays)) {
           fragileBufferDays = buffer;
           fragileDesc = `Only ${Math.max(buffer, 0)} working day buffer before "${child.name}" starts.`;
+          fragileChildId = child.id; // the exact tight child a fix should shift
         }
       }
     }
 
-    if (fragileBufferDays !== null && fragileBufferDays <= 1) {
+    if (fragileBufferDays !== null && fragileBufferDays < tightHandoverThreshold) {
       const assignee = db.resources.find(r => r.id === t.assigneeId);
       fragileTasks.push({
         id: t.id,
@@ -242,21 +267,27 @@ export function runConflictDetection(): void {
         trade: assignee?.trade || t.tradeRequired,
         bufferDays: fragileBufferDays,
         desc: fragileDesc,
+        childId: fragileChildId ?? undefined,
       });
     }
   }
 
+  const deadlineWarnEnabled = !!db.settings.deadlineWarnings?.enabled;
   for (const t of activeTasks) {
     if (t.status === "conflict") continue;
 
     const isFragile = fragileTasks.some(f => f.id === t.id);
 
-    if (evaluateWeatherRisk(t.start, t.end)) {
+    if (evaluateWeatherRisk(t.start, t.end, resolveStateForTask(t))) {
       t.status = "weather";
     } else if (isFragile) {
       t.status = "fragile";
     } else {
-      t.status = deriveExecutionStatus(t, today);
+      const derived = deriveExecutionStatus(t, today, deadlineWarnEnabled);
+      // Honor an explicit PM "in progress" so a job the PM is actively working
+      // shows as in-progress even if its dates don't bracket the scenario date —
+      // but never mask a real problem (overdue/etc), only a plain "scheduled".
+      t.status = t.pmStatus === "in_progress" && derived === "scheduled" ? "inprogress" : derived;
     }
   }
 
@@ -362,15 +393,19 @@ export function computeCascade(
         anchorDate = new Date(parent.end);
       }
 
-      const newStart = step > 0 ? addWorkingDays(anchorDate, step, stateStr) : anchorDate;
-      const prevStartStr = child.start;
-      child.start = newStart.toISOString().slice(0, 10);
+      const requiredStart = step > 0 ? addWorkingDays(anchorDate, step, stateStr) : anchorDate;
+      const currentStart = new Date(child.start);
 
-      const childDuration = child.durationDays || 1;
-      const newEnd = addWorkingDays(newStart, childDuration - 1, stateStr);
-      child.end = newEnd.toISOString().slice(0, 10);
-
-      if (child.start !== prevStartStr) {
+      // Only ever push a dependent LATER — never pull it earlier. This preserves
+      // each job's planned slack: a delay (or a "push back"/"extend" fix) shifts a
+      // successor only when the parent's new end would actually overrun it. Stops
+      // the old behaviour where every dependent was snapped back-to-back with its
+      // parent (which manufactured spurious clashes and 0-buffer tight handovers).
+      if (requiredStart > currentStart) {
+        child.start = requiredStart.toISOString().slice(0, 10);
+        const childDuration = child.durationDays || 1;
+        const newEnd = addWorkingDays(requiredStart, childDuration - 1, stateStr);
+        child.end = newEnd.toISOString().slice(0, 10);
         cascadeQueue.push(child.id);
       }
     }

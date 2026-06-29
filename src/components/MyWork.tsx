@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { HardHat, Calendar, AlertTriangle } from "lucide-react";
 
 const C = {
   navy:       "#0F1F3D",
@@ -105,7 +106,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
       <div style={{ background: C.navy, color: C.white, borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }}>
         <div>
           <div style={{ fontSize: 11, color: "#93C5FD", fontWeight: 700, letterSpacing: "0.05em" }}>SIGNED IN AS</div>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>👷 Ben Nguyen</div>
+          <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><HardHat size={15} /> Ben Nguyen</div>
           <div style={{ fontSize: 10, opacity: 0.85 }}>Formwork Foreman · NSW Region</div>
         </div>
         <button 
@@ -126,14 +127,14 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
       {/* Active Work summary tab */}
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 700, color: C.navy, margin: 0, textTransform: "uppercase", letterSpacing: "0.03em" }}>📍 My Shifts This Week</h2>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: C.navy, margin: 0, textTransform: "uppercase", letterSpacing: "0.03em" }}>📍 My Jobs This Week</h2>
           <span style={{ background: C.blueLight, color: C.blue, fontSize: 10, padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>June Week 1</span>
         </div>
 
         {loading ? (
-          <div style={{ textAlign: "center", padding: 24, fontSize: 12, color: C.gray }}>Recalculating personal schedule...</div>
+          <div style={{ textAlign: "center", padding: 24, fontSize: 12, color: C.gray }}>Loading your schedule…</div>
         ) : tasks.length === 0 ? (
-          <div style={{ background: C.white, borderRadius: 12, padding: 18, textAlign: "center", fontSize: 12, color: C.gray }}>No shifts assigned this week.</div>
+          <div style={{ background: C.white, borderRadius: 12, padding: 18, textAlign: "center", fontSize: 12, color: C.gray }}>No jobs assigned this week.</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {tasks.map(t => {
@@ -163,8 +164,8 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
 
                   {/* Dates & Progression info */}
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.gray, marginBottom: 12 }}>
-                    <span>📅 Timeline: {t.start} to {t.end}</span>
-                    <span>📈 Progress: {t.percent_complete}%</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Calendar size={12} /> {t.start} to {t.end}</span>
+                    <span>{isDone ? "Complete" : isBehind ? "Behind schedule" : "In progress"}</span>
                   </div>
 
                   {/* Operational controls */}
@@ -194,10 +195,10 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
                       <button 
                         disabled={updatingId === t.id}
                         onClick={() => handleReportBehind(t.id)}
-                        style={{ padding: "6px 10px", fontSize: 11, background: C.redBg, color: C.red, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}
-                        title="Alert PM that work is running behind on site"
+                        style={{ padding: "6px 10px", fontSize: 11, background: C.redBg, color: C.red, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}
+                        title="Tell your manager this job is running behind"
                       >
-                        ⚠️ Report Behind
+                        <AlertTriangle size={12} /> Report a delay
                       </button>
                     )}
                   </div>
@@ -210,7 +211,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
 
       {/* Notifications history */}
       <div>
-        <h2 style={{ fontSize: 13, fontWeight: 700, color: C.navy, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.03em" }}>📢 Recent Feed & Activity Alerts</h2>
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: C.navy, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.03em" }}>📢 Recent Updates</h2>
         <div style={{ background: C.white, borderRadius: 12, border: `0.5px solid ${C.grayLight}`, padding: 12, display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto" }}>
           {notifications.length === 0 ? (
             <div style={{ textAlign: "center", padding: 16, fontSize: 11.5, color: C.gray }}>No notification logs registered.</div>
@@ -218,7 +219,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
             notifications.map(n => (
               <div key={n.id} style={{ display: "flex", flexDirection: "column", gap: 2, paddingBottom: 6, borderBottom: `0.5px solid ${C.grayLight}` }}>
                 <span style={{ fontSize: 11, color: C.text, fontWeight: 500 }}>
-                  {n.type === "delay" ? "🚨 DELAY FILED " : "📝 STATEUPDATE "} 
+                  {n.type === "delay" ? "🚨 DELAY REPORTED " : "📝 STATUS UPDATE "}
                   - {n.message}
                 </span>
                 <span style={{ fontSize: 9, color: C.gray }}>{new Date(n.timestamp).toLocaleTimeString()} · Reporter: {n.reporterName}</span>
@@ -230,7 +231,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
 
       {/* Constraints disclosure */}
       <div style={{ padding: 12, background: "#F8FAFC", borderRadius: 10, border: `0.5px solid ${C.grayLight}`, fontSize: 11, color: C.gray, lineHeight: 1.4 }}>
-         ℹ️ <strong>Resource Persona Constraint</strong>: As an on-site subcontractor/team member, you have read-only access limited to your private trade agenda. Global pricing, program creations, & other resources' schedules are strictly protected.
+         ℹ️ <strong>What you can see</strong>: As an on-site team member, you can only view your own jobs. Pricing, the full programme, and other people's schedules are not shown here.
       </div>
 
     </div>

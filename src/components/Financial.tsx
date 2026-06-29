@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Project, ProgressClaim } from "../types";
 import { KpiCard, Card, StatusBadge, Btn, SectionHeader } from "./Dashboard";
+import { RefreshCw } from "lucide-react";
 
 const C = {
   blue:       "#1A5FA8",
@@ -282,14 +283,20 @@ export default function ScreenFinancial() {
   };
 
   const tabs = [
-    { id: "overview", label: "Portfolio Overview" },
-    { id: "planvscertified", label: "Plan vs Actual (Ops)" },
-    { id: "weekly", label: "Weekly Expenditure" },
+    { id: "overview", label: "All Projects" },
+    { id: "planvscertified", label: "Planned vs Actual" },
+    { id: "weekly", label: "Weekly Spend" },
     { id: "breakdown", label: "Cost Breakdown" },
-    { id: "variance", label: "Variation Ledger" },
+    { id: "variance", label: "Variation Log" },
   ];
 
   const totalContract = projList.reduce((acc, p) => acc + p.finalContractSum, 0);
+  // Retention held = 5% of certified cost on projects not yet at practical completion.
+  // Moved here from the Projects tab so all the deep finance figures live together.
+  const totalRetention = projList.reduce(
+    (acc, p) => acc + (p.status !== "PRACTICAL_COMPLETION" ? p.actualCost * 0.05 : 0),
+    0
+  );
   const totalProfitPool = projList.reduce((acc, p) => acc + (p.finalContractSum - p.actualCost), 0);
   const weightedMargin = totalContract > 0 ? (totalProfitPool / totalContract) * 100 : 0;
 
@@ -694,6 +701,7 @@ export default function ScreenFinancial() {
           <KpiCard label="Portfolio contract sum" value={`A$${totalContract.toFixed(1)}M`} valueColor={C.blue} sub={`${projList.length} active contracts · ${PERIOD_LABELS[periodFilter]}`} />
           <KpiCard label="Certified value" value={`A$${totalCertifiedClaimsVal.toFixed(1)}M`} sub={`${((totalCertifiedClaimsVal / totalContract) * 100 || 0).toFixed(0)}% of contract sum · ${PERIOD_LABELS[periodFilter]}`} />
           <KpiCard label="Total margin pool" value={`A$${totalProfitPool.toFixed(1)}M`} valueColor={C.greenDark} sub="All active projects (all-time)" />
+          <KpiCard label="Retention held (5%)" value={`A$${totalRetention.toFixed(2)}M`} sub="Held under standard AS 4000-1997" />
           <KpiCard label="Margin health" value={weightedMargin > 11 ? `${weightedMargin.toFixed(1)}%` : "In review"} valueColor={weightedMargin > 11 ? C.green : C.amber} sub="Portfolio-weighted (all-time)" />
         </div>
 
@@ -750,7 +758,7 @@ export default function ScreenFinancial() {
           <span title={exportDisabledTooltip}>
             <Btn small disabled={isDev} onClick={() => exportFinancialReport("Excel")}>{`Export Excel (${exportScopeLabel})`}</Btn>
           </span>
-          <Btn small onClick={loadFinancialData}>↻ Refresh</Btn>
+          <Btn small onClick={loadFinancialData}><span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><RefreshCw size={13} /> Refresh</span></Btn>
           <span style={{ fontSize: 10.5, color: C.gray, marginLeft: "auto" }}>
             {filteredProjects.length} of {projList.length} projects
           </span>
@@ -1122,7 +1130,7 @@ export default function ScreenFinancial() {
             <Card>
               <SectionHeader
                 title="Contract variance & LD risk"
-                right={<Btn primary small onClick={() => setShowAddModal(true)}>+ Register variation</Btn>}
+                right={<Btn primary small onClick={() => setShowAddModal(true)}>+ Add variation</Btn>}
               />
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -1211,7 +1219,7 @@ export default function ScreenFinancial() {
         {showAddModal && (
           <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15,31,61,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}>
             <div style={{ background: C.white, borderRadius: 12, width: 360, padding: 22, border: `0.5px solid ${C.grayLight}`, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 14 }}>Register contract variation</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 14 }}>Add a contract variation</div>
               <div style={{ marginBottom: 10 }}>
                 <label style={{ fontSize: 11, color: C.gray, display: "block", marginBottom: 4 }}>Project</label>
                 <select value={selProjectId} onChange={(e) => setSelProjectId(e.target.value)} style={{ width: "100%", ...filterInputStyle }}>

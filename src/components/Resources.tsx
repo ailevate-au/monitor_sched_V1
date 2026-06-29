@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Resource, Project } from "../types";
 import { KpiCard, Card, Btn } from "./Dashboard";
+import { Search, AlertTriangle, FileText } from "lucide-react";
 import { useMasters } from "../hooks/useMasters";
 import { AppNavigate } from "../types/masters";
 
@@ -30,7 +31,7 @@ const UtilBar = ({ util }: { util: number }) => {
   return (
     <div style={{ width:120 }}>
       <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:C.gray, marginBottom:3 }}>
-        <span>Capacity Load</span>
+        <span>Workload</span>
         <span style={{ fontWeight: 600, color }}>{util}%</span>
       </div>
       <div style={{ height:5, borderRadius:3, background:C.bgSecond }}>
@@ -299,7 +300,7 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
   };
 
   if (loading) {
-    return <div style={{ padding: 20, color: C.gray }}>Recalculating foreman utilization ratios...</div>;
+    return <div style={{ padding: 20, color: C.gray }}>Loading your team…</div>;
   }
 
   const activeResources = resources.length;
@@ -320,23 +321,23 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
     <div>
       {/* Portfolio Roster Overview Header Metrics */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:10, marginBottom:16 }}>
-        <KpiCard label="Active Professionals" value={`${activeResources}`} sub="PMs, Foreman & Trades" />
-        <KpiCard label="Over-allocated (>100%)" value={`${overAllocated}`} valueColor={C.red} sub="Conflicts detected on timelines" />
-        <KpiCard label="Under-utilised (<20%)" value={`${underUtilised}`} valueColor={C.amber} sub="Off-roster benchmark" />
-        <KpiCard label="Average Load Rate" value={`${avgUtil}%`} trend="↑ Healthy productive balance" />
+        <KpiCard label="Active Team" value={`${activeResources}`} sub="PMs, Foreman & Trades" />
+        <KpiCard label="Overbooked (>100%)" value={`${overAllocated}`} valueColor={C.red} sub="Booked beyond full time" />
+        <KpiCard label="Spare Capacity (<20%)" value={`${underUtilised}`} valueColor={C.amber} sub="Lots of free time" />
+        <KpiCard label="Average Workload" value={`${avgUtil}%`} trend="↑ Healthy balance" />
       </div>
 
       <Card>
         {/* Filter Board containing Search and Import Wizards */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14, flexWrap: "wrap", gap: 12 }}>
-          <span style={{ fontSize:13, fontWeight:600, color:C.text }}>Licensed Site Team & Subcontractors Register</span>
+          <span style={{ fontSize:13, fontWeight:600, color:C.text }}>Site Team & Subcontractors</span>
           
           <div style={{ display:"flex", gap:8, alignItems: "center", flexWrap: "wrap", width: "100%", justifyContent: "flex-end" }}>
             {/* Search Input Filter */}
             <div style={{ position: "relative", minWidth: 220 }}>
               <input 
                 type="text" 
-                placeholder="🔍 Search professional by name..." 
+                placeholder="Search by name..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 style={{
@@ -350,7 +351,7 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
                   outline: "none"
                 }}
               />
-              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: C.gray }}>👤</span>
+              <Search size={13} color={C.gray} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)" }} />
             </div>
 
             {/* Trade Selection Filter */}
@@ -359,7 +360,7 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
               onChange={e => setTradeFilter(e.target.value)}
               style={{ fontSize:12, padding:"5px 12px", borderRadius:8, border:`0.5px solid ${C.grayLight}`, background:C.white, color:C.text, fontFamily:"inherit" }}
             >
-              <option value="all">All Licensed Trades</option>
+              <option value="all">All Trades</option>
               {trades.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             
@@ -370,20 +371,20 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
 
         {filtered.length === 0 ? (
           <div style={{ padding: "30px", textAlign: "center", color: C.gray, fontSize: 12 }}>
-            No registered professionals match your filters. Try cleared query or filters!
+            No team members match your filters. Try clearing the search or filters.
           </div>
         ) : (
           filtered.map(r => {
-            let badgeText = "On Track";
+            let badgeText = "Balanced";
             let badgeBg = C.greenBg;
             let badgeColor = C.greenDark;
 
             if (r.util > 100) {
-              badgeText = "Over-allocated";
+              badgeText = "Overbooked";
               badgeBg = C.redBg;
               badgeColor = C.redDark;
             } else if (r.util < 20) {
-              badgeText = "Under-utilised";
+              badgeText = "Spare capacity";
               badgeBg = C.amberBg;
               badgeColor = C.amber;
             }
@@ -433,7 +434,7 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
                 {isExpanded && (
                   <div style={{ padding: "18px 24px", borderTop: `1px solid ${C.grayLight}`, background: "#F1F5F9" }}>
                     <div style={{ fontSize: 12.5, fontWeight: 700, color: C.navy, marginBottom: 12, display: "flex", gap: 6, alignItems: "center" }}>
-                      <span>📄 Detail Card & Site Allowances Config ({r.name})</span>
+                      <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><FileText size={14} /> Detail Card & Site Allowances Config ({r.name})</span>
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginBottom: 16 }}>
@@ -505,7 +506,7 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
 
                     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                       <Btn primary small onClick={() => handleSaveChanges(r.id)} style={{ padding: "6px 14px" }}>
-                        {isSaving ? "Saving Roster Ledger..." : "Commit Roster Settings"}
+                        {isSaving ? "Saving…" : "Save Roster"}
                       </Btn>
                       <Btn onClick={() => setExpandedResId(null)} style={{ padding: "6px 14px" }}>Cancel</Btn>
                     </div>
@@ -703,8 +704,8 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
             />
 
             {importError && (
-              <div style={{ color:C.red, fontSize:11.5, fontWeight:600, marginBottom:10 }}>
-                ⚠️ {importError}
+              <div style={{ color:C.red, fontSize:11.5, fontWeight:600, marginBottom:10, display:"inline-flex", alignItems:"center", gap:5 }}>
+                <AlertTriangle size={12} /> {importError}
               </div>
             )}
 

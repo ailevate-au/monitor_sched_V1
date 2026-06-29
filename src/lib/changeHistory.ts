@@ -24,12 +24,21 @@ export interface ChangeSet {
   warningsAtConfirm: string[];
   reverted: boolean;
   revertedAt?: string;
+  /**
+   * Plain-language summary of the change. Used for entries that aren't a date
+   * move — e.g. a PM marking a job "complete" or "in progress". When present it
+   * replaces the move-count label in the UI; entries with no `moves` aren't
+   * revertable (nothing to roll back).
+   */
+  summary?: string;
 }
 
 export interface ChangeHistoryStore {
   list(): ChangeSet[];
   add(changeSet: ChangeSet): void;
   update(id: string, patch: Partial<ChangeSet>): void;
+  /** Wipe the whole log — used by "Reset to clean" so history matches the schedule. */
+  clear(): void;
 }
 
 const STORAGE_KEY = "flowiq.timeline.changeHistory";
@@ -68,6 +77,14 @@ export const localStorageChangeHistory: ChangeHistoryStore = {
   update(id, patch) {
     const sets = readAll().map((cs) => (cs.id === id ? { ...cs, ...patch } : cs));
     writeAll(sets);
+  },
+  clear() {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* best-effort */
+    }
   },
 };
 

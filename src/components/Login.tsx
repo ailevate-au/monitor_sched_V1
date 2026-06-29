@@ -172,8 +172,7 @@ export default function Login() {
           </button>
 
           <div style={{ fontSize: 11, color: C.textMuted, textAlign: "center", lineHeight: 1.5, marginTop: 2 }}>
-            Demo build — credentials are accepted by the mock auth service and sign you in
-            against the live programme data.
+            Demo build — any email and password will sign you in.
           </div>
         </form>
 
@@ -186,10 +185,10 @@ export default function Login() {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {[
-              { label: "Owner (Superadmin)", email: "owner@flowiq.com.au" },
+              { label: "Owner (sees everything)", email: "owner@flowiq.com.au" },
               { label: "Admin", email: "admin@flowiq.com.au" },
               { label: "Project Manager", email: "pm@flowiq.com.au" },
-              { label: "Field Worker", email: "worker@flowiq.com.au" },
+              { label: "Worker (on site)", email: "worker@flowiq.com.au" },
             ].map((role) => (
               <button
                 key={role.email}

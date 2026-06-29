@@ -10,7 +10,9 @@ import {
   ChevronDown,
   ChevronUp,
   CalendarDays,
+  UserX,
 } from "lucide-react";
+import { useAuth } from "../lib/auth";
 import {
   Problem,
   ProblemAction,
@@ -18,6 +20,7 @@ import {
   parseProblemsResponse,
 } from "../types";
 import { KpiCard } from "./Dashboard";
+import { AppNavigate } from "../types/masters";
 
 const C = {
   navy: "#0F1F3D",
@@ -50,9 +53,13 @@ const CATEGORY_META: Record<
   late:     { label: "Running late",   icon: <Clock size={16} />,          accent: C.amber,   bg: "#FFFBEB", border: "#FCD34D" },
   fragile:  { label: "Tight handover", icon: <Link2 size={16} />,          accent: C.amber,   bg: "#FFFBF2", border: "#FDE68A" },
   weather:  { label: "Weather risk",   icon: <CloudRain size={16} />,      accent: C.blue,    bg: "#F1F7FE", border: "#BFDBFE" },
+  unassigned: { label: "No one assigned", icon: <UserX size={16} />,        accent: C.amber,   bg: "#FFFBF2", border: "#FDE68A" },
 };
 
-export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => void }) {
+export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
+  const { user } = useAuth();
+  const isPM = user?.role === "PM";
+  const [myProjectNames, setMyProjectNames] = useState<Set<string> | null>(null);
   const [data, setData]           = useState<ProblemsResponse>(EMPTY);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -81,6 +88,19 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
   };
 
   useEffect(() => { load(); }, []);
+
+  // PMs only see their own projects, so they shouldn't see cross-project problems
+  // that touch a project they don't own. Build the set of names they DO own.
+  useEffect(() => {
+    if (!isPM || !user?.email) { setMyProjectNames(null); return; }
+    fetch("/api/v1/projects")
+      .then(r => r.json())
+      .then((rows: any[]) => {
+        if (!Array.isArray(rows)) return;
+        setMyProjectNames(new Set(rows.filter(p => p.managerEmail === user.email).map(p => p.name)));
+      })
+      .catch(() => {});
+  }, [isPM, user?.email]);
 
   const confirmResolve = () => {
     if (!pending) return;
@@ -112,7 +132,41 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
       .catch(() => { setSubmitting(false); setPending(null); alert("Network error while resolving."); });
   };
 
-  const { problems, summary } = data;
+  // For a PM, split problems three ways by which project(s) each one touches
+  // (a problem can span two projects via "A + B"):
+  //   - fully theirs   → fixable cards (they manage every project involved)
+  //   - partly theirs  → a read-only notice: a change of theirs clashed into a
+  //     project they DON'T manage; only the owner can see + resolve it
+  //   - none theirs    → hidden (not their concern)
+  // The Owner sees everything as fixable cards.
+  const splitProjects = (name: string) => name.split(" + ").map(n => n.trim());
+  let problems = data.problems;
+  let crossProblems: Problem[] = [];
+  if (isPM && myProjectNames) {
+    const owned: Problem[] = [];
+    const cross: Problem[] = [];
+    for (const p of data.problems) {
+      const parts = splitProjects(p.projectName);
+      const ownedCount = parts.filter(n => myProjectNames.has(n)).length;
+      if (ownedCount === parts.length) owned.push(p);
+      else if (ownedCount > 0) cross.push(p);
+    }
+    problems = owned;
+    crossProblems = cross;
+  }
+  const summary = (isPM && myProjectNames)
+    ? {
+        total: problems.length,
+        critical: problems.filter(p => p.severity === "critical").length,
+        projectsAffected: new Set(problems.flatMap(p => splitProjects(p.projectName))).size,
+        projectsTotal: myProjectNames.size,
+      }
+    : data.summary;
+
+  // Exact Gantt task sets behind the KPI counts (a problem can cover several
+  // tasks, and the same task can surface in more than one problem — dedupe).
+  const allProblemTaskIds = Array.from(new Set(problems.flatMap(p => p.taskIds || [])));
+  const criticalTaskIds = Array.from(new Set(problems.filter(p => p.severity === "critical").flatMap(p => p.taskIds || [])));
 
   if (loading && problems.length === 0)
     return <div style={{ padding: 20, color: C.gray }}>Scanning your portfolio for issues…</div>;
@@ -127,32 +181,82 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
   return (
     <div>
       {/* Header */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 3 }}>
-          {summary.total > 0
-            ? `${summary.total} thing${summary.total > 1 ? "s" : ""} need${summary.total > 1 ? "" : "s"} your attention`
-            : "Everything is on track"}
-        </div>
-        <div style={{ fontSize: 12.5, color: C.gray }}>
-          {summary.total > 0
-            ? `Across ${summary.projectsAffected} of ${summary.projectsTotal} active projects. Each issue below has a recommended fix — pick one and confirm.`
-            : "No conflicts, delays, or weather risks detected across your portfolio."}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 3 }}>
+            {summary.total > 0
+              ? `${summary.total} thing${summary.total > 1 ? "s" : ""} need${summary.total > 1 ? "" : "s"} you`
+              : crossProblems.length > 0
+              ? "Nothing here for you to fix"
+              : "Everything's on track"}
+          </div>
+          <div style={{ fontSize: 12.5, color: C.gray }}>
+            {summary.total > 0
+              ? `${summary.projectsAffected} of ${summary.projectsTotal} projects have a problem. Pick a fix for each one.`
+              : crossProblems.length > 0
+              ? "But one of your changes affected another project — see below."
+              : "No clashes, no late jobs, nothing to worry about."}
+          </div>
         </div>
       </div>
 
-      {/* KPI strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, marginBottom: 20 }}>
-        <KpiCard label="Open Problems"     value={`${summary.total}`}             valueColor={summary.total > 0 ? C.red : C.greenDark}      sub="Need a decision" />
-        <KpiCard label="Critical"          value={`${summary.critical}`}          valueColor={summary.critical > 0 ? C.redDark : C.greenDark} sub="Double-bookings" />
-        <KpiCard label="Projects Affected" value={`${summary.projectsAffected}`} valueColor={C.amber}                                        sub={`of ${summary.projectsTotal} active`} />
-      </div>
+      {/* KPI strip — one clear number, plus two supporting */}
+      {summary.total > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, marginBottom: 20 }}>
+          <KpiCard
+            label="Total Issues"
+            value={`${summary.total}`}
+            valueColor={summary.total > 0 ? C.red : C.greenDark}
+            sub="Everything that needs you"
+            onClick={onNav && summary.total > 0
+              ? () => onNav("gantt", undefined, allProblemTaskIds.length > 0 ? { ganttTaskIds: allProblemTaskIds } : { ganttStatus: "problems" })
+              : undefined}
+            actionLabel="See on Timeline"
+          />
+          <KpiCard
+            label="Urgent"
+            value={`${summary.critical}`}
+            valueColor={summary.critical > 0 ? C.redDark : C.greenDark}
+            sub="Same person, two jobs at once"
+            onClick={onNav && summary.critical > 0
+              ? () => onNav("gantt", undefined, criticalTaskIds.length > 0 ? { ganttTaskIds: criticalTaskIds } : { ganttStatus: "conflict" })
+              : undefined}
+            actionLabel="See on Timeline"
+          />
+          <KpiCard label="Projects Hit" value={`${summary.projectsAffected}`} valueColor={C.amber} sub={`of ${summary.projectsTotal} running`} />
+        </div>
+      )}
 
-      {/* Empty state */}
-      {problems.length === 0 && (
+      {/* PM blind-spot notice — a change of theirs clashed into a project they
+          don't manage. Read-only: only the owner can see the detail and fix it. */}
+      {isPM && crossProblems.length > 0 && (
+        <div style={{ padding: "16px 18px", background: C.amberBg, borderRadius: 12, border: `1px solid #FCD34D`, marginBottom: 14, display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <TriangleAlert size={20} color={C.amber} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: C.amber, marginBottom: 4 }}>
+              A change of yours affected another project
+            </div>
+            <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55 }}>
+              {crossProblems.length} problem{crossProblems.length > 1 ? "s" : ""} now {crossProblems.length > 1 ? "involve" : "involves"} a
+              project you don't manage. You can't fix {crossProblems.length > 1 ? "them" : "it"} from here — the owner can see the
+              details and will resolve {crossProblems.length > 1 ? "them" : "it"}.
+            </div>
+            {crossProblems.map(p => (
+              <div key={p.id} style={{ fontSize: 11.5, color: C.text, padding: "7px 11px", background: C.white, borderRadius: 8, border: `0.5px solid #FDE68A`, marginTop: 8 }}>
+                <strong>{p.title}</strong>
+                <span style={{ color: C.gray }}> · {p.projectName}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state — only when there is genuinely nothing (no fixable, none cross-project). */}
+      {problems.length === 0 && crossProblems.length === 0 && (
         <div style={{ padding: "44px 20px", textAlign: "center", background: C.white, borderRadius: 12, border: `0.5px solid ${C.grayLight}` }}>
-          <div style={{ fontSize: 38, marginBottom: 10 }}>🎉</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 6 }}>No open problems</div>
-          <div style={{ fontSize: 12.5, color: C.gray }}>Your portfolio is conflict-free and on schedule.</div>
+          <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}><CheckCircle2 size={40} color={C.green} /></div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Everything's on track</div>
+          <div style={{ fontSize: 12.5, color: C.gray }}>No clashes, no late jobs. Nothing needs you right now.</div>
         </div>
       )}
 
@@ -179,7 +283,7 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
               <div style={{ padding: "18px 18px", background: C.greenBg, display: "flex", alignItems: "center", gap: 10 }}>
                 <CheckCircle2 size={22} color={C.green} />
                 <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: C.greenDark }}>Resolved — {p.title}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: C.greenDark }}>Resolved: {p.title}</div>
                   <div style={{ fontSize: 12, color: C.greenDark }}>{resolved}</div>
                 </div>
               </div>
@@ -213,7 +317,7 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
                   {onNav && (
                     <button
                       type="button"
-                      onClick={() => onNav("gantt")}
+                      onClick={() => onNav("gantt", undefined, (p.taskIds && p.taskIds.length > 0) ? { ganttTaskIds: p.taskIds, ganttFocusLabel: p.title } : undefined)}
                       style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}
                     >
                       <CalendarDays size={12} /> View in Timeline
@@ -234,7 +338,7 @@ export default function ScreenProblems({ onNav }: { onNav?: (screen: string) => 
                     }}
                   >
                     <span style={{ fontSize: 11.5, fontWeight: 600, color: C.gray, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      Suggested fixes — pick one
+                      Suggested fixes (pick one)
                     </span>
                     {fixesCollapsed
                       ? <ChevronDown size={15} color={C.gray} />
@@ -352,7 +456,7 @@ function ConfirmModal({
           <div style={{ fontSize: 12, color: C.gray, lineHeight: 1.5 }}>{action.detail}</div>
           {r && (
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: `0.5px solid ${C.grayLight}`, fontSize: 11.5, color: C.text }}>
-              <div><strong>{r.name}</strong> — {r.trade} · {r.rate} · {r.util}% load</div>
+              <div><strong>{r.name}</strong> · {r.trade} · {r.rate} · {r.util}% load</div>
               {r.bio && <div style={{ color: C.gray, marginTop: 3 }}>{r.bio}</div>}
               {r.skills && r.skills.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>

@@ -6,8 +6,8 @@ import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 import { dbInstance } from "./src/server/db";
 import { runConflictDetection, computeCascade, getConflictHubPayload, getReplacementCandidates } from "./src/server/conflictEngine";
-import { RESOURCE_PROFILES } from "./src/server/seedData";
-import { getBOMForecast } from "./src/server/bomWeather";
+import { RESOURCE_PROFILES, DEFAULT_TASKS } from "./src/server/seedData";
+import { getBOMForecast, getForecast, getWeatherSummary, setStormScenario } from "./src/server/bomWeather";
 import {
   getMastersBundle,
   getMasterList,
@@ -197,23 +197,44 @@ async function startServer() {
     res.json({ success: true, features: PERM_FEATURES, roles: PERM_ROLES, matrix: permissionMatrix });
   });
 
-  // GET /api/v1/dashboard: portfolio statistics and top-level summaries
+  // GET /api/v1/dashboard: portfolio statistics and top-level summaries.
+  // Total Issues is the SAME number the Problems hub and sidebar show, so every
+  // screen agrees on one count.
   app.get("/api/v1/dashboard", (req, res) => {
     const db = dbInstance;
     const weather = getBOMForecast();
 
-    const conflictsCount = db.conflicts.length;
+    const { summary } = buildProblemsResponse();
     const activeProjects = db.projects.filter(p => p.status === "ACTIVE").length;
+    const activeProjectIds = new Set(db.projects.filter(p => p.status === "ACTIVE").map(p => p.id));
+    const unassignedCount = db.tasks.filter(
+      t => !t.assigneeId && t.status !== "completed" && activeProjectIds.has(t.projectId)
+    ).length;
+
+    // On-track % = share of live (not-completed) tasks with no problem flag.
+    const live = db.tasks.filter(t => t.status !== "completed" && (t.percent_complete ?? 0) < 100);
+    const okTasks = live.filter(t => !["conflict", "overdue", "weather", "fragile"].includes(t.status)).length;
+    const onTrackPct = live.length === 0 ? 100 : Math.round((okTasks / live.length) * 100);
+
+    const stormDays = weather.filter(d => d.risk !== "ok").length;
 
     res.json({
       activeProjectsCount: activeProjects,
-      onProgrammePct: 57,
-      resourceConflictsCount: conflictsCount,
-      whsLtiFreeDays: 142,
+      onProgrammePct: onTrackPct,
+      // unified issue counts (same as Problems hub + sidebar)
+      totalIssues: summary.total,
+      criticalIssues: summary.critical,
+      projectsAffected: summary.projectsAffected,
+      // kept for backward-compat with older callers
+      resourceConflictsCount: summary.total,
+      // jobs on active projects with nobody assigned (an issue the owner can act on)
+      unassignedCount,
       weatherAlert: {
-        severity: "warning",
-        title: "BOM Forecast Alert",
-        text: "Heavy rain / severe storm forecast Sydney (Wed 4 Jun – Thu 5 Jun). 2 tasks at Weather Risk.",
+        severity: stormDays > 0 ? "warning" : "ok",
+        title: "Weather",
+        text: stormDays > 0
+          ? "Rain or storms forecast this week. Some outdoor work may be affected."
+          : "Clear week ahead. No weather risk to site work.",
         forecast: weather
       }
     });
@@ -355,6 +376,7 @@ async function startServer() {
       name,
       start,
       end,
+      deadline,
       dependencies,
       lag_days,
       dependency_type,
@@ -393,6 +415,7 @@ async function startServer() {
       name,
       start,
       end,
+      deadline: deadline || end,
       durationDays,
       assigneeId: assigneeId || null,
       assignee: assigneeName,
@@ -419,6 +442,7 @@ async function startServer() {
     const {
       start,
       end,
+      deadline,
       cascade,
       name,
       dependencies,
@@ -435,6 +459,7 @@ async function startServer() {
     if (!task) return res.status(404).json({ error: "Task not found" });
 
     if (name !== undefined) task.name = name;
+    if (deadline !== undefined) task.deadline = deadline || null;
     if (dependencies !== undefined) task.dependencies = dependencies;
     if (lag_days !== undefined) task.lag_days = parseInt(lag_days) || 0;
     if (dependency_type !== undefined) task.dependency_type = dependency_type === "SS" ? "SS" : "FS";
@@ -472,6 +497,74 @@ async function startServer() {
       db.tasks = computeCascade(db.tasks, id, 0, "NSW");
     }
 
+    runConflictDetection();
+    db.save();
+    res.json({ success: true, tasks: db.tasks });
+  });
+
+  // POST /api/v1/tasks/:id/status — PM-driven lifecycle change.
+  // "delayed" does a REAL cascade (shifts the task + dependents), which can create
+  // cross-project clashes the PM can't see but the Owner will. Returns the refreshed
+  // problem summary so the UI can say "this created N new issue(s)".
+  app.post("/api/v1/tasks/:id/status", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { pmStatus, delayDays } = req.body || {};
+    const task = db.tasks.find(t => t.id === id) as any;
+    if (!task) return res.status(404).json({ success: false, error: "Task not found" });
+
+    const before = buildProblemsResponse().summary.total;
+
+    if (pmStatus === "complete") {
+      task.percent_complete = 100;
+      task.status = "completed";
+      task.pmStatus = "complete";
+    } else if (pmStatus === "in_progress") {
+      // "In progress" = work is underway (no percentage tracking). Force the
+      // completion value below 100 so a job that was marked Complete flips back
+      // off "complete" — the engine then re-derives the live status from dates.
+      task.percent_complete = 50;
+      task.status = "inprogress";
+      task.pmStatus = "in_progress";
+    } else if (pmStatus === "not_started") {
+      task.percent_complete = 0;
+      task.status = "scheduled";
+      task.pmStatus = "not_started";
+    } else if (pmStatus === "delayed") {
+      const days = parseInt(delayDays, 10) || 0;
+      if (days !== 0) applyShift(id, days);
+      task.pmStatus = "delayed";
+    } else {
+      return res.status(400).json({ success: false, error: `Unknown status: ${pmStatus}` });
+    }
+
+    runConflictDetection();
+    db.save();
+    const refreshed = buildProblemsResponse();
+    res.json({
+      success: true,
+      newIssues: Math.max(0, refreshed.summary.total - before),
+      ...refreshed,
+      tasks: db.tasks,
+    });
+  });
+
+  // POST /api/v1/tasks/restore — revert tasks to a client-supplied snapshot.
+  // Powers the Timeline "Undo last change": if a save created clashes, restore the
+  // previous dates/assignees in one shot and re-run detection.
+  app.post("/api/v1/tasks/restore", (req, res) => {
+    const db = dbInstance;
+    const { tasks } = req.body || {};
+    if (!Array.isArray(tasks)) return res.status(400).json({ success: false, error: "Missing tasks snapshot" });
+    for (const s of tasks) {
+      const t = db.tasks.find(x => x.id === s.id) as any;
+      if (!t) continue;
+      if (s.start !== undefined) t.start = s.start;
+      if (s.end !== undefined) t.end = s.end;
+      if (s.durationDays !== undefined) t.durationDays = s.durationDays;
+      if (Object.prototype.hasOwnProperty.call(s, "assigneeId")) t.assigneeId = s.assigneeId;
+      if (s.percent_complete !== undefined) t.percent_complete = s.percent_complete;
+    }
     runConflictDetection();
     db.save();
     res.json({ success: true, tasks: db.tasks });
@@ -687,6 +780,12 @@ async function startServer() {
     dbInstance.projects.find(p => p.id === t?.projectId)?.state || "NSW";
   const projectNameFor = (pid: string) =>
     dbInstance.projects.find(p => p.id === pid)?.name || "Unknown project";
+  // Clear, unambiguous job label: project + full task name, so two jobs with the
+  // same name (e.g. "… — Level 4/5") are told apart. e.g. "Parramatta Square · Structural Steel Frame — Level 4".
+  const jobLabelFor = (t: any) => {
+    const proj = (projectNameFor(t?.projectId) || "").split(" — ")[0];
+    return proj ? `${proj} · ${t?.name}` : (t?.name || "this job");
+  };
 
   function applyShift(taskId: string, delayDays: number) {
     const db = dbInstance;
@@ -706,22 +805,21 @@ async function startServer() {
 
     // 1) CONFLICTS — double-booked resources
     for (const c of db.conflicts) {
-      const reassignTask = db.tasks.find(t => t.assigneeId === c.resourceId && t.status === "conflict");
-      const projNames = Array.from(new Set(
-        db.tasks.filter(t => t.assigneeId === c.resourceId && t.status === "conflict").map(t => projectNameFor(t.projectId))
-      ));
+      const conflictTasks = db.tasks.filter(t => t.assigneeId === c.resourceId && t.status === "conflict");
+      const reassignTask = conflictTasks[0];
+      const projNames = Array.from(new Set(conflictTasks.map(t => projectNameFor(t.projectId))));
       const candidates = (c.candidates || [])
         .filter((cd: any) => !conflictedIds.has(cd.id))
         .slice(0, 2);
 
       const actions: any[] = candidates.map((cd: any, i: number) => {
         const prof = profileFor(cd.id);
-        const interstate = cd.same_state === false ? ` · interstate (${cd.state})` : "";
+        const interstate = cd.same_state === false ? ` Lives in ${cd.state} (would travel).` : "";
         return {
           id: `reassign:${cd.id}`,
           kind: "reassign",
-          label: `Reassign to ${cd.name}`,
-          detail: `${cd.rate} · ${cd.util}% current load${interstate}. ${prof.bio || ""}`.trim(),
+          label: reassignTask ? `Give "${jobLabelFor(reassignTask)}" to ${cd.name}` : `Give the job to ${cd.name}`,
+          detail: `${cd.name} is free for these dates. Costs ${cd.rate}, ${cd.util}% booked right now.${interstate} ${prof.bio || ""}`.trim(),
           recommended: i === 0,
           resource: { ...cd, bio: prof.bio, skills: prof.skills, recommended: i === 0 },
         };
@@ -730,45 +828,90 @@ async function startServer() {
         actions.push({
           id: `shift:${reassignTask.id}:14`,
           kind: "accept_delay",
-          label: "Accept a 14-day delay instead",
-          detail: `Keep ${c.resource} on both jobs — push the conflicting task out 14 working days. Downstream tasks cascade automatically.`,
+          label: `Push "${jobLabelFor(reassignTask)}" back 2 weeks instead`,
+          detail: `Keep ${c.resource} on both jobs and move "${reassignTask.name}" 2 weeks later. Jobs that wait on it move too.`,
           delayDays: 14,
         });
       }
 
+      const crossProject = projNames.length > 1;
       problems.push({
         id: `prob-conflict-${c.resourceId}`,
         category: "conflict",
         severity: "critical",
-        title: `${c.resource} is booked on two jobs at once`,
+        taskIds: conflictTasks.map(t => t.id),
+        title: `${c.resource} is booked on two jobs at the same time`,
         projectName: projNames.join(" + ") || (reassignTask ? projectNameFor(reassignTask.projectId) : ""),
-        what: (c.overlapPairs && c.overlapPairs.length)
-          ? c.overlapPairs.map((p: any) => `${p.taskA} (${p.datesA}) clashes with ${p.taskB} (${p.datesB})`).join("; ")
+        // Name both jobs with their project + dates so a cross-project clash is obvious.
+        what: conflictTasks.length >= 2
+          ? `${c.resource} is needed on ${conflictTasks.length} jobs at once${crossProject ? " (on different projects)" : ""}: ${conflictTasks.map(t => `"${jobLabelFor(t)}" (${t.start} to ${t.end})`).join(" and ")}.`
           : c.desc,
-        impact: candidates.length
-          ? "Whichever job isn't covered will slip, delaying every task that waits on it."
-          : `No other ${c.trade} is free for these dates — accepting a short delay is the only safe option.`,
+        impact: "The same person can't be on two jobs at once. One of them will slip unless you fix it.",
         suggestedActions: actions,
       });
     }
 
-    // 2) LATE — tasks already past their end date (relative to the scenario date)
+    // 1b) UNASSIGNED — active-project jobs with nobody assigned. A real problem:
+    // the work has no one to do it. Suggest the best same-trade person who's free.
+    const activeIds = new Set(db.projects.filter(p => p.status === "ACTIVE").map(p => p.id));
+    const unassignedTasks = db.tasks.filter(
+      t => !t.assigneeId && t.status !== "completed" && activeIds.has(t.projectId)
+    );
+    for (const t of unassignedTasks) {
+      const cands = getReplacementCandidates("", t.tradeRequired, t)
+        .filter((cd: any) => !conflictedIds.has(cd.id))
+        .slice(0, 2);
+      const actions: any[] = cands.map((cd: any, i: number) => {
+        const prof = profileFor(cd.id);
+        const interstate = cd.same_state === false ? ` Lives in ${cd.state} (would travel).` : "";
+        return {
+          id: `assign:${t.id}:${cd.id}`,
+          kind: "reassign",
+          label: `Put ${cd.name} on "${jobLabelFor(t)}"`,
+          detail: `${cd.name} is free for these dates. Costs ${cd.rate}, ${cd.util}% booked right now.${interstate} ${prof.bio || ""}`.trim(),
+          recommended: i === 0,
+          resource: { ...cd, bio: prof.bio, skills: prof.skills, recommended: i === 0 },
+        };
+      });
+      problems.push({
+        id: `prob-unassigned-${t.id}`,
+        category: "unassigned",
+        severity: "medium",
+        taskIds: [t.id],
+        title: `No one is assigned to "${jobLabelFor(t)}"`,
+        projectName: projectNameFor(t.projectId),
+        what: `"${t.name}" (${t.start} to ${t.end}) needs a ${t.tradeRequired}, but nobody is on it yet.`,
+        impact: "Nobody is doing this job yet, so it can't start.",
+        suggestedActions: actions,
+      });
+    }
+
+    // 2) LATE — tasks past their end date (relative to the scenario "now"), plus —
+    // when the opt-in deadline warning is on — jobs now forecast to finish AFTER
+    // their must-finish-by deadline (behind schedule even if the end is in future).
+    const deadlineWarn = !!db.settings.deadlineWarnings?.enabled;
     const lateByProject = new Map<string, any[]>();
     for (const t of db.tasks) {
       if (t.status === "completed" || (t.percent_complete ?? 0) >= 100) continue;
-      if (new Date(t.end) >= SCENARIO_TODAY) continue;
+      const pastDue = new Date(t.end) < SCENARIO_TODAY;
+      const missesDeadline = deadlineWarn && !!t.deadline && t.end > t.deadline;
+      if (!pastDue && !missesDeadline) continue;
       if (!lateByProject.has(t.projectId)) lateByProject.set(t.projectId, []);
       lateByProject.get(t.projectId)!.push(t);
     }
     for (const [pid, tasks] of lateByProject) {
       const worst = tasks.slice().sort((a, b) => +new Date(a.end) - +new Date(b.end))[0];
-      const daysLate = Math.round((SCENARIO_TODAY.getTime() - new Date(worst.end).getTime()) / 86400000);
+      const pastDue = new Date(worst.end) < SCENARIO_TODAY;
+      const byDeadline = !pastDue && deadlineWarn && !!worst.deadline && worst.end > worst.deadline;
+      const daysLate = byDeadline
+        ? Math.round((new Date(worst.end).getTime() - new Date(worst.deadline).getTime()) / 86400000)
+        : Math.round((SCENARIO_TODAY.getTime() - new Date(worst.end).getTime()) / 86400000);
       const project = db.projects.find(p => p.id === pid);
       const actions: any[] = [{
         id: `shift:${worst.id}:10`,
         kind: "extend_deadline",
-        label: "Re-baseline & approve a 2-week extension",
-        detail: `Shift the overdue task forward 10 working days. Dependent tasks cascade. Clears the overdue flag.`,
+        label: "Give it 2 more weeks",
+        detail: `Move the late job 2 weeks later and clear the red flag. Jobs that wait on it move too.`,
         delayDays: 10,
         recommended: true,
       }];
@@ -780,8 +923,8 @@ async function startServer() {
           actions.push({
             id: `reassign:${cands[0].id}`,
             kind: "reassign",
-            label: `Bring in ${cands[0].name} to recover`,
-            detail: `${cands[0].rate} · ${cands[0].util}% load. ${prof.bio || ""}`.trim(),
+            label: `Bring in ${cands[0].name} to catch up`,
+            detail: `Costs ${cands[0].rate}, ${cands[0].util}% booked. ${prof.bio || ""}`.trim(),
             resource: { ...cands[0], bio: prof.bio, skills: prof.skills },
           });
         }
@@ -790,10 +933,15 @@ async function startServer() {
         id: `prob-late-${worst.id}`,
         category: "late",
         severity: "high",
-        title: `${projectNameFor(pid)} is running late`,
+        taskIds: [worst.id],
+        title: `${projectNameFor(pid)} is behind schedule`,
         projectName: projectNameFor(pid),
-        what: `${worst.name} was due ${worst.end} — now ${daysLate} day${daysLate !== 1 ? "s" : ""} overdue${assignee ? ` (assigned: ${assignee.name})` : ""}.`,
-        impact: project ? `Every day past plan adds LD exposure of about A$${(project.ldRatePerDay || 0).toLocaleString()}.` : "Downstream tasks are blocked until this finishes.",
+        what: byDeadline
+          ? `"${jobLabelFor(worst)}" is now forecast to finish ${worst.end}, ${daysLate} day${daysLate !== 1 ? "s" : ""} past its ${worst.deadline} deadline${assignee ? ` (${assignee.name}'s job)` : ""}.`
+          : `"${jobLabelFor(worst)}" was due ${worst.end}, now ${daysLate} day${daysLate !== 1 ? "s" : ""} late${assignee ? ` (${assignee.name}'s job)` : ""}.`,
+        impact: byDeadline
+          ? "This job is set to miss its deadline, so the jobs after it are at risk too."
+          : "This job is already late, so the jobs after it are waiting too.",
         suggestedActions: actions,
       });
     }
@@ -804,14 +952,19 @@ async function startServer() {
     for (const f of (worstFragile ? [worstFragile] : [])) {
       const parent = db.tasks.find(t => t.id === f.id);
       if (!parent) continue;
-      const child = db.tasks.find(t => (t.dependencies || "").split(",").map(d => d.trim()).includes(f.id) && t.assigneeId);
+      // Use the exact tight successor detection flagged (falls back to the first
+      // assigned dependent) so the "breathing room" fix shifts the job the
+      // problem actually names.
+      const child =
+        (f.childId ? db.tasks.find(t => t.id === f.childId) : undefined) ||
+        db.tasks.find(t => (t.dependencies || "").split(",").map(d => d.trim()).includes(f.id) && t.assigneeId);
       const actions: any[] = [];
       if (child) {
         actions.push({
           id: `shift:${child.id}:3`,
           kind: "extend_deadline",
-          label: "Add a 3-day buffer before the handover",
-          detail: `Delays the next task 3 working days so there's breathing room after the handover. Removes the tight-schedule risk.`,
+          label: "Add 3 days of breathing room",
+          detail: `Start the next job 3 days later so there's a gap. Removes the risk of a pile-up.`,
           delayDays: 3,
           recommended: true,
         });
@@ -819,18 +972,19 @@ async function startServer() {
       actions.push({
         id: `shift:${f.id}:-2`,
         kind: "extend_deadline",
-        label: "Start the earlier task sooner",
-        detail: `Pulls the earlier task forward 2 working days to open up a safety gap before the handover.`,
+        label: "Start the first job 2 days earlier",
+        detail: `Bring the earlier job forward 2 days to open up a safety gap.`,
         delayDays: -2,
       });
       problems.push({
         id: `prob-fragile-${f.id}`,
         category: "fragile",
         severity: "medium",
-        title: `Tight handover on ${f.name}`,
+        taskIds: [f.id],
+        title: `No gap between two jobs on ${f.name}`,
         projectName: projectNameFor(parent.projectId),
         what: f.desc,
-        impact: "If the earlier task slips even a day, the next trade can't start — a hidden chain reaction.",
+        impact: "If the first job runs even 1 day over, the next one can't start. Easy to miss.",
         suggestedActions: actions,
       });
     }
@@ -843,24 +997,25 @@ async function startServer() {
         id: `prob-weather`,
         category: "weather",
         severity: "high",
-        title: `Severe weather threatens ${weatherTasks.length} task(s) this week`,
+        taskIds: weatherTasks.map(t => t.id),
+        title: `Bad weather could stop ${weatherTasks.length} job(s) this week`,
         projectName: Array.from(new Set(weatherTasks.map(t => projectNameFor(t.projectId)))).join(" + "),
-        what: `BOM forecasts heavy rain and storms (Wed–Fri). Affected: ${weatherTasks.map(t => t.name).join("; ")}.`,
-        impact: "Outdoor works in this window risk rework, safety stand-downs, and unclaimed delay.",
+        what: `Rain and storms forecast this week. Outdoor jobs at risk: ${weatherTasks.map(t => jobLabelFor(t)).join("; ")}.`,
+        impact: "Storms could stop this outdoor work, so the jobs may not get done this week.",
         suggestedActions: [
           {
             id: `shiftmany:${ids}:5`,
             kind: "extend_deadline",
-            label: "Reschedule affected works past the storm",
-            detail: "Move the exposed tasks 5 working days later so they fall in clear weather.",
+            label: "Move these jobs past the storm",
+            detail: "Push the outdoor jobs 5 days later so they land in clear weather.",
             delayDays: 5,
             recommended: true,
           },
           {
             id: `shiftmany:${ids}:7`,
             kind: "extend_deadline",
-            label: "Lodge an Extension of Time & extend the programme",
-            detail: "Treat the storm window as an EOT event and extend affected tasks by 7 working days.",
+            label: "Claim the lost time and extend",
+            detail: "Log the storm as an official delay and move the jobs 7 days later.",
             delayDays: 7,
           },
         ],
@@ -883,6 +1038,35 @@ async function startServer() {
 
   app.get("/api/v1/problems", (_req, res) => {
     res.json(buildProblemsResponse());
+  });
+
+  // Programme settings (demo scheduling knobs, in-memory). Today this is just the
+  // tight-handover control: an on/off toggle and the working-day buffer under which
+  // a handover counts as "tight". Changing it re-runs detection and returns the
+  // refreshed feed so the UI updates live.
+  app.get("/api/v1/settings", (_req, res) => {
+    res.json(dbInstance.settings);
+  });
+
+  app.put("/api/v1/settings", (req, res) => {
+    const db = dbInstance;
+    const th = (req.body || {}).tightHandover || {};
+    if (typeof th.enabled === "boolean") {
+      db.settings.tightHandover.enabled = th.enabled;
+    }
+    if (th.thresholdDays !== undefined) {
+      const n = parseInt(th.thresholdDays, 10);
+      if (!Number.isNaN(n)) {
+        db.settings.tightHandover.thresholdDays = Math.min(10, Math.max(0, n));
+      }
+    }
+    const dw = (req.body || {}).deadlineWarnings || {};
+    if (typeof dw.enabled === "boolean") {
+      db.settings.deadlineWarnings.enabled = dw.enabled;
+    }
+    runConflictDetection();
+    db.save();
+    res.json({ success: true, settings: db.settings, ...buildProblemsResponse() });
   });
 
   app.post("/api/v1/problems/:id/resolve", (req, res) => {
@@ -909,6 +1093,12 @@ async function startServer() {
         db.undoStack.push({ targetId: task.id, prevAssigneeId: task.assigneeId });
         db.conflictResolutionLog.push({ resourceId: task.assigneeId || "", resolvedAt: new Date().toISOString(), undone: false });
         task.assigneeId = targetResourceId;
+      } else if (kind === "assign") {
+        // assign:<taskId>:<resourceId> — put someone on an unassigned job.
+        const targetTask = db.tasks.find(t => t.id === parts[1]);
+        if (!targetTask) return res.status(404).json({ success: false, error: "No task found for this problem" });
+        db.undoStack.push({ targetId: targetTask.id, prevAssigneeId: targetTask.assigneeId });
+        targetTask.assigneeId = parts[2];
       } else if (kind === "shift") {
         applyShift(parts[1], parseInt(parts[2], 10) || 0);
       } else if (kind === "shiftmany") {
@@ -925,6 +1115,68 @@ async function startServer() {
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err?.message || "Failed to resolve problem" });
     }
+  });
+
+  // ── DEMO CONTROLS ───────────────────────────────────────────────────────
+  // Drives the live "no issue → issue → resolved" story for the walkthrough.
+  // Simulate: a fresh batch of work lands and the portfolio sprouts the full set
+  //   of problems (two double-bookings, a late job, a tight handover, a storm).
+  // Reset:    put everything back to the clean baseline → "Everything's on track".
+  const setTask = (id: string, patch: Record<string, any>) => {
+    const t = dbInstance.tasks.find(x => x.id === id);
+    if (t) Object.assign(t, patch);
+  };
+
+  app.post("/api/v1/demo/simulate", (_req, res) => {
+    const db = dbInstance;
+    // 1) Ben double-booked — basement formwork reassigned onto his Level-4 pour week
+    setTask("TSK-P2-03", { assigneeId: "r1", start: "2026-06-03", end: "2026-06-09", durationDays: 5, percent_complete: 0, status: "scheduled" });
+    // 2) Tom double-booked — main-core piling pulled back to clash with his north piling
+    setTask("TSK-P3-01", { assigneeId: "r4", start: "2026-06-01", end: "2026-06-19", durationDays: 15, percent_complete: 0, status: "scheduled" });
+    // 3) A job running late — excavation stalled at 85%, past its end date
+    setTask("TSK-P2-01", { percent_complete: 85, status: "overdue" });
+    // 4) A tight handover — Chris's fitout pulled up hard against the steel frame finishing
+    setTask("TSK-P1-04", { start: "2026-06-29", end: "2026-07-17", durationDays: 14 });
+    // 5) A storm hits mid-week (NSW only — Parramatta is exposed, interstate jobs aren't).
+    //    Pull a clean NSW job (Sam's cost report) into the storm window so the weather
+    //    risk surfaces on a job that isn't already a clash.
+    setStormScenario(true);
+    setTask("TSK-P1-03", { start: "2026-06-03", end: "2026-06-09", durationDays: 5 });
+    // 6) A job with nobody assigned — the new batch left Southbank's services rough-in unstaffed
+    setTask("TSK-P3-02", { assigneeId: null });
+    runConflictDetection();
+    db.save();
+    res.json({ success: true, ...buildProblemsResponse() });
+  });
+
+  app.post("/api/v1/demo/reset", (_req, res) => {
+    const db = dbInstance;
+    // FULL restore to the seeded baseline. Rebuilding every task from DEFAULT_TASKS
+    // (rather than nudging a handful) means "Reset to clean" is truly clean — it
+    // scrubs ANY manual drags/edits/created tasks, not just the scripted scenario,
+    // and always returns to 0 issues.
+    db.tasks = DEFAULT_TASKS.map((s: any) => ({
+      id: s.id,
+      projectId: s.projectId,
+      name: s.name,
+      assigneeId: s.assigneeId,
+      tradeRequired: s.tradeRequired,
+      start: s.start,
+      end: s.end,
+      deadline: s.deadline ?? s.end,
+      durationDays: s.durationDays,
+      dependencies: s.dependencies,
+      status: s.status,
+      lag_days: 0,
+      dependency_type: "FS",
+      cost_override: null,
+      cost_override_type: null,
+      percent_complete: s.percent_complete ?? (s.status === "completed" ? 100 : 0),
+    }));
+    setStormScenario(false);
+    runConflictDetection();
+    db.save();
+    res.json({ success: true, ...buildProblemsResponse() });
   });
 
   // POST /api/v1/projects/import — bulk import projects (CSV rows or a sample set)
@@ -1379,9 +1631,16 @@ async function startServer() {
     res.json({ success: true, task, alerts: db.alerts });
   });
 
-  // Weather and forecast
+  // Weather and forecast — per-state so a WA job isn't judged by Sydney's sky.
   app.get("/api/v1/weather/forecast", (req, res) => {
-    res.json(getBOMForecast());
+    const state = typeof req.query.state === "string" ? req.query.state : undefined;
+    res.json(getForecast(state));
+  });
+
+  // GET /api/v1/weather/summary — compact "current conditions" chip per state,
+  // used to paint a small weather indicator on each Timeline row.
+  app.get("/api/v1/weather/summary", (_req, res) => {
+    res.json(getWeatherSummary());
   });
 
   // GET /api/v1/reports/export: PDF & spreadsheet generation

@@ -101,8 +101,19 @@ export default function FlowIQApp() {
     user && WORKER_ROLES.has(user.role) ? "Resource" : "PM"
   );
 
-  const navigate: AppNavigate = (nextScreen, tab) => {
+  // When navigating to the Gantt with a filter intent, seed its status filter.
+  // The Gantt remounts on each entry, so it reads this as its initial filter.
+  const [ganttFocus, setGanttFocus] = useState<string | null>(null);
+  const [ganttFocusTaskIds, setGanttFocusTaskIds] = useState<string[] | null>(null);
+  const [ganttFocusLabel, setGanttFocusLabel] = useState<string | null>(null);
+
+  const navigate: AppNavigate = (nextScreen, tab, options) => {
     if (tab) setMasterTab(tab);
+    if (nextScreen === "gantt") {
+      setGanttFocus(options?.ganttStatus ?? null);
+      setGanttFocusTaskIds(options?.ganttTaskIds ?? null);
+      setGanttFocusLabel(options?.ganttFocusLabel ?? null);
+    }
     setScreen(nextScreen);
     if (typeof window !== "undefined") {
       const nextPath = SCREEN_TO_PATH[nextScreen] || "/";
@@ -115,14 +126,37 @@ export default function FlowIQApp() {
   const [expensesCount, setExpensesCount] = useState(0);
 
   const fetchLiveBadges = () => {
-    // Sync the Problems badge with the live open-problem count
-    fetch("/api/v1/problems")
-      .then(res => res.json())
-      .then(data => {
-        const { summary } = parseProblemsResponse(data);
-        setConflictsCount(summary.total);
-      })
-      .catch(() => {});
+    // Sync the Problems badge with the live open-problem count.
+    // A PM only counts problems that involve one of THEIR projects (including a
+    // cross-project clash where one side is theirs), so the badge matches what
+    // the Problems page shows them — not the whole portfolio.
+    if (user?.role === "PM" && user?.email) {
+      Promise.all([
+        fetch("/api/v1/problems").then(r => r.json()),
+        fetch("/api/v1/projects").then(r => r.json()),
+      ])
+        .then(([pData, rows]) => {
+          const { problems } = parseProblemsResponse(pData);
+          const mine = new Set(
+            (Array.isArray(rows) ? rows : [])
+              .filter((p: any) => p.managerEmail === user.email)
+              .map((p: any) => p.name)
+          );
+          const involved = problems.filter(p =>
+            p.projectName.split(" + ").some(n => mine.has(n.trim()))
+          );
+          setConflictsCount(involved.length);
+        })
+        .catch(() => {});
+    } else {
+      fetch("/api/v1/problems")
+        .then(res => res.json())
+        .then(data => {
+          const { summary } = parseProblemsResponse(data);
+          setConflictsCount(summary.total);
+        })
+        .catch(() => {});
+    }
 
     // Sync project expenses badge count
     fetch("/api/v1/claims")
@@ -139,7 +173,7 @@ export default function FlowIQApp() {
     fetchLiveBadges();
     const interval = setInterval(fetchLiveBadges, 8000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user?.role, user?.email]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -149,15 +183,6 @@ export default function FlowIQApp() {
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
-
-  // The Owner is an overseer — land them on Problems (their decision queue),
-  // not the operational dashboard. Runs once when the session becomes available.
-  useEffect(() => {
-    if (isAuthenticated && user?.role === "Owner" && typeof window !== "undefined" && window.location.pathname === "/") {
-      navigate("problems");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user]);
 
   const ICON_SIZE = 16;
   const navItems = [
@@ -183,7 +208,7 @@ export default function FlowIQApp() {
     dashboard: <ScreenDashboard onNav={navigate} />,
     projects:  <ScreenProjects  onNav={navigate} />,
     weather:   <ScreenWeather />,
-    gantt:     <ScreenGantt onNav={navigate} />,
+    gantt:     <ScreenGantt onNav={navigate} initialStatus={ganttFocus} initialTaskIds={ganttFocusTaskIds} initialFocusLabel={ganttFocusLabel} />,
     resources: <ScreenResources onNav={navigate} />,
     problems:  <ScreenProblems onNav={navigate} />,
     financial: <ScreenFinancial />,

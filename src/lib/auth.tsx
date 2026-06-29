@@ -18,6 +18,24 @@ export interface AuthUser {
   state?: string;
 }
 
+/** Owner/Admin oversee the whole portfolio; a PM only sees projects they manage. */
+export function canSeeAllProjects(user: AuthUser | null): boolean {
+  return !user || user.role !== "PM";
+}
+
+/**
+ * Scope a project list to what the signed-in user may see. Owner/Admin/Worker
+ * get everything; a PM only gets projects whose `managerEmail` matches them.
+ * Works on any object carrying `{ managerEmail }`.
+ */
+export function visibleProjects<T extends { managerEmail?: string }>(
+  user: AuthUser | null,
+  projects: T[]
+): T[] {
+  if (canSeeAllProjects(user)) return projects;
+  return projects.filter(p => p.managerEmail && p.managerEmail === user!.email);
+}
+
 interface AuthContextValue {
   token: string | null;
   user: AuthUser | null;

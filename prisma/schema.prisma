@@ -71,6 +71,7 @@ model Task {
   tradeRequired    String
   start            String
   end              String
+  deadline         String?
   durationDays     Int
   dependencies     String  @default("")
   status           String  @default("scheduled")

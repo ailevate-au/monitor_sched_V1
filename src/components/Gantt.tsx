@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Task, Resource, Project } from "../types";
+import { AppNavigate } from "../types/masters";
 import { LabelWithInfo } from "./InfoTip";
 import { useMasters } from "../hooks/useMasters";
 import { useProgrammeSettings } from "../hooks/useProgrammeSettings";
@@ -29,7 +30,37 @@ import {
 import { changeHistory, makeChangeSetId, type ChangeSet } from "../lib/changeHistory";
 import TimelineAdjustPanel from "./TimelineAdjustPanel";
 import ChangeHistoryTab from "./ChangeHistoryTab";
-import { Timer, Users, FolderKanban, HardHat, History } from "lucide-react";
+import { Timer, Users, FolderKanban, HardHat, History, RotateCcw, AlertTriangle, CloudRain, Check, Inbox, Plus, Pencil, Clock, Play, RefreshCw, Filter } from "lucide-react";
+import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
+import { WeatherGlyph } from "../lib/weatherIcon";
+
+// One-level undo snapshot of committed tasks, persisted so the "Undo last change"
+// button survives leaving the Timeline and coming back (and a page refresh).
+type UndoSnapshot = {
+  label: string;
+  tasks: Array<{ id: string; start: string; end: string; assigneeId: string | null; durationDays: number; percent_complete: number }>;
+};
+const UNDO_STORAGE_KEY = "flowiq.timeline.undoSnapshot";
+function readUndoSnapshot(): UndoSnapshot | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(UNDO_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && Array.isArray(parsed.tasks) ? (parsed as UndoSnapshot) : null;
+  } catch {
+    return null;
+  }
+}
+function writeUndoSnapshot(snap: UndoSnapshot | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (snap) window.localStorage.setItem(UNDO_STORAGE_KEY, JSON.stringify(snap));
+    else window.localStorage.removeItem(UNDO_STORAGE_KEY);
+  } catch {
+    /* quota / private mode — undo is best-effort */
+  }
+}
 
 const C = {
   navy:       "#0F1F3D",
@@ -83,7 +114,26 @@ function getResourceViewBarColor(task: Task): string {
 }
 
 function taskDisplayName(task: Task): string {
-  return (task.name || "").split(" — ")[0] || "Unnamed Task";
+  // Show the full job name (e.g. "Concrete Slab — Ground Floor"), not just the
+  // part before the dash. Bars clip with an ellipsis if they're too short.
+  return task.name || "Unnamed Task";
+}
+
+/** Small per-project weather indicator (the project's own state, not Sydney). */
+function WeatherChip({ state, chip }: { state: string; chip?: { icon: string; temp: string; desc: string; risk: string } }) {
+  if (!chip) return null;
+  const danger = chip.risk === "danger";
+  const warn = chip.risk === "warn";
+  const bg = danger ? C.redBg : warn ? C.amberBg : "#F1F5F9";
+  const fg = danger ? C.redDark : warn ? C.amber : C.gray;
+  return (
+    <span
+      title={`${state}: ${chip.desc}, ${chip.temp}`}
+      style={{ display:"inline-flex", alignItems:"center", gap:3, marginLeft:6, fontSize:9.5, fontWeight:600, color:fg, background:bg, border:`0.5px solid ${danger ? "#FECACA" : warn ? "#FCD34D" : C.grayLight}`, padding:"1px 6px", borderRadius:10 }}
+    >
+      <WeatherGlyph icon={chip.icon} size={11} color={fg} />{state} {chip.temp}
+    </span>
+  );
 }
 
 function TaskNameWithId({
@@ -226,13 +276,33 @@ function MultiSelectDropdown({
   );
 }
 
-export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => void }) {
+/** Task statuses that count as an open "problem" surfaced in the Problems hub. */
+const PROBLEM_STATUSES = new Set(["conflict", "fragile", "overdue", "weather"]);
+
+export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, initialFocusLabel }: { onNav?: AppNavigate; initialStatus?: string | null; initialTaskIds?: string[] | null; initialFocusLabel?: string | null }) {
+  const { user } = useAuth();
+  const isPM = user?.role === "PM";
   const { masters } = useMasters(true);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [weatherForecast, setWeatherForecast] = useState<any[]>([]);
+  // Per-state "current conditions" chips, keyed by state code (NSW, VIC, …).
+  const [weatherSummary, setWeatherSummary] = useState<Record<string, { icon: string; temp: string; desc: string; risk: string }>>({});
   const [loading, setLoading] = useState(true);
+  // Set after a PM "Delayed" save: how many new issues that change just created.
+  const [pmCascadeNote, setPmCascadeNote] = useState<{ newIssues: number; taskName: string } | null>(null);
+  // Live committed problems (same source as the Problems hub) — so the Timeline
+  // surfaces ALL issue types on the schedule, not just unsaved clashes.
+  const [openProblems, setOpenProblems] = useState<any[]>([]);
+  // One-level undo: snapshot of the committed tasks taken just before a save,
+  // so a change that creates clashes can be reverted in one click. Persisted to
+  // localStorage so the "Undo last change" button survives navigating away from
+  // the Timeline and back (React state alone would reset on unmount).
+  const [undoSnapshot, setUndoSnapshot] = useState<UndoSnapshot | null>(() => readUndoSnapshot());
+  useEffect(() => {
+    writeUndoSnapshot(undoSnapshot);
+  }, [undoSnapshot]);
 
   // Modal / Editing form State
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -249,6 +319,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   const [formName, setFormName] = useState("");
   const [formStart, setFormStart] = useState("2026-06-01");
   const [formEnd, setFormEnd] = useState("2026-06-05");
+  const [formDeadline, setFormDeadline] = useState("2026-06-05");
   const [formLagDays, setFormLagDays] = useState(0);
   const [formAssigneeId, setFormAssigneeId] = useState("");
   const [formTrade, setFormTrade] = useState("Labour");
@@ -261,7 +332,9 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   // Drag & drop interaction state
   const [activeDrag, setActiveDrag] = useState<{
     id: string;
-    type: "move" | "resize";
+    // "resize" drags the right edge (end date); "resize-left" drags the left
+    // edge (start date) keeping the end fixed; "move" shifts the whole bar.
+    type: "move" | "resize" | "resize-left";
     startX: number;
     startCol: number;
     duration: number;
@@ -291,7 +364,9 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [changeSets, setChangeSets] = useState<ChangeSet[]>(() => changeHistory.list());
   const adjustActive = adjustAnchorId !== null;
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  // Open the advanced-filter row when arriving with a pre-seeded status filter,
+  // so the active "Problems only" filter is visible (and clearable) to the user.
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(!!initialStatus && initialStatus !== "all");
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const [leftColWidth, setLeftColWidth] = useState(340);
   const [isResizingLeftCol, setIsResizingLeftCol] = useState(false);
@@ -299,8 +374,14 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   const [filterProjects, setFilterProjects] = useState<string[]>([]);
   const [filterResources, setFilterResources] = useState<string[]>([]);
   const [filterSearch, setFilterSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] = useState(initialStatus || "all");
   const [filterTrade, setFilterTrade] = useState("all");
+  // When arriving from a Problem, focus the Timeline on the project(s) that
+  // problem involves. `focusTaskIds` are the exact jobs behind it; we show their
+  // whole projects (see `focusProjectIdSet`). `focusLabel` names the problem in
+  // the banner. Cleared via "Show all projects".
+  const [focusTaskIds, setFocusTaskIds] = useState<string[]>(initialTaskIds || []);
+  const [focusLabel, setFocusLabel] = useState<string | null>(initialFocusLabel || null);
 
   const CW = 40; // Column (day) width in px
   const MIN_LEFT_COL_WIDTH = 240;
@@ -423,13 +504,27 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       .then(res => res.json())
       .then(projData => {
         const list = Array.isArray(projData) ? projData : [];
-        setProjects(list);
-        setFormProject(prev => prev || list[0]?.name || "");
+        // PMs only see their own projects. We only scope the *project* list here;
+        // task scoping is derived at render time (see `scopedTasks`) so it can't
+        // race the fetch order or leak every project if this request is slow/fails.
+        const visList = scopeProjects(user, list);
+        setProjects(visList);
+        setFormProject(prev => prev || visList[0]?.name || "");
         return fetch("/api/v1/weather/forecast");
       })
       .then(res => res.json())
       .then(forecastData => {
         setWeatherForecast(forecastData);
+        return fetch("/api/v1/weather/summary");
+      })
+      .then(res => res.json())
+      .then(summary => {
+        if (summary && typeof summary === "object") setWeatherSummary(summary);
+        return fetch("/api/v1/problems");
+      })
+      .then(res => res.json())
+      .then(probData => {
+        setOpenProblems(Array.isArray(probData?.problems) ? probData.problems : []);
         setLoading(false);
       })
       .catch(err => {
@@ -442,15 +537,23 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
     loadAllData();
   }, []);
 
+  // A PM only sees the projects they manage. `projects` is already scoped, so
+  // derive task scoping from it at render time — robust against fetch ordering.
+  const visibleProjectIdSet = useMemo(() => new Set(projects.map(p => p.id)), [projects]);
+  const scopedTasks = useMemo(
+    () => (isPM ? tasks.filter(t => visibleProjectIdSet.has(t.projectId)) : tasks),
+    [tasks, visibleProjectIdSet, isPM]
+  );
+
   const draftConflicts = useMemo(
-    () => detectManpowerOverlaps(mergeTasksWithDrafts(tasks, pendingDrafts, draftNewTasks)),
-    [tasks, pendingDrafts, draftNewTasks]
+    () => detectManpowerOverlaps(mergeTasksWithDrafts(scopedTasks, pendingDrafts, draftNewTasks)),
+    [scopedTasks, pendingDrafts, draftNewTasks]
   );
 
   const displayTasks = useMemo(() => {
-    const merged = mergeTasksWithDrafts(tasks, pendingDrafts, draftNewTasks);
+    const merged = mergeTasksWithDrafts(scopedTasks, pendingDrafts, draftNewTasks);
     return applyDraftConflictStatus(merged, draftConflicts);
-  }, [tasks, pendingDrafts, draftNewTasks, draftConflicts]);
+  }, [scopedTasks, pendingDrafts, draftNewTasks, draftConflicts]);
 
   displayTasksRef.current = displayTasks;
 
@@ -468,15 +571,15 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   // Eligible anchors: assigned, concrete (server) tasks that are not yet complete.
   const adjustCandidateTasks = useMemo(
     () =>
-      tasks.filter(
+      scopedTasks.filter(
         (t) => t.assigneeId && t.assignee !== "Unassigned" && (t.percent_complete ?? 0) < 100
       ),
-    [tasks]
+    [scopedTasks]
   );
 
   const adjustAnchorTask = useMemo(
-    () => (adjustAnchorId ? tasks.find((t) => t.id === adjustAnchorId) ?? null : null),
-    [adjustAnchorId, tasks]
+    () => (adjustAnchorId ? scopedTasks.find((t) => t.id === adjustAnchorId) ?? null : null),
+    [adjustAnchorId, scopedTasks]
   );
 
   const adjustMoves = useMemo<TaskMove[]>(() => {
@@ -532,9 +635,64 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
     setSavingMsg(null);
   };
 
+  // Snapshot the current committed schedule so the next save can be undone.
+  const captureUndo = (label: string) => {
+    setUndoSnapshot({
+      label,
+      tasks: tasksRef.current.map((t) => ({
+        id: t.id,
+        start: t.start,
+        end: t.end,
+        assigneeId: t.assigneeId ?? null,
+        durationDays: t.durationDays,
+        percent_complete: t.percent_complete ?? 0,
+      })),
+    });
+  };
+
+  const undoLastChange = () => {
+    if (!undoSnapshot) return;
+    setSavingMsg("Undoing last change…");
+    fetch("/api/v1/tasks/restore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tasks: undoSnapshot.tasks }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.success) throw new Error("restore failed");
+        setUndoSnapshot(null);
+        setPmCascadeNote(null);
+        clearDrafts();
+        loadAllData();
+        setSavingMsg("Reverted to the previous schedule.");
+        window.setTimeout(() => setSavingMsg(null), 3500);
+      })
+      .catch(() => {
+        setSavingMsg("Could not undo. Try again.");
+        window.setTimeout(() => setSavingMsg(null), 3000);
+      });
+  };
+
   const commitDrafts = async () => {
     if (!hasPendingDrafts) return;
-    if (draftConflicts.length > 0) return;
+    // Note: saving is allowed even with clashes — the user can Undo if the
+    // knock-on isn't what they wanted. Snapshot first so Undo has a target.
+    captureUndo("schedule change");
+
+    // Snapshot dates BEFORE the save so we can diff against the reloaded schedule
+    // and write a Change History entry (covers the dragged job + any cascade).
+    const beforeById = new Map(
+      tasksRef.current.map((t) => [t.id, { start: t.start, end: t.end, name: t.name, projectId: t.projectId }])
+    );
+    const draftLabel = (() => {
+      const ids = Object.keys(pendingDrafts);
+      const first = ids.map((id) => tasksRef.current.find((t) => t.id === id)).find(Boolean);
+      const newCount = draftNewTasks.length;
+      if (first) return taskDisplayName(first);
+      if (newCount > 0) return `${newCount} new job${newCount === 1 ? "" : "s"}`;
+      return "Schedule change";
+    })();
 
     setSavingMsg("Saving programme changes…");
     try {
@@ -581,12 +739,14 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       }
 
       clearDrafts();
+      let reloadedTasks: Task[] = [];
       await new Promise<void>((resolve) => {
         setLoading(true);
         fetch("/api/v1/dashboard/tasks")
           .then((res) => res.json())
           .then((data) => {
-            setTasks(data);
+            reloadedTasks = Array.isArray(data) ? data : [];
+            setTasks(reloadedTasks);
             setLoading(false);
             resolve();
           })
@@ -599,10 +759,51 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       const conflictRes = await fetch("/api/v1/conflicts");
       const conflictData = await conflictRes.json();
       const hardConflicts = conflictData?.metrics?.hardConflicts ?? conflictData?.length ?? 0;
+
+      // Log this save to Change History by diffing dates before vs after the save
+      // (this captures the moved job AND any jobs the cascade pushed with it).
+      const loggedMoves = reloadedTasks
+        .filter((t) => !isPM || visibleProjectIdSet.has(t.projectId))
+        .map((t) => {
+          const b = beforeById.get(t.id);
+          if (!b || (b.start === t.start && b.end === t.end)) return null;
+          return { taskId: t.id, name: t.name, fromStart: b.start, fromEnd: b.end, toStart: t.start, toEnd: t.end };
+        })
+        .filter((m): m is NonNullable<typeof m> => m !== null);
+
+      if (loggedMoves.length > 0) {
+        const maxPush = Math.max(
+          0,
+          ...loggedMoves.map((m) =>
+            Math.round(
+              (new Date(m.toStart).getTime() - new Date(m.fromStart).getTime()) / 86400000
+            )
+          )
+        );
+        const cs: ChangeSet = {
+          id: makeChangeSetId(),
+          createdAt: new Date().toISOString(),
+          anchorTaskId: loggedMoves[0].taskId,
+          anchorTaskName: draftLabel,
+          mode: loggedMoves.length > 1 ? "full" : "none",
+          delayWorkingDays: maxPush,
+          moves: loggedMoves,
+          warningsAtConfirm:
+            hardConflicts > 0
+              ? [`${hardConflicts} person${hardConflicts > 1 ? "s" : ""} now booked twice`]
+              : [],
+          reverted: false,
+        };
+        changeHistory.add(cs);
+        setChangeSets(changeHistory.list());
+      }
+
       setSavingMsg(
         hardConflicts > 0
-          ? `Saved. ${hardConflicts} manpower conflict(s) detected — check Conflicts Hub.`
-          : "Programme saved successfully."
+          ? (isPM
+              ? `Saved. Your change created ${hardConflicts} clash${hardConflicts > 1 ? "es" : ""}. Any on a project you don't manage won't show in your Problems — the owner will see ${hardConflicts > 1 ? "them" : "it"}.`
+              : `Saved. ${hardConflicts} person${hardConflicts > 1 ? "s are" : " is"} booked twice. Check Problems.`)
+          : "Saved."
       );
       window.setTimeout(() => setSavingMsg(null), 4000);
     } catch (err) {
@@ -790,7 +991,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       setChangeSets(changeHistory.list());
       closeAdjust();
       loadAllData();
-      setSavingMsg(`Adjustment applied — ${cs.moves.length} task(s) moved.`);
+      setSavingMsg(`Timeline updated. ${cs.moves.length} task(s) moved.`);
       window.setTimeout(() => setSavingMsg(null), 4000);
     } catch (err) {
       console.error("Error applying timeline adjustment:", err);
@@ -814,7 +1015,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       changeHistory.update(cs.id, { reverted: true, revertedAt: new Date().toISOString() });
       setChangeSets(changeHistory.list());
       loadAllData();
-      setSavingMsg("Adjustment reverted — tasks restored to prior dates.");
+      setSavingMsg("Change reverted. Tasks restored to prior dates.");
       window.setTimeout(() => setSavingMsg(null), 3500);
     } catch (err) {
       console.error("Error reverting adjustment:", err);
@@ -872,11 +1073,34 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   // the normal draft view.
   const renderSourceTasks = adjustActive && adjustMoves.length > 0 ? adjustSimTasks : displayTasks;
 
+  const focusTaskIdSet = useMemo(() => new Set(focusTaskIds), [focusTaskIds]);
+  // The projects a focused problem touches — we show those whole projects, not
+  // just the two clashing bars, so the surrounding jobs give context.
+  const focusProjectIdSet = useMemo(() => {
+    if (focusTaskIdSet.size === 0) return new Set<string>();
+    const byId = new Map(scopedTasks.map((t) => [t.id, t]));
+    const ids = new Set<string>();
+    for (const tid of focusTaskIds) {
+      const t = byId.get(tid);
+      if (t) ids.add(t.projectId);
+    }
+    return ids;
+  }, [focusTaskIds, focusTaskIdSet, scopedTasks]);
+  const focusProjectNames = useMemo(() => {
+    const names = projects.filter((p) => focusProjectIdSet.has(p.id)).map((p) => p.name.split(" —")[0]);
+    return Array.from(new Set(names));
+  }, [projects, focusProjectIdSet]);
   const filteredTasks = useMemo(() => {
     const q = filterSearch.trim().toLowerCase();
     return renderSourceTasks.filter((t) => {
+      // Project-level focus: keep every job on the focused problem's project(s).
+      if (focusProjectIdSet.size > 0 && !focusProjectIdSet.has(t.projectId)) return false;
       if (filterProjects.length > 0 && !filterProjects.includes(t.project || "")) return false;
-      if (filterStatus !== "all" && t.status !== filterStatus) return false;
+      if (filterStatus === "problems") {
+        if (!PROBLEM_STATUSES.has(t.status || "")) return false;
+      } else if (filterStatus !== "all" && t.status !== filterStatus) {
+        return false;
+      }
       const tradeLabel = t.trade || t.tradeRequired || "";
       if (filterTrade !== "all" && tradeLabel !== filterTrade) return false;
       if (filterResources.length > 0 && !filterResources.includes(t.assigneeId || "unassigned")) return false;
@@ -886,7 +1110,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       }
       return true;
     });
-  }, [renderSourceTasks, filterProjects, filterStatus, filterTrade, filterResources, filterSearch]);
+  }, [renderSourceTasks, focusProjectIdSet, filterProjects, filterStatus, filterTrade, filterResources, filterSearch]);
 
   const tradeFilterOptions = useMemo(() => {
     const set = new Set<string>();
@@ -1087,6 +1311,9 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       if (drag.type === "move") {
         finalStartCol = Math.max(0, originalStartCol + colsShift);
         finalEndCol = Math.max(0, originalEndCol + colsShift);
+      } else if (drag.type === "resize-left") {
+        // Drag start edge; end stays put, can't cross the end.
+        finalStartCol = Math.max(0, Math.min(originalEndCol, originalStartCol + colsShift));
       } else {
         finalEndCol = Math.max(finalStartCol, originalEndCol + colsShift);
       }
@@ -1109,7 +1336,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       let cascade = autoCascadeRef.current;
       if (!cascade && taskHasDependents(taskId)) {
         cascade = window.confirm(
-          "Also shift tasks that depend on this one?\n\nOK = move dependents too · Cancel = only this task"
+          "Also move the tasks that follow this one?\n\nOK = move the following tasks too · Cancel = move only this task"
         );
       }
 
@@ -1201,6 +1428,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   }
 
   const hasActiveFilters =
+    focusTaskIds.length > 0 ||
     filterProjects.length > 0 ||
     filterResources.length > 0 ||
     filterStatus !== "all" ||
@@ -1208,6 +1436,8 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
     filterSearch.trim().length > 0;
 
   const clearFilters = () => {
+    setFocusTaskIds([]);
+    setFocusLabel(null);
     setFilterProjects([]);
     setFilterResources([]);
     setFilterStatus("all");
@@ -1239,10 +1469,11 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
   // Open Edit Dialog for Task
   const handleOpenEdit = (t: Task) => {
     setEditingTask(t);
-    setFormProject(t.project);
+    setFormProject(t.project ?? "");
     setFormName(t.name);
     setFormStart(t.start);
     setFormEnd(t.end);
+    setFormDeadline(t.deadline || t.end);
     setFormLagDays(t.lag_days || 0);
     setFormAssigneeId(t.assigneeId || "");
     setFormTrade(t.trade || "Labour");
@@ -1251,8 +1482,89 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
     setFormCostOverrideActive(t.cost_override !== null && t.cost_override !== undefined);
     setFormCostOverride(t.cost_override !== null && t.cost_override !== undefined ? String(t.cost_override) : "");
     setFormCostOverrideType(t.cost_override_type || "hourly");
-    setShowTaskAdvanced(!!(t.dependencies && t.dependencies !== "-") || t.lag_days > 0 || (t.cost_override !== null && t.cost_override !== undefined));
+    setShowTaskAdvanced(!!(t.dependencies && t.dependencies !== "-") || (t.lag_days ?? 0) > 0 || (t.cost_override !== null && t.cost_override !== undefined));
     setShowAddModal(true);
+  };
+
+  // PM lifecycle change. "delayed" does a REAL cascade server-side, which can
+  // create cross-project clashes the PM can't see but the Owner will.
+  const applyPmStatus = (task: Task, pmStatus: "not_started" | "in_progress" | "complete" | "delayed") => {
+    let delayDays = 0;
+    if (pmStatus === "delayed") {
+      const raw = window.prompt("How many working days is this job delayed?", "5");
+      if (raw === null) return;
+      delayDays = parseInt(raw, 10) || 0;
+      if (delayDays === 0) return;
+    }
+    setShowAddModal(false);
+    captureUndo(pmStatus === "delayed" ? "delay" : "status change");
+    // Snapshot dates so a delay's cascade can be written to Change History.
+    const beforeById = new Map(
+      tasksRef.current.map((t) => [t.id, { start: t.start, end: t.end }])
+    );
+    fetch(`/api/v1/tasks/${task.id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pmStatus, delayDays }),
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (!res.success) { alert(res.error || "Could not update the job."); return; }
+        if (pmStatus === "delayed") {
+          setPmCascadeNote({ newIssues: res.newIssues ?? 0, taskName: taskDisplayName(task) });
+          // Log the delay + its cascade to Change History (visible to the owner too).
+          fetch("/api/v1/dashboard/tasks")
+            .then((r) => r.json())
+            .then((after: Task[]) => {
+              const moves = (Array.isArray(after) ? after : [])
+                .filter((t) => !isPM || visibleProjectIdSet.has(t.projectId))
+                .map((t) => {
+                  const b = beforeById.get(t.id);
+                  if (!b || (b.start === t.start && b.end === t.end)) return null;
+                  return { taskId: t.id, name: t.name, fromStart: b.start, fromEnd: b.end, toStart: t.start, toEnd: t.end };
+                })
+                .filter((m): m is NonNullable<typeof m> => m !== null);
+              const cs: ChangeSet = {
+                id: makeChangeSetId(),
+                createdAt: new Date().toISOString(),
+                anchorTaskId: task.id,
+                anchorTaskName: taskDisplayName(task),
+                mode: moves.length > 1 ? "full" : "none",
+                delayWorkingDays: delayDays,
+                moves,
+                summary: `Marked delayed by ${delayDays} working day${delayDays === 1 ? "" : "s"}`,
+                warningsAtConfirm:
+                  (res.newIssues ?? 0) > 0 ? [`Created ${res.newIssues} new issue${res.newIssues > 1 ? "s" : ""}`] : [],
+                reverted: false,
+              };
+              changeHistory.add(cs);
+              setChangeSets(changeHistory.list());
+            })
+            .catch(() => {});
+        } else {
+          // Plain status change (no date move) — still log it so every status
+          // change shows up in Change History.
+          const statusLabel =
+            pmStatus === "complete" ? "Marked complete"
+            : pmStatus === "in_progress" ? "Marked in progress"
+            : "Marked not started";
+          changeHistory.add({
+            id: makeChangeSetId(),
+            createdAt: new Date().toISOString(),
+            anchorTaskId: task.id,
+            anchorTaskName: taskDisplayName(task),
+            mode: "none",
+            delayWorkingDays: 0,
+            moves: [],
+            summary: statusLabel,
+            warningsAtConfirm: [],
+            reverted: false,
+          });
+          setChangeSets(changeHistory.list());
+        }
+        loadAllData();
+      })
+      .catch(() => alert("Network error while updating the job."));
   };
 
   // Open Create Dialog
@@ -1261,6 +1573,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
     setFormName("");
     setFormStart("2026-06-01");
     setFormEnd("2026-06-05");
+    setFormDeadline("2026-06-05");
     setFormLagDays(0);
     setFormAssigneeId("");
     setFormTrade(masters?.trades[0]?.label || "Labour");
@@ -1290,6 +1603,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       name: formName,
       start: formStart,
       end: formEnd,
+      deadline: formDeadline || formEnd,
       lag_days: Number(formLagDays) || 0,
       assigneeId: formAssigneeId || null,
       assignee: assigneeName,
@@ -1311,7 +1625,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
           savedTask: editingTask,
         },
       }));
-      setSavingMsg("Task update added to draft — review conflicts, then save programme.");
+      setSavingMsg("Change saved as a draft. Check for clashes, then Save.");
       window.setTimeout(() => setSavingMsg(null), 3500);
       return;
     }
@@ -1331,6 +1645,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       tradeRequired: formTrade,
       start: formStart,
       end: formEnd,
+      deadline: formDeadline || formEnd,
       durationDays,
       dependencies: formDependencies || "-",
       status: "scheduled",
@@ -1349,7 +1664,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       ...prev,
       [tempId]: { kind: "create", payload },
     }));
-    setSavingMsg("New task added to draft — review conflicts, then save programme.");
+    setSavingMsg("New job saved as a draft. Check for clashes, then Save.");
     window.setTimeout(() => setSavingMsg(null), 3500);
   };
 
@@ -1415,17 +1730,90 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
     return <div style={{ padding: 25, color: C.gray, textAlign: "center", fontSize: 14 }}>Loading programme...</div>;
   }
 
+  // Committed problems on this schedule, scoped to what the viewer can see.
+  const visibleProjectNames = new Set(projects.map(p => p.name));
+  const timelineProblems = openProblems.filter(p =>
+    !isPM || String(p.projectName || "").split(" + ").every(n => visibleProjectNames.has(n.trim()))
+  );
+  const issueCounts = timelineProblems.reduce<Record<string, number>>((acc, p) => {
+    acc[p.category] = (acc[p.category] || 0) + 1;
+    return acc;
+  }, {});
+  const ISSUE_META: Record<string, { label: string; color: string }> = {
+    conflict:   { label: "Double-booking", color: C.red },
+    late:       { label: "Running late",   color: C.redDark },
+    fragile:    { label: "Tight handover", color: C.amber },
+    weather:    { label: "Weather risk",   color: C.blue },
+    unassigned: { label: "No one assigned", color: C.gray },
+  };
+
   return (
     <div>
+      {/* Focus banner — arrived from a Problem's "View in Timeline". Shows only
+          the project(s) that problem touches, with a one-click way back to all. */}
+      {focusProjectIdSet.size > 0 && (
+        <div style={{ marginBottom: 12, borderRadius: 12, border: `1px solid #BFDBFE`, background: C.blueLight, padding: "11px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <Filter size={16} color={C.blue} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1, minWidth: 200, fontSize: 12.5, color: C.navy, fontWeight: 600 }}>
+            {focusLabel ? `Showing only the project${focusProjectNames.length > 1 ? "s" : ""} for this problem: "${focusLabel}".` : "Showing only the flagged projects."}
+            {focusProjectNames.length > 0 && (
+              <span style={{ fontWeight: 400, color: C.textMuted }}> {focusProjectNames.join(" + ")}. Other projects are hidden.</span>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={clearFilters}
+            style={{ flexShrink: 0, padding: "6px 14px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "none", background: C.blue, color: C.white, cursor: "pointer" }}
+          >
+            Show all projects
+          </button>
+        </div>
+      )}
+      {/* PM cascade note — a "Delayed" change just rippled across the portfolio */}
+      {pmCascadeNote && (
+        <div style={{ marginBottom: 12, borderRadius: 12, border: `1px solid ${pmCascadeNote.newIssues > 0 ? "#FCD34D" : "#BBF7D0"}`, background: pmCascadeNote.newIssues > 0 ? C.amberBg : C.greenBg, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {pmCascadeNote.newIssues > 0
+            ? <AlertTriangle size={16} color={C.amber} style={{ flexShrink: 0 }} />
+            : <Check size={16} color={C.greenDark} style={{ flexShrink: 0 }} />}
+          <span style={{ flex: 1, minWidth: 200, fontSize: 12.5, color: pmCascadeNote.newIssues > 0 ? C.amber : C.greenDark, fontWeight: 600 }}>
+            {pmCascadeNote.newIssues > 0
+              ? `Delaying "${pmCascadeNote.taskName}" moved the jobs that follow, and created ${pmCascadeNote.newIssues} new issue${pmCascadeNote.newIssues > 1 ? "s" : ""} across the portfolio.${isPM ? " Some may be on projects you don't manage. The owner will see them." : ""}`
+              : `Delaying "${pmCascadeNote.taskName}" moved the dependent jobs. No new clashes.`}
+          </span>
+          {!isPM && pmCascadeNote.newIssues > 0 && onNav && (
+            <button type="button" onClick={() => onNav("problems")} style={{ padding: "5px 11px", fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: "none", background: C.blue, color: C.white, cursor: "pointer" }}>See Problems →</button>
+          )}
+          <button type="button" onClick={() => setPmCascadeNote(null)} style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: `0.5px solid ${C.grayLight}`, background: C.white, color: C.gray, cursor: "pointer" }}>Dismiss</button>
+        </div>
+      )}
+
+      {/* Issues on this schedule — every category, not just unsaved clashes */}
+      {timelineProblems.length > 0 && (
+        <div style={{ marginBottom: 12, borderRadius: 12, border: `1px solid ${C.grayLight}`, background: C.white, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.textMuted }}>Issues on this schedule:</span>
+          {Object.entries(issueCounts).map(([cat, n]) => {
+            const meta = ISSUE_META[cat] || { label: cat, color: C.gray };
+            return (
+              <span key={cat} onClick={() => onNav?.("problems")} title="Open Problems"
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: meta.color, background: "#F8FAFC", border: `1px solid ${C.grayLight}`, padding: "2px 9px", borderRadius: 20, cursor: onNav ? "pointer" : "default" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: meta.color, display: "inline-block" }} />
+                {meta.label} · {n}
+              </span>
+            );
+          })}
+          {onNav && <button type="button" onClick={() => onNav("problems")} style={{ marginLeft: "auto", padding: "4px 10px", fontSize: 11, fontWeight: 700, borderRadius: 6, border: "none", background: C.blue, color: C.white, cursor: "pointer" }}>Open Problems →</button>}
+        </div>
+      )}
+
       {/* Conflict alert — compact header, expandable details */}
       {draftConflicts.length > 0 && (
         <div style={{ marginBottom: 16, borderRadius: 12, border: `1.5px solid ${C.red}`, background: C.redBg, overflow: "hidden", boxShadow: "0 4px 14px rgba(224,74,74,0.10)" }}>
           {/* Always-visible compact row */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px" }}>
-            <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+            <AlertTriangle size={18} color={C.red} style={{ flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.redDark }}>
-                {groupedDraftConflicts.length} scheduling conflict{groupedDraftConflicts.length > 1 ? "s" : ""} — not saved
+                {groupedDraftConflicts.length} clash{groupedDraftConflicts.length > 1 ? "es" : ""}: same person booked twice, not saved yet
               </span>
               <span style={{ fontSize: 12, color: C.text, marginLeft: 8 }}>
                 {groupedDraftConflicts.map(([, cs]) => cs[0].resourceName).join(" · ")}
@@ -1457,7 +1845,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                 return (
                   <div key={resourceId} style={{ background: C.white, borderRadius: 10, border: `1px solid #FECACA`, padding: "12px 14px" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: C.redDark, marginBottom: 6 }}>
-                      {primary.resourceName} — scheduling conflict
+                      {primary.resourceName} — booked on two jobs at once
                     </div>
                     {conflicts.map((c, idx) => (
                       <div key={idx} style={{ fontSize: 12, color: C.text, marginBottom: 4 }}>
@@ -1470,33 +1858,28 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                         <span style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Smart recommendation</span>
                         <button type="button"
                           onClick={() => setRecRefreshSeeds((prev) => ({ ...prev, [resourceId]: (prev[resourceId] || 0) + 1 }))}
-                          style={{ padding: "3px 8px", fontSize: 10.5, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.purple}55`, background: C.white, color: C.purple, cursor: "pointer" }}>
-                          ↻ Refresh
+                          style={{ padding: "3px 8px", fontSize: 10.5, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.purple}55`, background: C.white, color: C.purple, cursor: "pointer", display:"inline-flex", alignItems:"center", gap:5 }}>
+                          <RefreshCw size={11} /> Refresh
                         </button>
                       </div>
 
-                      {constraintInsight && (
-                        <div style={{ fontSize: 11.5, color: C.text, background: C.white, borderRadius: 8, border: `1px solid ${C.amber}55`, padding: "8px 10px", marginBottom: 10, lineHeight: 1.45 }}>
-                          <div style={{ fontWeight: 700, color: C.amber, marginBottom: 6 }}>Which task can't move?</div>
-                          <div style={{ marginBottom: 4 }}>
-                            <strong>{constraintInsight.taskA.name}</strong>
-                            <span style={{ color: constraintInsight.suggestedAnchorTaskId === primary.taskAId ? C.greenDark : C.blue, fontWeight: 600 }}>{constraintInsight.suggestedAnchorTaskId === primary.taskAId ? " · keep as-is" : " · can be moved"}</span>
-                            {constraintInsight.taskA.reasons.length > 0 && <span style={{ color: C.textMuted }}> — {constraintInsight.taskA.reasons.join("; ")}</span>}
+                      {constraintInsight && (() => {
+                        const anchorIsA = constraintInsight.suggestedAnchorTaskId === primary.taskAId;
+                        const keepName = anchorIsA ? primary.taskAName : primary.taskBName;
+                        const moveName = anchorIsA ? primary.taskBName : primary.taskAName;
+                        return (
+                          <div style={{ fontSize: 11.5, color: C.text, background: C.white, borderRadius: 8, border: `1px solid ${C.amber}55`, padding: "8px 10px", marginBottom: 10, lineHeight: 1.45 }}>
+                            Keep <strong>{keepName}</strong> where it is, and move <strong>{moveName}</strong> instead.
                           </div>
-                          <div>
-                            <strong>{constraintInsight.taskB.name}</strong>
-                            <span style={{ color: constraintInsight.suggestedAnchorTaskId === primary.taskBId ? C.greenDark : C.blue, fontWeight: 600 }}>{constraintInsight.suggestedAnchorTaskId === primary.taskBId ? " · keep as-is" : " · can be moved"}</span>
-                            {constraintInsight.taskB.reasons.length > 0 && <span style={{ color: C.textMuted }}> — {constraintInsight.taskB.reasons.join("; ")}</span>}
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {recommendations.length > 0 ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {recommendations.map((rec, idx) => (
                             <div key={rec.id} style={{ padding: "10px 12px", borderRadius: 8, border: `1px solid ${idx === 0 ? C.green : C.grayLight}`, background: idx === 0 ? C.greenBg : C.white }}>
                               <div style={{ fontSize: 10.5, fontWeight: 700, color: idx === 0 ? C.greenDark : C.gray, marginBottom: 4 }}>
-                                {idx === 0 ? "Best fix" : `Option ${idx + 1}`} · {rec.kind === "reschedule" ? "Reschedule dates" : "Swap person"}
+                                {idx === 0 ? "Best fix" : `Option ${idx + 1}`} · {rec.id.startsWith("push14") ? "Push 2 weeks" : rec.kind === "reschedule" ? "Move dates" : "Give job to someone else"}
                               </div>
                               <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text, marginBottom: 2 }}>{rec.headline}</div>
                               <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.45, marginBottom: 8 }}>{rec.detail}</div>
@@ -1558,15 +1941,24 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
         </div>
 
         <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-          <button style={{ padding: "8px 14px", background: C.blue, color: C.white, border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600 }} onClick={handleOpenCreate}>+ Add Task</button>
+          <button style={{ padding: "8px 14px", background: C.blue, color: C.white, border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600, display:"inline-flex", alignItems:"center", gap:6 }} onClick={handleOpenCreate}><Plus size={14} /> Add task</button>
           <button
             style={{ padding: "8px 14px", background: adjustActive ? C.purple : "#F3F2FF", color: adjustActive ? C.white : C.purple, border: `0.5px solid ${C.purple}`, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}
             onClick={() => (adjustActive ? closeAdjust() : openAdjust())}
-            title="Stage a working-day delay with full / partial / no cascade"
+            title="Preview a delay and choose how the following tasks move"
           >
             <Timer size={14} /> {adjustActive ? "Close Adjuster" : "Adjust Timeline"}
           </button>
-          <button style={{ padding: "8px 14px", background: C.bgSecond, color: C.text, border: `0.5px solid ${C.grayLight}`, borderRadius: 8, fontSize: 12, cursor: "pointer" }} onClick={loadAllData} title="Reload tasks">↻ Refresh</button>
+          {undoSnapshot && (
+            <button
+              style={{ padding: "8px 14px", background: C.amberBg, color: C.amber, border: `0.5px solid #FCD34D`, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}
+              onClick={undoLastChange}
+              title="Revert the last saved change (and any clashes it caused) back to the previous schedule"
+            >
+              <RotateCcw size={14} /> Undo last change
+            </button>
+          )}
+          <button style={{ padding: "8px 14px", background: C.bgSecond, color: C.text, border: `0.5px solid ${C.grayLight}`, borderRadius: 8, fontSize: 12, cursor: "pointer", display:"inline-flex", alignItems:"center", gap:6 }} onClick={loadAllData} title="Reload tasks"><RefreshCw size={13} /> Refresh</button>
         </div>
       </div>
 
@@ -1638,11 +2030,12 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
           style={{ padding: "8px 12px", fontSize: 12.5, borderRadius: 8, border: `0.5px solid ${C.grayLight}` }}
         >
           <option value="all">All statuses</option>
+          <option value="problems">Problems only</option>
           <option value="scheduled">Scheduled</option>
           <option value="inprogress">In progress</option>
           <option value="completed">Completed</option>
           <option value="conflict">Conflict</option>
-          <option value="fragile">Fragile buffer</option>
+          <option value="fragile">Tight gap</option>
           <option value="weather">Weather risk</option>
           <option value="overdue">Overdue</option>
         </select>
@@ -1721,47 +2114,44 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
           <div style={{ fontSize: 12.5, color: C.text }}>
             <strong>Draft mode</strong> · {pendingChangeCount} unsaved change{pendingChangeCount === 1 ? "" : "s"}
             {draftConflicts.length > 0 ? (
-              <span style={{ color: C.redDark, fontWeight: 600 }}> — resolve conflict above before saving</span>
+              <span style={{ color: C.redDark, fontWeight: 600 }}> · this will create a clash. You can save anyway and Undo if it's not what you wanted.</span>
             ) : (
-              <span style={{ color: C.greenDark }}> — ready to save</span>
+              <span style={{ color: C.greenDark }}> · ready to save</span>
             )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {!draftConflicts.length && (
-              <button
-                type="button"
-                onClick={discardDrafts}
-                style={{
-                  padding: "7px 12px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  borderRadius: 8,
-                  border: `1px solid ${C.grayLight}`,
-                  background: C.white,
-                  cursor: "pointer",
-                  color: C.text,
-                }}
-              >
-                Discard
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={discardDrafts}
+              style={{
+                padding: "7px 12px",
+                fontSize: 12,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: `1px solid ${C.grayLight}`,
+                background: C.white,
+                cursor: "pointer",
+                color: C.text,
+              }}
+            >
+              Discard
+            </button>
             <button
               type="button"
               onClick={() => void commitDrafts()}
-              disabled={draftConflicts.length > 0}
-              title={draftConflicts.length > 0 ? "Resolve conflicts first" : "Save to live programme"}
+              title="Save to live programme"
               style={{
                 padding: "7px 14px",
                 fontSize: 12,
                 fontWeight: 600,
                 borderRadius: 8,
                 border: "none",
-                background: draftConflicts.length > 0 ? C.grayLight : C.blue,
-                color: draftConflicts.length > 0 ? C.gray : C.white,
-                cursor: draftConflicts.length > 0 ? "not-allowed" : "pointer",
+                background: draftConflicts.length > 0 ? C.amber : C.blue,
+                color: C.white,
+                cursor: "pointer",
               }}
             >
-              Save programme
+              {draftConflicts.length > 0 ? "Save anyway" : "Save programme"}
             </button>
           </div>
         </div>
@@ -1780,7 +2170,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
           gap: 10,
           flexWrap: "wrap",
         }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: C.navy }}>🌧 Weather risk this week</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: C.navy, display: "inline-flex", alignItems: "center", gap: 5 }}><CloudRain size={14} color={C.blue} /> Weather risk this week</span>
           {weatherForecast.filter(w => w.risk === "warn" || w.risk === "danger").map(w => (
             <span key={w.date} style={{
               fontSize: 11,
@@ -1800,8 +2190,12 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
       {scheduleViewMode !== "history" && (
         <div style={{ display:"flex", gap:16, alignItems:"center", fontSize:12, color:C.textMuted, flexWrap: "wrap", marginBottom:14 }}>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.red, borderRadius:"50%", display:"inline-block" }} />Conflict</span>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.redDark, borderRadius:"50%", display:"inline-block" }} />Late</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.amber, borderRadius:"50%", display:"inline-block" }} />Fragile</span>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.blue, borderRadius:"50%", display:"inline-block" }} />Weather</span>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.green, borderRadius:"50%", display:"inline-block" }} />Done</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.blueMid, borderRadius:"50%", display:"inline-block" }} />On track</span>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:"#94A3B8", border:"1px dashed #64748B", borderRadius:4, display:"inline-block" }} />Unassigned</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, border:`2px dashed ${C.amber}`, borderRadius:4, display:"inline-block" }} />Draft (unsaved)</span>
           {(scheduleViewMode === "overall" || scheduleViewMode === "projectteam") && <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ display:"inline-block", width:2, height:14, background:C.blue, borderRadius:1 }} /><span style={{ fontSize:9, marginLeft:1 }}>▼</span>PC Deadline</span>}
         </div>
@@ -1864,7 +2258,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                   return (
                     <div key={i} style={{ width:CW, flexShrink:0, height:44, borderLeft:`0.5px solid ${C.grayLight}`, background:getWeatherStyleForCol(i), position:"sticky", top:0, zIndex:20 }}>
                       {i % 7 === 0 && <span style={{ fontSize:9, color: wx && wx.risk !== "ok" ? (wx.risk === "danger" ? C.redDark : C.amber) : C.gray, fontWeight:600, whiteSpace:"nowrap", position:"absolute", top:3, left:"50%", transform:"translateX(-50%)" }}>{weeks[wkIdx] || ""}</span>}
-                      {wx && wx.risk !== "ok" && <span style={{ fontSize:9, position:"absolute", top:16, left:"50%", transform:"translateX(-50%)" }} title={wx.desc}>{wx.icon}</span>}
+                      {wx && wx.risk !== "ok" && <span style={{ position:"absolute", top:15, left:"50%", transform:"translateX(-50%)" }} title={wx.desc}><WeatherGlyph icon={wx.icon} size={11} color={wx.risk === "danger" ? C.redDark : C.amber} /></span>}
                       <span style={{ fontSize:10, position:"absolute", bottom:4, left:"50%", transform:"translateX(-50%)", color: isTd ? C.red : C.textMuted, fontWeight: isTd ? 700 : 500 }}>{formatColDay(i)}</span>
                       {isTd && <div style={{ position:"absolute", top:0, bottom:0, left:"50%", marginLeft:-1, width:2, background:C.red, opacity:0.75, zIndex:1 }} />}
                     </div>
@@ -1903,6 +2297,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                         <span style={{ fontSize:9, color:C.gray, marginRight:2, transition:"transform 0.15s", display:"inline-block", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>
                         <span style={{ width:9, height:9, background:group.color, borderRadius:"50%", display:"inline-block", flexShrink:0 }} />
                         {projName.split(" —")[0]}
+                        {projectData?.state && <WeatherChip state={projectData.state} chip={weatherSummary[projectData.state]} />}
                         {projectData?.pcEndDate && <span style={{ fontSize:9.5, fontWeight:500, color:C.gray, marginLeft:4 }}>PC: {projectData.pcEndDate}</span>}
                         {isCollapsed && <span style={{ fontSize:9, color:C.gray, fontWeight:400, marginLeft:2 }}>({group.tasks.length} task{group.tasks.length !== 1 ? "s" : ""})</span>}
                       </div>
@@ -1933,7 +2328,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                             <div style={{ minWidth:0 }}>
                               <div style={{ fontSize:12, fontWeight:600, color: isConflicted ? C.redDark : C.text, display:"flex", alignItems:"center", gap:4 }}>
                                 {res?.name || "Unknown"}
-                                {isConflicted && <span style={{ fontSize:10, background:C.redBg, color:C.redDark, padding:"1px 5px", borderRadius:4, fontWeight:700, flexShrink:0 }}>⚠ Conflict</span>}
+                                {isConflicted && <span style={{ fontSize:10, background:C.redBg, color:C.redDark, padding:"1px 5px", borderRadius:4, fontWeight:700, flexShrink:0, display:"inline-flex", alignItems:"center", gap:3 }}><AlertTriangle size={10} /> Conflict</span>}
                               </div>
                               <div style={{ fontSize:9.5, color:C.gray }}>{res?.trade || ""} · {res?.state || ""}</div>
                             </div>
@@ -1955,7 +2350,11 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                             let renderedDurationCol = lCol;
                             if (isThisDragged) {
                               if (activeDrag.type === "move") renderedStartCol = Math.max(0, sCol + dragDeltaCols);
-                              else renderedDurationCol = Math.max(1, lCol + dragDeltaCols);
+                              else if (activeDrag.type === "resize-left") {
+                                const ns = Math.max(0, Math.min(sCol + lCol - 1, sCol + dragDeltaCols));
+                                renderedStartCol = ns;
+                                renderedDurationCol = sCol + lCol - ns;
+                              } else renderedDurationCol = Math.max(1, lCol + dragDeltaCols);
                             }
                             const barColor = getTaskBarColor(task);
                             const done = isTaskDone(task);
@@ -1999,12 +2398,18 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                                 }}
                                 title={`${task.name} · ${task.start} → ${task.end}`}
                               >
-                                {done && <span style={{ marginRight:3 }}>✓</span>}
-                                {task.status === "conflict" && <span style={{ marginRight:3 }}>⚠</span>}
-                                {taskHasWeatherRisk(task) && <span style={{ marginRight:3 }}>🌧️</span>}
+                                {done && <Check size={12} color="#fff" style={{ marginRight:3, flexShrink:0 }} aria-label="Completed" />}
+                                {task.status === "conflict" && <AlertTriangle size={11} color="#fff" style={{ marginRight:3, flexShrink:0 }} />}
+                                {taskHasWeatherRisk(task) && <CloudRain size={11} color="#fff" style={{ marginRight:3, flexShrink:0 }} />}
                                 {taskDisplayName(task)}
-                                {task.percent_complete > 0 && ` (${task.percent_complete}%)`}
-                                <div style={{ position:"absolute", right:0, top:0, bottom:0, width:10, cursor:"ew-resize", background:"rgba(255,255,255,0.15)", borderLeft:"0.5px solid rgba(255,255,255,0.25)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, userSelect:"none" }}
+                                <div title="Drag to change the start date" style={{ position:"absolute", left:0, top:0, bottom:0, width:10, cursor:"ew-resize", background:"rgba(255,255,255,0.15)", borderRight:"0.5px solid rgba(255,255,255,0.25)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, userSelect:"none" }}
+                                  onMouseDown={(e) => {
+                                    if (adjustActive) return;
+                                    e.stopPropagation(); e.preventDefault();
+                                    dragDidMoveRef.current = false;
+                                    setActiveDrag({ id: task.id, type: "resize-left", startX: e.clientX, startCol: sCol, duration: lCol });
+                                  }}>⋮</div>
+                                <div title="Drag to change the end date" style={{ position:"absolute", right:0, top:0, bottom:0, width:10, cursor:"ew-resize", background:"rgba(255,255,255,0.15)", borderLeft:"0.5px solid rgba(255,255,255,0.25)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, userSelect:"none" }}
                                   onMouseDown={(e) => {
                                     if (adjustActive) return;
                                     e.stopPropagation(); e.preventDefault();
@@ -2023,7 +2428,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                     {!isCollapsed && unassigned.length > 0 && (
                       <div style={{ display:"flex", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, minHeight:ROW_HEIGHT, alignItems:"center", position:"relative", background:"#FAFBFD" }}>
                         <div style={{ ...stickyLeft("#FAFBFD"), padding:"6px 12px 6px 16px", fontSize:11.5, color:C.gray, fontStyle:"italic" }}>
-                          <span>📋 Unassigned ({unassigned.length})</span>
+                          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><Inbox size={13} color={C.gray} /> Unassigned ({unassigned.length})</span>
                         </div>
                         {Array.from({length:COLS}).map((_, i) => (
                           <div key={i} style={{ width:CW, flexShrink:0, height:ROW_HEIGHT, borderLeft:`0.5px solid ${C.grayLight}` }} />
@@ -2070,7 +2475,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
             const lCol = getColDuration(task.start, task.end);
             const xStart = LW + sCol * CW;
             const xEnd = xStart + Math.max(26, lCol * CW);
-            taskCoordinates[task.id] = { xStart, xEnd, y: bodyHeight + 19 };
+            taskCoordinates[task.id] = { xStart, xEnd, y: bodyHeight + ROW_HEIGHT / 2 };
             bodyHeight += ROW_HEIGHT;
           });
 
@@ -2081,7 +2486,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
               const lCol = getColDuration(task.start, task.end);
               const xStart = LW + sCol * CW;
               const xEnd = xStart + Math.max(26, lCol * CW);
-              taskCoordinates[task.id] = { xStart, xEnd, y: bodyHeight + 19 };
+              taskCoordinates[task.id] = { xStart, xEnd, y: bodyHeight + ROW_HEIGHT / 2 };
             });
             bodyHeight += ROW_HEIGHT;
           }
@@ -2124,7 +2529,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                             {weeks[wkIdx] || ""}
                           </span>
                         )}
-                        {wx && wx.risk !== "ok" && <span style={{ fontSize:9, position:"absolute", top:16, left:"50%", transform:"translateX(-50%)" }} title={wx.desc}>{wx.icon}</span>}
+                        {wx && wx.risk !== "ok" && <span style={{ position:"absolute", top:15, left:"50%", transform:"translateX(-50%)" }} title={wx.desc}><WeatherGlyph icon={wx.icon} size={11} color={wx.risk === "danger" ? C.redDark : C.amber} /></span>}
                         <span style={{ fontSize:10, position:"absolute", bottom:4, left:"50%", transform:"translateX(-50%)", color: isTd ? C.red : C.textMuted, fontWeight: isTd ? 700 : 500 }}>{formatColDay(i)}</span>
                         {isTd && <div style={{ position:"absolute", top:0, bottom:0, left:"50%", marginLeft:-1, width:2, background:C.red, opacity:0.75, zIndex:1 }} />}
                       </div>
@@ -2163,14 +2568,23 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                     if (!taskObj) return null;
                     const deps = (taskObj.dependencies || "").split(",").map(d => d.trim()).filter(d => d && d !== "-");
                     return deps.map(predId => {
+                      if (predId === id) return null; // ignore self-reference
                       const predCoord = taskCoordinates[predId];
                       if (!predCoord) return null;
-                      
-                      const x1 = predCoord.xEnd;
+
+                      // Skip arrows whose predecessor finishes before the visible
+                      // window starts, or whose successor starts after it ends —
+                      // otherwise the line is drawn from/to off-screen coordinates
+                      // and appears to point at an empty section.
+                      const VIS_LEFT = LW;
+                      const VIS_RIGHT = LW + COLS * CW;
+                      if (predCoord.xEnd < VIS_LEFT || succCoord.xStart > VIS_RIGHT) return null;
+
+                      const x1 = Math.min(Math.max(predCoord.xEnd, VIS_LEFT), VIS_RIGHT);
                       const y1 = predCoord.y;
-                      const x2 = succCoord.xStart;
+                      const x2 = Math.min(Math.max(succCoord.xStart, VIS_LEFT), VIS_RIGHT);
                       const y2 = succCoord.y;
-                      
+
                       // Calculate cubic bezier curves
                       const dx = x2 - x1;
                       const controlOffset = Math.max(25, Math.abs(dx) * 0.4);
@@ -2216,6 +2630,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                       <span style={{ fontSize:9, color:C.gray, marginRight:2, transition:"transform 0.15s", display:"inline-block", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>
                       <span style={{ width:9, height:9, background:group.color, borderRadius:"50%", display:"inline-block", flexShrink:0 }} />
                       {projName.split(" —")[0]}
+                      {projectData?.state && <WeatherChip state={projectData.state} chip={weatherSummary[projectData.state]} />}
                       {projectData?.pcEndDate && (
                         <span style={{ fontSize:9.5, fontWeight:500, color:C.gray, marginLeft:4 }}>PC: {projectData.pcEndDate}</span>
                       )}
@@ -2245,6 +2660,10 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                     if (isThisDragged) {
                       if (activeDrag.type === "move") {
                         renderedStartCol = Math.max(0, sCol + dragDeltaCols);
+                      } else if (activeDrag.type === "resize-left") {
+                        const ns = Math.max(0, Math.min(sCol + lCol - 1, sCol + dragDeltaCols));
+                        renderedStartCol = ns;
+                        renderedDurationCol = sCol + lCol - ns;
                       } else {
                         renderedDurationCol = Math.max(1, lCol + dragDeltaCols);
                       }
@@ -2254,17 +2673,33 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                     const done = isTaskDone(task);
                     const isDraft = isDraftTaskId(task.id, pendingDrafts);
 
+                    const firstDep = (task.dependencies || "").split(",").map(d => d.trim()).filter(d => d && d !== "-")[0];
+                    const depTask = firstDep ? displayTasks.find(t => t.id === firstDep) : null;
+
                     return (
-                      <div key={task.id} style={{ display:"flex", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, minHeight:ROW_HEIGHT, alignItems:"center", position:"relative" }}>
-                        
+                      // Fixed row height keeps the dependency-arrow coordinates (which
+                      // assume ROW_HEIGHT per row) aligned with the rendered bars.
+                      <div key={task.id} style={{ display:"flex", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, height:ROW_HEIGHT, alignItems:"center", position:"relative" }}>
+
                         {/* Left Assignee info cell */}
-                        <div style={{ ...stickyLeft(C.white), padding:"6px 12px 6px 28px", fontSize:12.5, color:C.textMuted, overflow:"hidden", display:"flex", flexDirection:"column", gap:2 }}>
+                        <div style={{ ...stickyLeft(C.white), padding:"6px 12px 6px 28px", fontSize:12.5, color:C.textMuted, overflow:"hidden", display:"flex", flexDirection:"column", justifyContent:"center", height:ROW_HEIGHT, gap:2 }}>
                           <span style={{ fontSize: 12.5, color: C.text, display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
-                            {done && <span style={{ color: C.greenDark, flexShrink: 0 }}>✓</span>}
+                            {done && <Check size={13} color={C.greenDark} style={{ flexShrink: 0 }} aria-label="Completed" />}
                             <TaskNameWithId task={task} onClick={() => handleOpenEdit(task)} nameStyle={{ color: C.text }} />
                           </span>
-                          <span style={{ fontSize: 9.5, color: C.gray, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                            👷 {task.assignee} · {task.trade}
+                          {/* Assignee + dependency hint on ONE line so every row stays the
+                              same height (variable height was breaking arrow alignment). */}
+                          <span style={{ fontSize: 9.5, color: C.gray, display:"flex", alignItems:"center", gap:3, minWidth:0 }}>
+                            <HardHat size={10} style={{ flexShrink:0 }} />
+                            <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
+                              {task.assignee} · {task.trade}
+                              {depTask && (
+                                <span style={{ color: C.purple }}
+                                  title={`Starts after "${depTask.name}" finishes (${task.dependency_type || "FS"}). Move that job and this one moves too.`}>
+                                  {"  ·  ↳ after "}{taskDisplayName(depTask)}{task.dependency_type === "SS" ? " (starts together)" : ""}
+                                </span>
+                              )}
+                            </span>
                           </span>
                         </div>
 
@@ -2324,17 +2759,39 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                             handleOpenEdit(task);
                           }}
                           >
-                            {done && <span style={{ marginRight: 4 }} title="Completed">✓</span>}
-                            {taskHasWeatherRisk(task) && <span style={{ marginRight: 4 }} title="Task overlaps rain/storm forecast dates!">🌧️</span>}
+                            {done && <Check size={12} color="#fff" style={{ marginRight: 4, flexShrink: 0 }} aria-label="Completed" />}
+                            {taskHasWeatherRisk(task) && <CloudRain size={11} color="#fff" style={{ marginRight: 4, flexShrink: 0 }} aria-label="Overlaps rain/storm dates" />}
                             <span style={{ fontSize: 9, opacity: 0.85, marginRight: 4, display: "inline-block" }}>
                               {task.assignee ? task.assignee.split(" ")[0] : "Anon"}:
                             </span>
                             {taskDisplayName(task)}
-                            {task.percent_complete > 0 && ` (${task.percent_complete}%)`}
                             {task.status === "conflict" && <span style={{ width:6, height:6, background:C.red, borderRadius:"50%", border:`1px solid ${C.white}`, position:"absolute", top: 2, right: 18 }} />}
                             {task.status === "fragile"  && <span style={{ width:6, height:6, background:C.amber, borderRadius:"50%", border:`1px solid ${C.white}`, position:"absolute", top: 2, right: 18 }} />}
 
-                            <div 
+                            <div
+                              style={{
+                                position: "absolute", left: 0, top: 0, bottom: 0, width: 12, cursor: "ew-resize",
+                                background: "rgba(255,255,255,0.2)", borderRight: "0.5px solid rgba(255,255,255,0.25)",
+                                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: "bold", userSelect: "none"
+                              }}
+                              onMouseDown={(e) => {
+                                if (adjustActive) return;
+                                e.stopPropagation();
+                                e.preventDefault();
+                                dragDidMoveRef.current = false;
+                                setActiveDrag({
+                                  id: task.id,
+                                  type: "resize-left",
+                                  startX: e.clientX,
+                                  startCol: sCol,
+                                  duration: lCol
+                                });
+                              }}
+                              title="Drag to change the start date"
+                            >
+                              ⋮
+                            </div>
+                            <div
                               style={{
                                 position: "absolute", right: 0, top: 0, bottom: 0, width: 12, cursor: "ew-resize",
                                 background: "rgba(255,255,255,0.2)", borderLeft: "0.5px solid rgba(255,255,255,0.25)",
@@ -2353,7 +2810,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                                   duration: lCol
                                 });
                               }}
-                              title="Drag to adjust duration"
+                              title="Drag to change the end date"
                             >
                               ⋮
                             </div>
@@ -2365,9 +2822,11 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                             background: "#0F172A", color: "#FFFFFF", padding: "2px 8px", borderRadius: 6,
                             fontSize: 9.5, fontWeight: 600, zIndex: 200, boxShadow: "0 4px 8px rgba(0,0,0,0.2)", whiteSpace: "nowrap"
                           }}>
-                            {activeDrag.type === "move" 
-                              ? `📅 Shift: ${getDateFromCol(renderedStartCol)} to ${getDateFromCol(renderedStartCol + renderedDurationCol - 1)}`
-                              : `📏 Extend: ${renderedDurationCol} Working Days (${getDateFromCol(renderedStartCol + renderedDurationCol - 1)})`
+                            {activeDrag.type === "move"
+                              ? `${getDateFromCol(renderedStartCol)} to ${getDateFromCol(renderedStartCol + renderedDurationCol - 1)}`
+                              : activeDrag.type === "resize-left"
+                              ? `Starts ${getDateFromCol(renderedStartCol)} (${renderedDurationCol} days)`
+                              : `${renderedDurationCol} days (ends ${getDateFromCol(renderedStartCol + renderedDurationCol - 1)})`
                             }
                           </div>
                         )}
@@ -2379,7 +2838,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                   {!isCollapsed && unassignedTasks.length > 0 && (
                     <div style={{ display:"flex", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, minHeight:ROW_HEIGHT, alignItems:"center", position:"relative", background: "#FAFBFD" }}>
                       <div style={{ ...stickyLeft("#FAFBFD"), padding:"6px 12px 6px 28px", fontSize:12, color:C.gray, fontStyle: "italic" }}>
-                        <span>📋 Unassigned Backlog</span>
+                        <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><Inbox size={13} color={C.gray} /> Unassigned backlog</span>
                         <div style={{ fontSize: 9, color: C.gray, fontStyle: "normal" }}>({unassignedTasks.length} tasks)</div>
                       </div>
 
@@ -2413,7 +2872,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                             }}
                             title={`Click to assign resource: ${task.name}`}
                           >
-                            {taskHasWeatherRisk(task) && <span style={{ marginRight: 4 }} title="Task overlaps rain/storm forecast dates!">🌧️</span>}
+                            {taskHasWeatherRisk(task) && <CloudRain size={11} color="#fff" style={{ marginRight: 4, flexShrink: 0 }} aria-label="Overlaps rain/storm dates" />}
                             <span style={{ fontStyle: "italic", marginRight: 4 }}>Unassigned:</span>
                             {task.name}
                           </div>
@@ -2498,7 +2957,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                           {weeks[wkIdx] || ""}
                         </span>
                       )}
-                      {wx && wx.risk !== "ok" && <span style={{ fontSize:9, position:"absolute", top:16, left:"50%", transform:"translateX(-50%)" }} title={wx.desc}>{wx.icon}</span>}
+                      {wx && wx.risk !== "ok" && <span style={{ position:"absolute", top:15, left:"50%", transform:"translateX(-50%)" }} title={wx.desc}><WeatherGlyph icon={wx.icon} size={11} color={wx.risk === "danger" ? C.redDark : C.amber} /></span>}
                       <span style={{ fontSize:10, position:"absolute", bottom:4, left:"50%", transform:"translateX(-50%)", color: isTd ? C.red : C.textMuted, fontWeight: isTd ? 700 : 500 }}>{formatColDay(i)}</span>
                       {isTd && <div style={{ position:"absolute", top:0, bottom:0, left:"50%", marginLeft:-1, width:2, background:C.red, opacity:0.75, zIndex:1 }} />}
                     </div>
@@ -2521,12 +2980,12 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                         display: "inline-flex", width: 18, height: 18, borderRadius: "50%", background: C.navy, color: C.white, 
                         fontWeight: 700, fontSize: 8.5, alignItems: "center", justifyContent: "center" 
                       }}>
-                        {r.initials || "👷"}
+                        {r.initials || <HardHat size={11} />}
                       </span>
                       <strong style={{ color: C.text, fontSize: 12 }}>{r.name}</strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                      <span style={{ fontSize: 9.5, color: C.gray, fontWeight: 500 }}>🔨 {r.trade}</span>
+                      <span style={{ fontSize: 9.5, color: C.gray, fontWeight: 500, display:"inline-flex", alignItems:"center", gap:4 }}><HardHat size={10} /> {r.trade}</span>
                       <span style={{ fontSize: 9.5, fontWeight: 700, background: `${utilColor}12`, color: utilColor, padding: "1px 5px", borderRadius: 4 }}>
                         {r.util}% cap
                       </span>
@@ -2552,6 +3011,10 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                     if (isThisDragged) {
                       if (activeDrag.type === "move") {
                         renderedStartCol = Math.max(0, sCol + dragDeltaCols);
+                      } else if (activeDrag.type === "resize-left") {
+                        const ns = Math.max(0, Math.min(sCol + lCol - 1, sCol + dragDeltaCols));
+                        renderedStartCol = ns;
+                        renderedDurationCol = sCol + lCol - ns;
                       } else {
                         renderedDurationCol = Math.max(1, lCol + dragDeltaCols);
                       }
@@ -2609,15 +3072,38 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                           handleOpenEdit(task);
                         }}
                       >
-                        {done && <span style={{ marginRight: 3 }} title="Completed">✓</span>}
-                        {taskHasWeatherRisk(task) && <span style={{ marginRight: 3 }} title="Task overlaps rain/storm forecast dates!">🌧️</span>}
-                        {task.status === "conflict" && <span style={{ marginRight: 3 }}>⚠</span>}
+                        {done && <Check size={12} color="#fff" style={{ marginRight: 3, flexShrink: 0 }} aria-label="Completed" />}
+                        {taskHasWeatherRisk(task) && <CloudRain size={11} color="#fff" style={{ marginRight: 3, flexShrink: 0 }} aria-label="Overlaps rain/storm dates" />}
+                        {task.status === "conflict" && <AlertTriangle size={11} color="#fff" style={{ marginRight: 3, flexShrink: 0 }} />}
                         <span style={{ fontSize: 9, opacity: 0.8, marginRight: 4 }}>{projShortName}:</span>
                         {taskDisplayName(task)}
-                        {task.percent_complete > 0 && ` (${task.percent_complete}%)`}
 
-                        {/* Drag Resize Handle */}
+                        {/* Drag Resize Handles (left = start date, right = end date) */}
                         <div
+                          title="Drag to change the start date"
+                          style={{
+                            position: "absolute", left: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize",
+                            background: "rgba(255,255,255,0.15)", borderRight: "0.5px solid rgba(255,255,255,0.25)",
+                            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, userSelect: "none"
+                          }}
+                          onMouseDown={(e) => {
+                            if (adjustActive) return;
+                            e.stopPropagation();
+                            e.preventDefault();
+                            dragDidMoveRef.current = false;
+                            setActiveDrag({
+                              id: task.id,
+                              type: "resize-left",
+                              startX: e.clientX,
+                              startCol: sCol,
+                              duration: lCol
+                            });
+                          }}
+                        >
+                          ⋮
+                        </div>
+                        <div
+                          title="Drag to change the end date"
                           style={{
                             position: "absolute", right: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize",
                             background: "rgba(255,255,255,0.15)", borderLeft: "0.5px solid rgba(255,255,255,0.25)",
@@ -2654,7 +3140,7 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
               return (
                 <div style={{ display:"flex", borderBottom:`0.5px solid ${C.grayLight}`, minWidth: LW + COLS*CW, minHeight:ROW_HEIGHT + 8, alignItems:"center", position:"relative", background: "#F1F5F9" }}>
                   <div style={{ ...stickyLeft("#F1F5F9"), padding:"6px 12px", fontSize:11.5, display:"flex", flexDirection:"column", justifyContent:"center" }}>
-                    <strong style={{ color: C.gray, fontSize: 11.5 }}>👤 Unassigned Backlog</strong>
+                    <strong style={{ color: C.gray, fontSize: 11.5, display:"inline-flex", alignItems:"center", gap:5 }}><Inbox size={13} color={C.gray} /> Unassigned backlog</strong>
                     <span style={{ fontSize: 9.5, color: C.gray }}>({unassignedBacklog.length} Backlog works)</span>
                   </div>
 
@@ -2719,8 +3205,8 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
             
             {/* Modal Header */}
             <div style={{ background: C.navy, color:C.white, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <span style={{ fontWeight:600, fontSize:13 }}>
-                {editingTask ? `✏️ Edit Programmed Task: ${editingTask.id}` : "➕ Register New Programme Task"}
+              <span style={{ fontWeight:600, fontSize:13, display:"inline-flex", alignItems:"center", gap:7 }}>
+                {editingTask ? <><Pencil size={14} /> Edit task: {editingTask.id}</> : <><Plus size={14} /> Add task</>}
               </span>
               <button 
                 onClick={() => setShowAddModal(false)}
@@ -2772,13 +3258,37 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                 </div>
                 <div style={{ flex:1 }}>
                   <label style={{ display:"block", fontSize:11, fontWeight:600, color:C.gray, marginBottom:4 }}>END DATE</label>
-                  <input 
+                  <input
                     type="date"
                     value={formEnd}
                     onChange={(e) => setFormEnd(e.target.value)}
                     style={{ width:"100%", padding:"6px 8px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, fontSize:12 }}
                   />
                 </div>
+              </div>
+
+              {/* Must-finish-by deadline — the planned/required finish, separate from
+                  the live end date. Drives the "behind schedule" warning when that
+                  check is turned on in Master Data → Programme settings. */}
+              <div>
+                <label style={{ display:"block", fontSize:11, fontWeight:600, color:C.gray, marginBottom:4 }}>
+                  <LabelWithInfo
+                    label="MUST FINISH BY (DEADLINE)"
+                    title="Must finish by (deadline)"
+                    body={"The date this job is supposed to finish — the planned or contractual finish.\n\nIt stays put even when the job's end date moves (e.g. after a delay or cascade). If the end date runs past this deadline, FlowIQ flags the job 'behind schedule' — but only when that check is turned on in Master Data → Programme settings."}
+                  />
+                </label>
+                <input
+                  type="date"
+                  value={formDeadline}
+                  onChange={(e) => setFormDeadline(e.target.value)}
+                  style={{ width:"100%", padding:"6px 8px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, fontSize:12 }}
+                />
+                {formDeadline && formEnd && formEnd > formDeadline && (
+                  <div style={{ fontSize:10.5, color:C.redDark, marginTop:4 }}>
+                    End date is after the deadline — this job is behind schedule.
+                  </div>
+                )}
               </div>
 
               {/* Resource Assignments */}
@@ -2924,16 +3434,44 @@ export default function ScreenGantt({ onNav }: { onNav?: (screen: string) => voi
                 </div>
               )}
 
+              {/* PM job-status controls — change the lifecycle of a live job.
+                  "Mark delayed" cascades and can ripple into other projects. */}
+              {editingTask && !editingTask.id.startsWith("DRAFT-") && !editingTask.id.startsWith("DRAFT") && (
+                <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, background: "#F8FAFC", border: `0.5px solid ${C.grayLight}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, marginBottom: 8 }}>
+                    Job status {isPM ? "(you manage this job)" : ""}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <button type="button" onClick={() => applyPmStatus(editingTask, "in_progress")}
+                      style={{ padding: "6px 12px", borderRadius: 7, background: C.white, border: `0.5px solid ${C.grayLight}`, color: C.text, fontSize: 11.5, fontWeight: 600, cursor: "pointer", display:"inline-flex", alignItems:"center", gap:6 }}>
+                      <Play size={12} /> Mark in progress
+                    </button>
+                    <button type="button" onClick={() => applyPmStatus(editingTask, "complete")}
+                      style={{ padding: "6px 12px", borderRadius: 7, background: C.greenBg, border: `0.5px solid #BBF7D0`, color: C.greenDark, fontSize: 11.5, fontWeight: 600, cursor: "pointer", display:"inline-flex", alignItems:"center", gap:6 }}>
+                      <Check size={13} /> Mark complete
+                    </button>
+                    <button type="button" onClick={() => applyPmStatus(editingTask, "delayed")}
+                      style={{ padding: "6px 12px", borderRadius: 7, background: C.amberBg, border: `0.5px solid #FCD34D`, color: C.amber, fontSize: 11.5, fontWeight: 600, cursor: "pointer", display:"inline-flex", alignItems:"center", gap:6 }}
+                      title="Push this job out by N working days. Jobs that depend on it move too.">
+                      <Clock size={12} /> Mark delayed…
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: C.gray, marginTop: 6 }}>
+                    Delaying a job moves the jobs that depend on it — and can create clashes on other projects.
+                  </div>
+                </div>
+              )}
+
               {/* Action buttons */}
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:10, alignItems:"center" }}>
                 {editingTask && editingTask.assigneeId && !editingTask.id.startsWith("DRAFT-") && (
                   <button
                     type="button"
                     onClick={() => { const id = editingTask.id; setShowAddModal(false); openAdjust(id); }}
-                    style={{ padding: "8px 14px", borderRadius: 8, background:"#F3F2FF", border:`0.5px solid ${C.purple}`, color:C.purple, fontSize:12, cursor:"pointer", fontWeight:600, marginRight:"auto" }}
-                    title="Stage a working-day delay with cascade options"
+                    style={{ padding: "8px 14px", borderRadius: 8, background:"#F3F2FF", border:`0.5px solid ${C.purple}`, color:C.purple, fontSize:12, cursor:"pointer", fontWeight:600, marginRight:"auto", display:"inline-flex", alignItems:"center", gap:6 }}
+                    title="Preview a delay and choose how the following tasks move"
                   >
-                    ⏱ Delay / adjust…
+                    <Timer size={13} /> Delay / adjust…
                   </button>
                 )}
                 <button

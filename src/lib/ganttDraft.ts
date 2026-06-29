@@ -263,6 +263,21 @@ function taskShortName(task: Task): string {
   return task.name.split(" — ")[0] || task.name;
 }
 
+/** Project name without the trailing "— Stage/Tower" qualifier. */
+function projectShort(name?: string): string {
+  return (name || "").split(" — ")[0] || name || "Project";
+}
+
+/**
+ * Clear, unambiguous job label: project + full task name. Two jobs called
+ * "Structural Steel Frame — Level 4/5" must be told apart, so keep the full name
+ * and prefix the project. e.g. "Parramatta Square · Structural Steel Frame — Level 4".
+ */
+function jobLabel(task: Task): string {
+  const proj = projectShort(task.project);
+  return proj ? `${proj} · ${task.name}` : task.name;
+}
+
 function countDependents(tasks: Task[], taskId: string): number {
   return tasks.filter((t) => {
     const deps = (t.dependencies || "")
@@ -624,14 +639,49 @@ export function buildSmartRecommendations(
   );
 
   const seen = new Set<string>();
-  return options
+  const deduped = options
     .filter((option) => {
       if (seen.has(option.id)) return false;
       seen.add(option.id);
       return true;
     })
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+    .slice(0, 4);
+
+  // Always add a "push 2 weeks" fallback — matches the same option shown in the Problems hub.
+  const insight = buildConflictConstraintInsight(conflict, tasks, pendingById);
+  const adjustTaskId = insight?.suggestedAdjustTaskId || conflict.taskBId;
+  const adjustTask = tasks.find((t) => t.id === adjustTaskId);
+  const anchorTaskId = insight?.suggestedAnchorTaskId || conflict.taskAId;
+  const anchorTask = tasks.find((t) => t.id === anchorTaskId);
+  const pushId = `push14-${adjustTaskId}`;
+  if (adjustTask && !deduped.find((o) => o.id === pushId)) {
+    const currentResource = resources.find((r) => r.id === conflict.resourceId);
+    const push14Start = shiftIsoDate(adjustTask.start, 14);
+    const push14End = shiftIsoDate(adjustTask.end, 14);
+    const costImpact = attachProjectImpact(
+      buildCostImpactForReschedule(adjustTask, currentResource),
+      tasks, resources, adjustTask, projects, tasks
+    );
+    deduped.push({
+      kind: "reschedule",
+      id: pushId,
+      taskId: adjustTaskId,
+      taskName: taskShortName(adjustTask),
+      anchorTaskId,
+      anchorTaskName: anchorTask ? taskShortName(anchorTask) : "",
+      anchorReasons: insight?.taskA.reasons || [],
+      headline: `Push "${jobLabel(adjustTask)}" back 2 weeks instead`,
+      detail: `Move "${adjustTask.name}" 2 weeks later so the same person isn't on two jobs at once. Jobs that wait on it move too.`,
+      start: push14Start,
+      end: push14End,
+      tags: ["+14d shift", "Same person"],
+      score: 55,
+      costImpact,
+    });
+  }
+
+  return deduped;
 }
 
 function appendOptionsForDirection(
@@ -656,10 +706,9 @@ function appendOptionsForDirection(
   const originalState =
     resources.find((r) => r.id === conflict.resourceId)?.state || "NSW";
   const duration = taskDurationDays(moveTask);
-  const moveName = taskShortName(moveTask);
-  const anchorName = taskShortName(anchorTask);
-  const anchorReasonText =
-    anchorProfile.reasons.slice(0, 2).join(" · ") || "programme constraint";
+  // Full task names so two jobs like "… — Level 4" / "… — Level 5" are told apart.
+  const moveName = moveTask.name;
+  const anchorName = anchorTask.name;
   const currentResource = resources.find((r) => r.id === conflict.resourceId);
 
   const afterStart = shiftIsoDate(anchorTask.end, 1);
@@ -689,8 +738,8 @@ function appendOptionsForDirection(
       anchorTaskId: anchorTask.id,
       anchorTaskName: anchorName,
       anchorReasons: anchorProfile.reasons,
-      headline: `Move "${moveName}" to ${afterStart} – ${afterEnd}`,
-      detail: `"${anchorName}" keeps its dates (${anchorReasonText}). "${moveName}" starts after it finishes — same person, no overlap.`,
+      headline: `Move "${jobLabel(moveTask)}" to ${afterStart} – ${afterEnd}`,
+      detail: `Keep "${anchorName}" where it is. Move "${moveName}" so it starts after "${anchorName}" finishes — then the same person isn't on two jobs at once.`,
       start: afterStart,
       end: afterEnd,
       tags: ["Same person", "No overlap", "Clears conflict"],
@@ -727,8 +776,8 @@ function appendOptionsForDirection(
       anchorTaskId: anchorTask.id,
       anchorTaskName: anchorName,
       anchorReasons: anchorProfile.reasons,
-      headline: `Start "${moveName}" earlier — ${beforeStart} to ${beforeEnd}`,
-      detail: `"${anchorName}" keeps its dates (${anchorReasonText}). "${moveName}" finishes before "${anchorName}" starts — no overlap.`,
+      headline: `Move "${jobLabel(moveTask)}" earlier — ${beforeStart} to ${beforeEnd}`,
+      detail: `Keep "${anchorName}" where it is. Move "${moveName}" so it finishes before "${anchorName}" starts — then the same person isn't on two jobs at once.`,
       start: beforeStart,
       end: beforeEnd,
       tags: ["Same person", "Move earlier", "Clears conflict"],
@@ -776,8 +825,8 @@ function appendOptionsForDirection(
       anchorTaskId: anchorTask.id,
       anchorTaskName: anchorName,
       anchorReasons: anchorProfile.reasons,
-      headline: `Swap "${moveName}" to ${candidate.name}`,
-      detail: `${conflict.resourceName} stays on "${anchorName}" (${anchorReasonText}). ${candidate.name} takes over "${moveName}" — ${candidate.util}% current load.`,
+      headline: `Give "${jobLabel(moveTask)}" to ${candidate.name}`,
+      detail: `${conflict.resourceName} stays on "${anchorName}". ${candidate.name} takes over "${moveName}" instead — ${candidate.util}% booked right now, so they're free for these dates.`,
       resourceId: candidate.id,
       resourceName: candidate.name,
       tags: ["Different person", ...candidate.reasonTags, costTag],

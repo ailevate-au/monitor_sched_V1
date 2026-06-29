@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Card, SectionHeader, Btn } from "./Dashboard";
+import { BarChart3, DollarSign, ClipboardList, FileText, ShieldCheck, Download } from "lucide-react";
 
 const C = {
   blue:       "#1A5FA8",
@@ -18,7 +19,7 @@ const C = {
 type ReportCategory = "all" | "schedule" | "finance" | "resources" | "safety" | "weather";
 
 interface ReportDef {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   sub: string;
   color: string;
@@ -34,7 +35,7 @@ interface ProjectOption {
 }
 
 interface RecentExport {
-  icon: string;
+  icon: React.ReactNode;
   name: string;
   by: string;
   when: string;
@@ -44,15 +45,15 @@ interface RecentExport {
 }
 
 const REPORTS_BASE: ReportDef[] = [
-  { icon: "📊", title: "Portfolio Programme Report", sub: "Schedule baseline alignment and delivery status for selected project", color: C.blue, category: "schedule", exportType: "Portfolio-Programme", metrics: [] },
-  { icon: "💰", title: "Financial Variance Ledger", sub: "Contract sums, budget variance, and margin for selected project", color: C.green, category: "finance", exportType: "Financial-Variance-Ledger", metrics: [] },
-  { icon: "📋", title: "Project Expense Summary", sub: "Recorded expenses and retention balance for selected project", color: C.amber, category: "finance", exportType: "Project-Expense-Summary", metrics: [] },
+  { icon: <BarChart3 size={18} color={C.blue} />, title: "All-Projects Programme Report", sub: "How the schedule is tracking and delivery status for the selected project", color: C.blue, category: "schedule", exportType: "Portfolio-Programme", metrics: [] },
+  { icon: <DollarSign size={18} color={C.green} />, title: "Financial Variance Report", sub: "Contract sums, budget variance, and margin for selected project", color: C.green, category: "finance", exportType: "Financial-Variance-Ledger", metrics: [] },
+  { icon: <ClipboardList size={18} color={C.amber} />, title: "Project Expense Summary", sub: "Recorded expenses and retention balance for selected project", color: C.amber, category: "finance", exportType: "Project-Expense-Summary", metrics: [] },
 ];
 
 const RECENT: RecentExport[] = [
-  { icon: "📄", name: "Project Expense Summary — May 2025.pdf", by: "S. Hughes", when: "3 hours ago", size: "1.8MB", type: "Project-Expense-Summary", category: "finance" },
-  { icon: "📊", name: "Portfolio Programme Report.xlsx", by: "M. O'Brien", when: "yesterday", size: "2.1MB", type: "Portfolio-Programme", category: "schedule" },
-  { icon: "🛡️", name: "WHS Safety Council Audit — May 2025.pdf", by: "S. Hughes", when: "2 days ago", size: "940KB", type: "WHS-Compliance", category: "safety" },
+  { icon: <FileText size={16} color={C.amber} />, name: "Project Expense Summary, May 2025.pdf", by: "S. Hughes", when: "3 hours ago", size: "1.8MB", type: "Project-Expense-Summary", category: "finance" },
+  { icon: <BarChart3 size={16} color={C.blue} />, name: "Portfolio Programme Report.xlsx", by: "M. O'Brien", when: "yesterday", size: "2.1MB", type: "Portfolio-Programme", category: "schedule" },
+  { icon: <ShieldCheck size={16} color={C.green} />, name: "WHS Safety Council Audit, May 2025.pdf", by: "S. Hughes", when: "2 days ago", size: "940KB", type: "WHS-Compliance", category: "safety" },
 ];
 
 const CATEGORY_LABELS: Record<ReportCategory, string> = {
@@ -256,7 +257,7 @@ export default function ScreenReports() {
                         transition: "border-color 0.15s",
                       }}
                     >
-                      <span style={{ fontSize: 18, flexShrink: 0 }}>{r.icon}</span>
+                      <span style={{ flexShrink: 0, display: "inline-flex" }}>{r.icon}</span>
                       <div style={{ flex: 1, minWidth: 140 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 500, color: C.text }}>{r.title}</div>
                         <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{r.sub}</div>
@@ -298,13 +299,13 @@ export default function ScreenReports() {
                         borderRadius: 8, flexWrap: "wrap", cursor: "pointer",
                       }}
                     >
-                      <span style={{ fontSize: 16, flexShrink: 0 }}>{r.icon}</span>
+                      <span style={{ flexShrink: 0, display: "inline-flex" }}>{r.icon}</span>
                       <div style={{ flex: 1, minWidth: 120 }}>
                         <div style={{ fontSize: 12, fontWeight: 500, color: C.text }}>{r.name}</div>
                         <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{r.by} · {r.when} · {r.size}</div>
                       </div>
                       <span title={exportDisabledTooltip}>
-                        <Btn small disabled={isDev} onClick={(e) => { e.stopPropagation(); handleExport(r.type, r.name.endsWith(".xlsx") ? "Excel" : "PDF"); }}>⬇</Btn>
+                        <Btn small disabled={isDev} onClick={(e) => { e.stopPropagation(); handleExport(r.type, r.name.endsWith(".xlsx") ? "Excel" : "PDF"); }}><Download size={13} /></Btn>
                       </span>
                     </div>
                   );
@@ -341,7 +342,7 @@ export default function ScreenReports() {
             {selectedRecent && !detail && (
               <>
                 <div style={{ fontSize: 12, color: C.gray, marginBottom: 12, lineHeight: 1.5 }}>
-                  Archived export from the SaaS report log. Re-download to get the same snapshot, or regenerate from the template for live data.
+                  A previously saved report. Re-download to get the same snapshot, or regenerate from the template for up-to-date data.
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <span title={exportDisabledTooltip}>
@@ -373,7 +374,7 @@ export default function ScreenReports() {
                   </span>
                 </div>
                 <div style={{ marginTop: 14, padding: 10, background: C.bgSecond, borderRadius: 8, fontSize: 11, color: C.gray, lineHeight: 1.5 }}>
-                  Demo mode: only 3 key reports are shown and each export uses the selected project context.
+                  Demo: only 3 key reports are shown, and each export uses the project you've selected.
                 </div>
               </>
             )}

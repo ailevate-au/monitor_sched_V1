@@ -17,6 +17,8 @@ export interface Project {
   weatherRisk: boolean;
   overBudget: boolean;
   retentionPercent?: number;
+  /** Email of the PM who owns this project. PMs only see their own projects. */
+  managerEmail?: string;
 }
 
 export interface Resource {
@@ -47,6 +49,13 @@ export interface Task {
   tradeRequired: string;
   start: string;
   end: string;
+  /**
+   * "Must finish by" date — the planned/contractual finish, separate from the
+   * live `end` (which moves when a job is delayed or cascades). When the
+   * deadline-warning setting is on, a job whose `end` runs past its `deadline`
+   * is flagged "behind schedule". Defaults to the seed end date.
+   */
+  deadline?: string;
   durationDays: number;
   dependencies: string;
   status: "scheduled" | "inprogress" | "weather" | "fragile" | "conflict" | "overdue" | "completed";
@@ -59,6 +68,11 @@ export interface Task {
   cost_override?: number | null;
   cost_override_type?: "hourly" | "daily" | "lump_sum" | null;
   percent_complete?: number;
+  /**
+   * PM-controlled lifecycle, separate from the engine-derived `status`
+   * (conflict/weather/etc). PMs set this; "delayed" triggers a real cascade.
+   */
+  pmStatus?: "not_started" | "in_progress" | "complete" | "delayed";
 }
 
 export interface ProgressClaim {
@@ -122,6 +136,8 @@ export interface FragileTaskSummary {
   trade: string;
   bufferDays: number;
   desc: string;
+  /** The tight successor job a "breathing room" fix should push out. */
+  childId?: string;
 }
 
 export interface ConflictHubResponse {
@@ -167,7 +183,7 @@ export interface CostCategory {
 // plain-language issue carrying 2–3 suggested fixes; the owner picks one,
 // confirms, and the problem resolves.
 
-export type ProblemCategory = "conflict" | "late" | "fragile" | "weather";
+export type ProblemCategory = "conflict" | "late" | "fragile" | "weather" | "unassigned";
 export type ProblemSeverity = "critical" | "high" | "medium";
 
 /** A candidate replacement attached to a "reassign" action. */
@@ -202,6 +218,8 @@ export interface Problem {
   id: string;
   category: ProblemCategory;
   severity: ProblemSeverity;
+  /** Timeline task IDs this problem covers — used to focus the Gantt. */
+  taskIds?: string[];
   /** Short headline, e.g. "Ben Nguyen is double-booked". */
   title: string;
   projectName: string;

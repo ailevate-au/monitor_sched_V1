@@ -4,6 +4,12 @@ import { KpiCard, StatusBadge, Btn, Card } from "./Dashboard";
 import { useMasters } from "../hooks/useMasters";
 import { AppNavigate } from "../types/masters";
 import { LabelWithInfo } from "./InfoTip";
+import { useAuth } from "../lib/auth";
+import { visibleProjects as scopeProjects } from "../lib/auth";
+import { Zap, RotateCcw, Calendar, DollarSign, Download, Plus } from "lucide-react";
+import { changeHistory } from "../lib/changeHistory";
+
+const iconRow = { display: "inline-flex", alignItems: "center", gap: 6 } as const;
 
 const C = {
   navy:       "#0F1F3D",
@@ -38,10 +44,15 @@ const ProgressBar = ({ pct, color }: { pct: number; color?: string }) => (
 );
 
 export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
+  const { user } = useAuth();
   const { masters } = useMasters(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
+  // Real issue categories per project name (from the same source as Problems hub)
+  const [issuesByProject, setIssuesByProject] = useState<Record<string, Set<string>>>({});
+  const [totalIssues, setTotalIssues] = useState(0);
+  const [demoBusy, setDemoBusy] = useState(false);
 
   // New Project State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -79,6 +90,24 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   const [projectRates, setProjectRates] = useState<{ [resourceId: string]: string }>({});
   const [isSavingRates, setIsSavingRates] = useState(false);
 
+  const loadIssues = () => {
+    fetch("/api/v1/problems")
+      .then(res => res.json())
+      .then(data => {
+        const map: Record<string, Set<string>> = {};
+        for (const p of data.problems || []) {
+          for (const name of String(p.projectName || "").split(" + ")) {
+            const key = name.trim();
+            if (!key) continue;
+            (map[key] ||= new Set()).add(p.category);
+          }
+        }
+        setIssuesByProject(map);
+        setTotalIssues(data.summary?.total ?? 0);
+      })
+      .catch(() => {});
+  };
+
   const loadProjectsAndResources = () => {
     setLoading(true);
     Promise.all([
@@ -94,11 +123,33 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
         console.error("Error loading projects and resources:", err);
         setLoading(false);
       });
+    loadIssues();
   };
 
   useEffect(() => {
     loadProjectsAndResources();
   }, []);
+
+  // Demo controls — issues come from importing/changing work, so the trigger
+  // lives here next to Import. Simulate drops the problem set onto the schedule;
+  // Reset clears it. Both refresh the live issue badges.
+  const runDemo = (path: "simulate" | "reset") => {
+    setDemoBusy(true);
+    fetch(`/api/v1/demo/${path}`, { method: "POST" })
+      .then(res => res.json())
+      .then(() => {
+        setDemoBusy(false);
+        // A clean reset rebuilds the seed, so any pending Timeline "Undo last
+        // change" snapshot AND the Change History log are now stale — drop both so
+        // the buttons clear and history matches the freshly-reset schedule.
+        if (path === "reset") {
+          try { window.localStorage.removeItem("flowiq.timeline.undoSnapshot"); } catch { /* best-effort */ }
+          changeHistory.clear();
+        }
+        loadIssues();
+      })
+      .catch(() => setDemoBusy(false));
+  };
 
   const handleAddProject = () => {
     if (!name.trim() || !contractor.trim()) {
@@ -220,33 +271,67 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   };
 
   if (loading) {
-    return <div style={{ padding: 20, color: C.gray }}>Querying project contracts...</div>;
+    return <div style={{ padding: 20, color: C.gray }}>Loading projects…</div>;
   }
 
-  // Calculate sum metrics from real states
-  const totalContract = projects.reduce((sum, p) => sum + p.finalContractSum, 0);
-  const totalCertified = projects.reduce((sum, p) => sum + p.actualCost, 0);
-  const totalRetention = projects.reduce((sum, p) => sum + (p.status !== "PRACTICAL_COMPLETION" ? p.actualCost * 0.05 : 0), 0);
+  // PMs only see the projects they manage; Owner/Admin see the whole portfolio.
+  const visProjects = scopeProjects(user, projects);
+  // Simple portfolio counts (deep finance figures live on the Finance tab).
+  const activeCount = visProjects.filter(p => p.status === "ACTIVE").length;
 
   return (
     <div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:10, marginBottom:16 }}>
-        <KpiCard label="Total Contract Value" value={`A$${totalContract.toFixed(0)}M`} valueColor={C.blue} sub={`${projects.length} Tier 1 Projects`} />
-        <KpiCard label="Total Certified Cost" value={`A$${totalCertified.toFixed(1)}M`} trend="+A$2.1M over planned bounds" />
-        <KpiCard label="Retention Held (5%)" value={`A$${totalRetention.toFixed(2)}M`} sub="Held under standard AS 4000-1997" />
+        <KpiCard label="Total Projects" value={`${visProjects.length}`} valueColor={C.blue} sub={user?.role === "PM" ? "Assigned to you" : "Across the portfolio"} />
+        <KpiCard label="Active" value={`${activeCount}`} valueColor={C.green} sub="Live on site right now" />
+        <KpiCard
+          label="Total Issues"
+          value={`${totalIssues}`}
+          valueColor={totalIssues > 0 ? C.red : C.greenDark}
+          sub={totalIssues > 0 ? "Open Problems to fix" : "All clear"}
+          onClick={() => onNav?.("problems")}
+          actionLabel="Open Problems"
+        />
+      </div>
+
+      {/* Demo control strip — create or clear the problem scenario from here */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, padding: "12px 16px", borderRadius: 12, border: `1px solid ${totalIssues > 0 ? "#FECACA" : C.grayLight}`, background: totalIssues > 0 ? C.redBg : "#F8FAFC", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: totalIssues > 0 ? C.redDark : C.text }}>
+            {totalIssues > 0
+              ? `New work created ${totalIssues} problem${totalIssues > 1 ? "s" : ""} across your projects`
+              : "Everything's on track"}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.gray, marginTop: 2 }}>
+            {totalIssues > 0
+              ? "Open Problems to see each one and how to fix it."
+              : "Bring in new work to see how FlowIQ catches problems the moment they appear."}
+          </div>
+        </div>
+        {totalIssues > 0 ? (
+          <>
+            <Btn small onClick={() => onNav?.("problems")}>See Problems →</Btn>
+            <Btn small danger onClick={() => runDemo("reset")} disabled={demoBusy}>{demoBusy ? "Working…" : <span style={iconRow}><RotateCcw size={13} /> Reset to clean</span>}</Btn>
+          </>
+        ) : (
+          <Btn primary small onClick={() => runDemo("simulate")} disabled={demoBusy}>{demoBusy ? "Working…" : <span style={iconRow}><Zap size={13} /> Bring in new work</span>}</Btn>
+        )}
       </div>
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-        <span style={{ fontSize:12, fontWeight:600, color:C.gray, textTransform:"uppercase", letterSpacing:"0.05em" }}>Active Builder Programs</span>
+        <span style={{ fontSize:12, fontWeight:600, color:C.gray, textTransform:"uppercase", letterSpacing:"0.05em" }}>Active Projects</span>
         <div style={{ display: "flex", gap: 8 }}>
-          <Btn small onClick={() => { setShowImportModal(true); setImportMsg(null); }}>⤓ Import Projects</Btn>
-          <Btn primary small onClick={() => setShowAddModal(true)}>+ New Project Contract</Btn>
+          <Btn small onClick={() => { setShowImportModal(true); setImportMsg(null); }}><span style={iconRow}><Download size={13} /> Import projects</span></Btn>
+          <Btn primary small onClick={() => setShowAddModal(true)}><span style={iconRow}><Plus size={13} /> New project</span></Btn>
         </div>
       </div>
 
-      {projects.map(p => {
-        const hasConflicts = p.id === "p1" || p.id === "p2";
-        const hasFragile = p.id === "p1" || p.id === "p3";
+      {visProjects.map(p => {
+        const cats = issuesByProject[p.name] || new Set<string>();
+        const hasConflicts = cats.has("conflict");
+        const hasFragile = cats.has("fragile");
+        const hasLate = cats.has("late");
+        const hasWeather = cats.has("weather");
         const marginVal = p.id === "p1" ? 11.2 : p.id === "p2" ? 13.8 : p.id === "p3" ? 16.2 : 14.1;
 
         // Count how many overrides are active on this project
@@ -267,15 +352,16 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
               </div>
               <div style={{ display:"flex", gap:5, flexWrap:"wrap", justifyContent:"flex-end" }}>
                 {hasConflicts && <StatusBadge status="conflict" />}
+                {hasLate && <StatusBadge status="overdue" />}
                 {hasFragile && <StatusBadge status="fragile" />}
-                {p.weatherRisk && <StatusBadge status="weather" />}
+                {hasWeather && <StatusBadge status="weather" />}
                 <StatusBadge status={p.status === "PRACTICAL_COMPLETION" ? "practical" : "active"} />
               </div>
             </div>
             <div style={{ display:"flex", gap:20, fontSize:11, color:C.gray, marginBottom:10, flexWrap:"wrap", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                <span>📅 Prog. Baseline: {p.pcStartDate} to {p.pcEndDate}</span>
-                <span>💰 A${p.finalContractSum.toFixed(1)}M contract sum</span>
+                <span style={iconRow}><Calendar size={12} /> {p.pcStartDate} to {p.pcEndDate}</span>
+                <span style={iconRow}><DollarSign size={12} /> A${p.finalContractSum.toFixed(1)}M contract</span>
                 <span style={{ color: p.overBudget ? C.red : C.green }}>
                   {p.overBudget ? "↓" : "↑"} Gross Margin: {marginVal}%
                 </span>
@@ -285,11 +371,11 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {overrideCount > 0 && (
                   <span style={{ fontSize: 10, background: C.blueLight, color: C.blue, fontWeight: 700, padding: "2px 6px", borderRadius: 4 }}>
-                    {overrideCount} Custom Rate Rules Active
+                    {overrideCount} Custom Labor Rates
                   </span>
                 )}
                 <Btn small onClick={(e) => handleOpenRates(e, p)} style={{ background: C.bgSecond, color: C.navy, border: `0.5px solid ${C.grayLight}` }}>
-                  ⚙️ Labor Rate Overrides
+                  ⚙️ Adjust Labor Rates
                 </Btn>
               </div>
             </div>
@@ -302,8 +388,8 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       {showAddModal && (
         <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(15,31,61,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:99 }}>
           <div style={{ background:C.white, borderRadius:12, width: 420, padding: 22, border:`0.5px solid ${C.grayLight}`, boxShadow: "0 10px 25px rgba(0,0,0,0.1)", maxHeight: "95vh", overflowY: "auto" }}>
-            <div style={{ fontSize:14, fontWeight:600, color:C.text, marginBottom:4 }}>Register New Project</div>
-            <div style={{ fontSize:11, color:C.gray, marginBottom:16 }}>Enter the key contract details — you can update costs and dates later.</div>
+            <div style={{ fontSize:14, fontWeight:600, color:C.text, marginBottom:4 }}>Add New Project</div>
+            <div style={{ fontSize:11, color:C.gray, marginBottom:16 }}>Enter the key contract details. You can update costs and dates later.</div>
 
             {/* Row 1: Name */}
             <div style={{ marginBottom:10 }}>
@@ -473,7 +559,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
             <div style={{ background: C.blueLight, border: `1px solid ${C.blueMid}55`, borderRadius: 10, padding: "12px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: C.blue }}>Quick start</div>
-                <div style={{ fontSize: 11, color: C.gray }}>Adds 2 sample projects instantly — great for a demo.</div>
+                <div style={{ fontSize: 11, color: C.gray }}>Adds 2 sample projects instantly. Great for a demo.</div>
               </div>
               <Btn primary small disabled={importing} onClick={() => runImport({ sample: true }, "sample set")}>
                 {importing ? "Importing…" : "Load sample set"}
@@ -507,7 +593,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       {showRatesModal && selectedProj && (
         <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(15,31,61,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:99 }}>
           <Card style={{ width: 500, padding: 22, overflowY: "auto", maxHeight: "90vh" }}>
-            <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:4 }}>⚙️ Site Labor Rate Rules ({selectedProj.name})</div>
+            <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:4 }}>⚙️ Labor Rates for This Project ({selectedProj.name})</div>
             <div style={{ fontSize:11, color:C.gray, marginBottom:16 }}>Specify project-specific rates (e.g. due to Union EBA minimums, travel allowances, or remote loading). Leave blank to use subbie's default rate.</div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "50vh", overflowY: "auto", paddingRight: 6, marginBottom: 16 }}>
