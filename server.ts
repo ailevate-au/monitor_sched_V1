@@ -376,6 +376,7 @@ async function startServer() {
       name,
       start,
       end,
+      deadline,
       dependencies,
       lag_days,
       dependency_type,
@@ -414,6 +415,7 @@ async function startServer() {
       name,
       start,
       end,
+      deadline: deadline || end,
       durationDays,
       assigneeId: assigneeId || null,
       assignee: assigneeName,
@@ -440,6 +442,7 @@ async function startServer() {
     const {
       start,
       end,
+      deadline,
       cascade,
       name,
       dependencies,
@@ -456,6 +459,7 @@ async function startServer() {
     if (!task) return res.status(404).json({ error: "Task not found" });
 
     if (name !== undefined) task.name = name;
+    if (deadline !== undefined) task.deadline = deadline || null;
     if (dependencies !== undefined) task.dependencies = dependencies;
     if (lag_days !== undefined) task.lag_days = parseInt(lag_days) || 0;
     if (dependency_type !== undefined) task.dependency_type = dependency_type === "SS" ? "SS" : "FS";
@@ -877,17 +881,26 @@ async function startServer() {
       });
     }
 
-    // 2) LATE — tasks already past their end date (relative to the scenario date)
+    // 2) LATE — tasks past their end date (relative to the scenario "now"), plus —
+    // when the opt-in deadline warning is on — jobs now forecast to finish AFTER
+    // their must-finish-by deadline (behind schedule even if the end is in future).
+    const deadlineWarn = !!db.settings.deadlineWarnings?.enabled;
     const lateByProject = new Map<string, any[]>();
     for (const t of db.tasks) {
       if (t.status === "completed" || (t.percent_complete ?? 0) >= 100) continue;
-      if (new Date(t.end) >= SCENARIO_TODAY) continue;
+      const pastDue = new Date(t.end) < SCENARIO_TODAY;
+      const missesDeadline = deadlineWarn && !!t.deadline && t.end > t.deadline;
+      if (!pastDue && !missesDeadline) continue;
       if (!lateByProject.has(t.projectId)) lateByProject.set(t.projectId, []);
       lateByProject.get(t.projectId)!.push(t);
     }
     for (const [pid, tasks] of lateByProject) {
       const worst = tasks.slice().sort((a, b) => +new Date(a.end) - +new Date(b.end))[0];
-      const daysLate = Math.round((SCENARIO_TODAY.getTime() - new Date(worst.end).getTime()) / 86400000);
+      const pastDue = new Date(worst.end) < SCENARIO_TODAY;
+      const byDeadline = !pastDue && deadlineWarn && !!worst.deadline && worst.end > worst.deadline;
+      const daysLate = byDeadline
+        ? Math.round((new Date(worst.end).getTime() - new Date(worst.deadline).getTime()) / 86400000)
+        : Math.round((SCENARIO_TODAY.getTime() - new Date(worst.end).getTime()) / 86400000);
       const project = db.projects.find(p => p.id === pid);
       const actions: any[] = [{
         id: `shift:${worst.id}:10`,
@@ -918,8 +931,12 @@ async function startServer() {
         taskIds: [worst.id],
         title: `${projectNameFor(pid)} is behind schedule`,
         projectName: projectNameFor(pid),
-        what: `"${jobLabelFor(worst)}" was due ${worst.end}, now ${daysLate} day${daysLate !== 1 ? "s" : ""} late${assignee ? ` (${assignee.name}'s job)` : ""}.`,
-        impact: "This job is already late, so the jobs after it are waiting too.",
+        what: byDeadline
+          ? `"${jobLabelFor(worst)}" is now forecast to finish ${worst.end}, ${daysLate} day${daysLate !== 1 ? "s" : ""} past its ${worst.deadline} deadline${assignee ? ` (${assignee.name}'s job)` : ""}.`
+          : `"${jobLabelFor(worst)}" was due ${worst.end}, now ${daysLate} day${daysLate !== 1 ? "s" : ""} late${assignee ? ` (${assignee.name}'s job)` : ""}.`,
+        impact: byDeadline
+          ? "This job is set to miss its deadline, so the jobs after it are at risk too."
+          : "This job is already late, so the jobs after it are waiting too.",
         suggestedActions: actions,
       });
     }
@@ -1038,6 +1055,10 @@ async function startServer() {
         db.settings.tightHandover.thresholdDays = Math.min(10, Math.max(0, n));
       }
     }
+    const dw = (req.body || {}).deadlineWarnings || {};
+    if (typeof dw.enabled === "boolean") {
+      db.settings.deadlineWarnings.enabled = dw.enabled;
+    }
     runConflictDetection();
     db.save();
     res.json({ success: true, settings: db.settings, ...buildProblemsResponse() });
@@ -1137,6 +1158,7 @@ async function startServer() {
       tradeRequired: s.tradeRequired,
       start: s.start,
       end: s.end,
+      deadline: s.deadline ?? s.end,
       durationDays: s.durationDays,
       dependencies: s.dependencies,
       status: s.status,

@@ -37,6 +37,8 @@ export interface ChangeHistoryStore {
   list(): ChangeSet[];
   add(changeSet: ChangeSet): void;
   update(id: string, patch: Partial<ChangeSet>): void;
+  /** Wipe the whole log — used by "Reset to clean" so history matches the schedule. */
+  clear(): void;
 }
 
 const STORAGE_KEY = "flowiq.timeline.changeHistory";
@@ -75,6 +77,14 @@ export const localStorageChangeHistory: ChangeHistoryStore = {
   update(id, patch) {
     const sets = readAll().map((cs) => (cs.id === id ? { ...cs, ...patch } : cs));
     writeAll(sets);
+  },
+  clear() {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* best-effort */
+    }
   },
 };
 

@@ -319,6 +319,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
   const [formName, setFormName] = useState("");
   const [formStart, setFormStart] = useState("2026-06-01");
   const [formEnd, setFormEnd] = useState("2026-06-05");
+  const [formDeadline, setFormDeadline] = useState("2026-06-05");
   const [formLagDays, setFormLagDays] = useState(0);
   const [formAssigneeId, setFormAssigneeId] = useState("");
   const [formTrade, setFormTrade] = useState("Labour");
@@ -1470,6 +1471,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
     setFormName(t.name);
     setFormStart(t.start);
     setFormEnd(t.end);
+    setFormDeadline(t.deadline || t.end);
     setFormLagDays(t.lag_days || 0);
     setFormAssigneeId(t.assigneeId || "");
     setFormTrade(t.trade || "Labour");
@@ -1569,6 +1571,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
     setFormName("");
     setFormStart("2026-06-01");
     setFormEnd("2026-06-05");
+    setFormDeadline("2026-06-05");
     setFormLagDays(0);
     setFormAssigneeId("");
     setFormTrade(masters?.trades[0]?.label || "Labour");
@@ -1598,6 +1601,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       name: formName,
       start: formStart,
       end: formEnd,
+      deadline: formDeadline || formEnd,
       lag_days: Number(formLagDays) || 0,
       assigneeId: formAssigneeId || null,
       assignee: assigneeName,
@@ -1639,6 +1643,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       tradeRequired: formTrade,
       start: formStart,
       end: formEnd,
+      deadline: formDeadline || formEnd,
       durationDays,
       dependencies: formDependencies || "-",
       status: "scheduled",
@@ -3254,13 +3259,37 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                 </div>
                 <div style={{ flex:1 }}>
                   <label style={{ display:"block", fontSize:11, fontWeight:600, color:C.gray, marginBottom:4 }}>END DATE</label>
-                  <input 
+                  <input
                     type="date"
                     value={formEnd}
                     onChange={(e) => setFormEnd(e.target.value)}
                     style={{ width:"100%", padding:"6px 8px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, fontSize:12 }}
                   />
                 </div>
+              </div>
+
+              {/* Must-finish-by deadline — the planned/required finish, separate from
+                  the live end date. Drives the "behind schedule" warning when that
+                  check is turned on in Master Data → Programme settings. */}
+              <div>
+                <label style={{ display:"block", fontSize:11, fontWeight:600, color:C.gray, marginBottom:4 }}>
+                  <LabelWithInfo
+                    label="MUST FINISH BY (DEADLINE)"
+                    title="Must finish by (deadline)"
+                    body={"The date this job is supposed to finish — the planned or contractual finish.\n\nIt stays put even when the job's end date moves (e.g. after a delay or cascade). If the end date runs past this deadline, FlowIQ flags the job 'behind schedule' — but only when that check is turned on in Master Data → Programme settings."}
+                  />
+                </label>
+                <input
+                  type="date"
+                  value={formDeadline}
+                  onChange={(e) => setFormDeadline(e.target.value)}
+                  style={{ width:"100%", padding:"6px 8px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, fontSize:12 }}
+                />
+                {formDeadline && formEnd && formEnd > formDeadline && (
+                  <div style={{ fontSize:10.5, color:C.redDark, marginTop:4 }}>
+                    End date is after the deadline — this job is behind schedule.
+                  </div>
+                )}
               </div>
 
               {/* Resource Assignments */}

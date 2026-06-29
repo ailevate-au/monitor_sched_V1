@@ -7,6 +7,7 @@ import { LabelWithInfo } from "./InfoTip";
 import { useAuth } from "../lib/auth";
 import { visibleProjects as scopeProjects } from "../lib/auth";
 import { Zap, RotateCcw, Calendar, DollarSign, Download, Plus } from "lucide-react";
+import { changeHistory } from "../lib/changeHistory";
 
 const iconRow = { display: "inline-flex", alignItems: "center", gap: 6 } as const;
 
@@ -139,9 +140,11 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       .then(() => {
         setDemoBusy(false);
         // A clean reset rebuilds the seed, so any pending Timeline "Undo last
-        // change" snapshot is now stale — drop it so the button clears too.
+        // change" snapshot AND the Change History log are now stale — drop both so
+        // the buttons clear and history matches the freshly-reset schedule.
         if (path === "reset") {
           try { window.localStorage.removeItem("flowiq.timeline.undoSnapshot"); } catch { /* best-effort */ }
+          changeHistory.clear();
         }
         loadIssues();
       })

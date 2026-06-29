@@ -68,7 +68,14 @@ export class Datastore {
   // turns the fragile/tight-handover problem type on/off; `thresholdDays` is the
   // minimum acceptable working-day buffer — a handover is flagged when the gap is
   // strictly LESS than this (default 3 → flags gaps of 0/1/2 working days).
-  settings = { tightHandover: { enabled: true, thresholdDays: 3 } };
+  // `deadlineWarnings.enabled` is the opt-in "behind schedule" check: when on, a
+  // job whose live `end` runs past its `deadline` (must-finish-by date) is flagged
+  // overdue on the Timeline and surfaces as a "Running late" problem. Default OFF so
+  // the tuned demo scenario is untouched until the owner turns it on.
+  settings = {
+    tightHandover: { enabled: true, thresholdDays: 3 },
+    deadlineWarnings: { enabled: false },
+  };
   undoStack: Array<{ targetId: string; prevAssigneeId: string | null }> = [];
   conflictResolutionLog: Array<{ resourceId: string; resolvedAt: string; undone: boolean }> = [];
   conflictMetrics = {
@@ -127,7 +134,8 @@ export class Datastore {
       await prisma.task.create({
         data: {
           id: t.id, projectId: t.projectId, name: t.name, assigneeId: t.assigneeId,
-          tradeRequired: t.tradeRequired, start: t.start, end: t.end, durationDays: t.durationDays,
+          tradeRequired: t.tradeRequired, start: t.start, end: t.end,
+          deadline: (t as any).deadline ?? t.end, durationDays: t.durationDays,
           dependencies: t.dependencies, status: t.status, dependencyType: "FS", lagDays: 0,
           percentComplete:
             (t as any).percent_complete ??
@@ -208,7 +216,8 @@ export class Datastore {
 
     this.tasks = tasks.map(t => ({
       id: t.id, projectId: t.projectId, name: t.name, assigneeId: t.assigneeId,
-      tradeRequired: t.tradeRequired, start: t.start, end: t.end, durationDays: t.durationDays,
+      tradeRequired: t.tradeRequired, start: t.start, end: t.end,
+      deadline: (t as any).deadline ?? t.end, durationDays: t.durationDays,
       dependencies: t.dependencies, status: t.status as Task["status"],
       lag_days: t.lagDays,
       dependency_type: (t.dependencyType === "SS" ? "SS" : "FS") as "FS" | "SS",
@@ -273,6 +282,7 @@ export class Datastore {
       else if (t.id === "TSK-001" || t.id === "TSK-006") defaultPct = 15;
       return {
         ...t,
+        deadline: t.deadline ?? t.end,
         lag_days: t.lag_days ?? 0,
         dependency_type: t.dependency_type ?? "FS",
         cost_override: t.cost_override ?? null,
@@ -347,7 +357,8 @@ export class Datastore {
         where: { id: t.id },
         create: {
           id: t.id, projectId: t.projectId, name: t.name, assigneeId: t.assigneeId,
-          tradeRequired: t.tradeRequired, start: t.start, end: t.end, durationDays: t.durationDays,
+          tradeRequired: t.tradeRequired, start: t.start, end: t.end,
+          deadline: t.deadline ?? t.end, durationDays: t.durationDays,
           dependencies: t.dependencies, status: t.status,
           lagDays: t.lag_days ?? 0, dependencyType: t.dependency_type ?? "FS",
           costOverride: t.cost_override, costOverrideType: t.cost_override_type,
@@ -355,7 +366,8 @@ export class Datastore {
         },
         update: {
           projectId: t.projectId, name: t.name, assigneeId: t.assigneeId,
-          tradeRequired: t.tradeRequired, start: t.start, end: t.end, durationDays: t.durationDays,
+          tradeRequired: t.tradeRequired, start: t.start, end: t.end,
+          deadline: t.deadline ?? t.end, durationDays: t.durationDays,
           dependencies: t.dependencies, status: t.status,
           lagDays: t.lag_days ?? 0, dependencyType: t.dependency_type ?? "FS",
           costOverride: t.cost_override, costOverrideType: t.cost_override_type,

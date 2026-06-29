@@ -86,6 +86,7 @@ async function main() {
         tradeRequired: t.tradeRequired,
         start: t.start,
         end: t.end,
+        deadline: (t as any).deadline ?? t.end,
         durationDays: t.durationDays,
         dependencies: t.dependencies,
         status: t.status,

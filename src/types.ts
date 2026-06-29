@@ -49,6 +49,13 @@ export interface Task {
   tradeRequired: string;
   start: string;
   end: string;
+  /**
+   * "Must finish by" date — the planned/contractual finish, separate from the
+   * live `end` (which moves when a job is delayed or cascades). When the
+   * deadline-warning setting is on, a job whose `end` runs past its `deadline`
+   * is flagged "behind schedule". Defaults to the seed end date.
+   */
+  deadline?: string;
   durationDays: number;
   dependencies: string;
   status: "scheduled" | "inprogress" | "weather" | "fragile" | "conflict" | "overdue" | "completed";

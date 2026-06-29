@@ -72,7 +72,7 @@ function calculateResourceUtil(
   return Math.max(0, util);
 }
 
-function deriveExecutionStatus(task: Task, today: Date): Task["status"] {
+function deriveExecutionStatus(task: Task, today: Date, deadlineWarnEnabled: boolean): Task["status"] {
   if ((task.percent_complete ?? 0) >= 100) return "completed";
 
   const start = new Date(task.start);
@@ -80,7 +80,14 @@ function deriveExecutionStatus(task: Task, today: Date): Task["status"] {
   start.setHours(0, 0, 0, 0);
   end.setHours(0, 0, 0, 0);
 
-  if (end < today && (task.percent_complete ?? 0) < 100) return "overdue";
+  const incomplete = (task.percent_complete ?? 0) < 100;
+  // "Behind schedule": the live end has run past the must-finish-by deadline.
+  // Opt-in (db.settings.deadlineWarnings) so it never disturbs the clean baseline,
+  // where every job's end equals its deadline. ISO date strings compare correctly.
+  const missesDeadline =
+    deadlineWarnEnabled && incomplete && !!task.deadline && task.end > task.deadline;
+
+  if ((end < today && incomplete) || missesDeadline) return "overdue";
   if (start <= today && end >= today) return "inprogress";
   if (end < today) return "completed";
   return "scheduled";
@@ -265,6 +272,7 @@ export function runConflictDetection(): void {
     }
   }
 
+  const deadlineWarnEnabled = !!db.settings.deadlineWarnings?.enabled;
   for (const t of activeTasks) {
     if (t.status === "conflict") continue;
 
@@ -275,7 +283,7 @@ export function runConflictDetection(): void {
     } else if (isFragile) {
       t.status = "fragile";
     } else {
-      t.status = deriveExecutionStatus(t, today);
+      t.status = deriveExecutionStatus(t, today, deadlineWarnEnabled);
     }
   }
 
