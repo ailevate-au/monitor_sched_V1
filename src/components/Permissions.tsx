@@ -145,7 +145,7 @@ export default function ScreenPermissions() {
 
   const flashSaved = (msg: string) => {
     setStatusMsg(msg);
-    window.setTimeout(() => setStatusMsg((m) => (m === msg ? null : m)), 2500);
+    window.setTimeout(() => setStatusMsg((m) => (m === msg ? null : m)), 6000);
   };
 
   const handleToggle = async (role: PermRole, featureKey: string) => {

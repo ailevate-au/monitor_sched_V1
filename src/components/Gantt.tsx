@@ -666,11 +666,11 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
         clearDrafts();
         loadAllData();
         setSavingMsg("Reverted to the previous schedule.");
-        window.setTimeout(() => setSavingMsg(null), 3500);
+        window.setTimeout(() => setSavingMsg(null), 7000);
       })
       .catch(() => {
         setSavingMsg("Could not undo. Try again.");
-        window.setTimeout(() => setSavingMsg(null), 3000);
+        window.setTimeout(() => setSavingMsg(null), 7000);
       });
   };
 
@@ -805,11 +805,11 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
               : `Saved. ${hardConflicts} person${hardConflicts > 1 ? "s are" : " is"} booked twice. Check Problems.`)
           : "Saved."
       );
-      window.setTimeout(() => setSavingMsg(null), 4000);
+      window.setTimeout(() => setSavingMsg(null), 7000);
     } catch (err) {
       console.error("Error committing draft programme:", err);
       setSavingMsg("Could not save changes. Try again.");
-      window.setTimeout(() => setSavingMsg(null), 3000);
+      window.setTimeout(() => setSavingMsg(null), 7000);
     }
   };
 
@@ -863,7 +863,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
         };
       });
       setSavingMsg(`Draft updated: ${resource.name} assigned to ${taskDisplayName(current)} (not saved yet).`);
-      window.setTimeout(() => setSavingMsg(null), 3500);
+      window.setTimeout(() => setSavingMsg(null), 7000);
       return;
     }
 
@@ -877,7 +877,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       },
     }));
     setSavingMsg(`Draft updated: ${resource.name} assigned to ${taskDisplayName(current)} (not saved yet).`);
-    window.setTimeout(() => setSavingMsg(null), 3500);
+    window.setTimeout(() => setSavingMsg(null), 7000);
   };
 
   const applyRescheduleDraft = (taskId: string, start: string, end: string) => {
@@ -915,7 +915,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
     }
 
     setSavingMsg(`Draft updated: ${taskDisplayName(current)} moved to ${start} – ${end} (not saved yet).`);
-    window.setTimeout(() => setSavingMsg(null), 3500);
+    window.setTimeout(() => setSavingMsg(null), 7000);
   };
 
   const applySmartRecommendation = (rec: SmartRecommendation) => {
@@ -930,13 +930,13 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
   const openAdjust = (anchorId?: string) => {
     if (hasPendingDrafts) {
       setSavingMsg("Save or discard your draft changes before staging a delay.");
-      window.setTimeout(() => setSavingMsg(null), 3500);
+      window.setTimeout(() => setSavingMsg(null), 7000);
       return;
     }
     const target = anchorId || selectedTaskId || adjustCandidateTasks[0]?.id || null;
     if (!target) {
       setSavingMsg("No assigned tasks available to delay.");
-      window.setTimeout(() => setSavingMsg(null), 3000);
+      window.setTimeout(() => setSavingMsg(null), 7000);
       return;
     }
     setAdjustAnchorId(target);
@@ -992,11 +992,11 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       closeAdjust();
       loadAllData();
       setSavingMsg(`Timeline updated. ${cs.moves.length} task(s) moved.`);
-      window.setTimeout(() => setSavingMsg(null), 4000);
+      window.setTimeout(() => setSavingMsg(null), 7000);
     } catch (err) {
       console.error("Error applying timeline adjustment:", err);
       setSavingMsg("Could not apply adjustment. Try again.");
-      window.setTimeout(() => setSavingMsg(null), 3000);
+      window.setTimeout(() => setSavingMsg(null), 7000);
     }
   };
 
@@ -1016,11 +1016,11 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       setChangeSets(changeHistory.list());
       loadAllData();
       setSavingMsg("Change reverted. Tasks restored to prior dates.");
-      window.setTimeout(() => setSavingMsg(null), 3500);
+      window.setTimeout(() => setSavingMsg(null), 7000);
     } catch (err) {
       console.error("Error reverting adjustment:", err);
       setSavingMsg("Could not revert. Try again.");
-      window.setTimeout(() => setSavingMsg(null), 3000);
+      window.setTimeout(() => setSavingMsg(null), 7000);
     }
   };
 
@@ -1626,7 +1626,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
         },
       }));
       setSavingMsg("Change saved as a draft. Check for clashes, then Save.");
-      window.setTimeout(() => setSavingMsg(null), 3500);
+      window.setTimeout(() => setSavingMsg(null), 7000);
       return;
     }
 
@@ -1665,7 +1665,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       [tempId]: { kind: "create", payload },
     }));
     setSavingMsg("New job saved as a draft. Check for clashes, then Save.");
-    window.setTimeout(() => setSavingMsg(null), 3500);
+    window.setTimeout(() => setSavingMsg(null), 7000);
   };
 
   const handleReassign = (taskId: string, assigneeId: string) => {

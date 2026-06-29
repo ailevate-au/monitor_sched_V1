@@ -69,7 +69,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
       .then(() => {
         setActionMsg("Status submitted successfully.");
         setUpdatingId(null);
-        setTimeout(() => setActionMsg(null), 3000);
+        setTimeout(() => setActionMsg(null), 6000);
         loadMyData();
       })
       .catch(() => {
@@ -91,7 +91,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
       .then(() => {
         setActionMsg("Delay notice submitted. PM notified.");
         setUpdatingId(null);
-        setTimeout(() => setActionMsg(null), 3000);
+        setTimeout(() => setActionMsg(null), 6000);
         loadMyData();
       })
       .catch(() => {
