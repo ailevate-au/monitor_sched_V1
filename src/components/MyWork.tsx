@@ -165,7 +165,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
                   {/* Dates & Progression info */}
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.gray, marginBottom: 12 }}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Calendar size={12} /> {t.start} to {t.end}</span>
-                    <span>Progress: {t.percent_complete}%</span>
+                    <span>{isDone ? "Complete" : isBehind ? "Behind schedule" : "In progress"}</span>
                   </div>
 
                   {/* Operational controls */}

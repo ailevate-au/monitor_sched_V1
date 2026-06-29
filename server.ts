@@ -520,10 +520,15 @@ async function startServer() {
       task.status = "completed";
       task.pmStatus = "complete";
     } else if (pmStatus === "in_progress") {
-      if ((task.percent_complete ?? 0) <= 0) task.percent_complete = 40;
+      // "In progress" = work is underway (no percentage tracking). Force the
+      // completion value below 100 so a job that was marked Complete flips back
+      // off "complete" — the engine then re-derives the live status from dates.
+      task.percent_complete = 50;
+      task.status = "inprogress";
       task.pmStatus = "in_progress";
     } else if (pmStatus === "not_started") {
       task.percent_complete = 0;
+      task.status = "scheduled";
       task.pmStatus = "not_started";
     } else if (pmStatus === "delayed") {
       const days = parseInt(delayDays, 10) || 0;

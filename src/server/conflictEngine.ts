@@ -283,7 +283,11 @@ export function runConflictDetection(): void {
     } else if (isFragile) {
       t.status = "fragile";
     } else {
-      t.status = deriveExecutionStatus(t, today, deadlineWarnEnabled);
+      const derived = deriveExecutionStatus(t, today, deadlineWarnEnabled);
+      // Honor an explicit PM "in progress" so a job the PM is actively working
+      // shows as in-progress even if its dates don't bracket the scenario date —
+      // but never mask a real problem (overdue/etc), only a plain "scheduled".
+      t.status = t.pmStatus === "in_progress" && derived === "scheduled" ? "inprogress" : derived;
     }
   }
 

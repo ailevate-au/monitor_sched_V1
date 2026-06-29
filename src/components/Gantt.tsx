@@ -2400,7 +2400,6 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                                 {task.status === "conflict" && <AlertTriangle size={11} color="#fff" style={{ marginRight:3, flexShrink:0 }} />}
                                 {taskHasWeatherRisk(task) && <CloudRain size={11} color="#fff" style={{ marginRight:3, flexShrink:0 }} />}
                                 {taskDisplayName(task)}
-                                {(task.percent_complete ?? 0) > 0 && ` (${task.percent_complete}%)`}
                                 <div title="Drag to change the start date" style={{ position:"absolute", left:0, top:0, bottom:0, width:10, cursor:"ew-resize", background:"rgba(255,255,255,0.15)", borderRight:"0.5px solid rgba(255,255,255,0.25)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, userSelect:"none" }}
                                   onMouseDown={(e) => {
                                     if (adjustActive) return;
@@ -2764,7 +2763,6 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                               {task.assignee ? task.assignee.split(" ")[0] : "Anon"}:
                             </span>
                             {taskDisplayName(task)}
-                            {(task.percent_complete ?? 0) > 0 && ` (${task.percent_complete}%)`}
                             {task.status === "conflict" && <span style={{ width:6, height:6, background:C.red, borderRadius:"50%", border:`1px solid ${C.white}`, position:"absolute", top: 2, right: 18 }} />}
                             {task.status === "fragile"  && <span style={{ width:6, height:6, background:C.amber, borderRadius:"50%", border:`1px solid ${C.white}`, position:"absolute", top: 2, right: 18 }} />}
 
@@ -3077,7 +3075,6 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                         {task.status === "conflict" && <AlertTriangle size={11} color="#fff" style={{ marginRight: 3, flexShrink: 0 }} />}
                         <span style={{ fontSize: 9, opacity: 0.8, marginRight: 4 }}>{projShortName}:</span>
                         {taskDisplayName(task)}
-                        {(task.percent_complete ?? 0) > 0 && ` (${task.percent_complete}%)`}
 
                         {/* Drag Resize Handles (left = start date, right = end date) */}
                         <div
