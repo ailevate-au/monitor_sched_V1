@@ -862,7 +862,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
           },
         };
       });
-      setSavingMsg(`Draft updated: ${resource.name} assigned to ${taskDisplayName(current)} (not saved yet).`);
+      setSavingMsg(`Draft updated: ${resource.name} assigned to ${taskDisplayName(current)}. Click "Save programme" to apply.`);
       window.setTimeout(() => setSavingMsg(null), 7000);
       return;
     }
@@ -876,7 +876,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
         savedTask: serverTask || current,
       },
     }));
-    setSavingMsg(`Draft updated: ${resource.name} assigned to ${taskDisplayName(current)} (not saved yet).`);
+    setSavingMsg(`Draft updated: ${resource.name} assigned to ${taskDisplayName(current)}. Click "Save programme" to apply.`);
     window.setTimeout(() => setSavingMsg(null), 7000);
   };
 
@@ -914,7 +914,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       }));
     }
 
-    setSavingMsg(`Draft updated: ${taskDisplayName(current)} moved to ${start} – ${end} (not saved yet).`);
+    setSavingMsg(`Draft updated: ${taskDisplayName(current)} moved to ${start} – ${end}. Click "Save programme" to apply.`);
     window.setTimeout(() => setSavingMsg(null), 7000);
   };
 
@@ -1625,7 +1625,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
           savedTask: editingTask,
         },
       }));
-      setSavingMsg("Change saved as a draft. Check for clashes, then Save.");
+      setSavingMsg("Change added to your draft. Check for clashes, then click \"Save programme\".");
       window.setTimeout(() => setSavingMsg(null), 7000);
       return;
     }
@@ -1664,7 +1664,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       ...prev,
       [tempId]: { kind: "create", payload },
     }));
-    setSavingMsg("New job saved as a draft. Check for clashes, then Save.");
+    setSavingMsg("New job added to your draft. Check for clashes, then click \"Save programme\".");
     window.setTimeout(() => setSavingMsg(null), 7000);
   };
 
@@ -1813,7 +1813,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
             <AlertTriangle size={18} color={C.red} style={{ flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.redDark }}>
-                {groupedDraftConflicts.length} clash{groupedDraftConflicts.length > 1 ? "es" : ""}: same person booked twice, not saved yet
+                {groupedDraftConflicts.length} clash{groupedDraftConflicts.length > 1 ? "es" : ""}: same person booked twice — in your draft
               </span>
               <span style={{ fontSize: 12, color: C.text, marginLeft: 8 }}>
                 {groupedDraftConflicts.map(([, cs]) => cs[0].resourceName).join(" · ")}
@@ -2112,9 +2112,9 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
           }}
         >
           <div style={{ fontSize: 12.5, color: C.text }}>
-            <strong>Draft mode</strong> · {pendingChangeCount} unsaved change{pendingChangeCount === 1 ? "" : "s"}
+            <strong>Draft mode</strong> · {pendingChangeCount} change{pendingChangeCount === 1 ? "" : "s"}
             {draftConflicts.length > 0 ? (
-              <span style={{ color: C.redDark, fontWeight: 600 }}> · this will create a clash. You can save anyway and Undo if it's not what you wanted.</span>
+              <span style={{ color: C.redDark, fontWeight: 600 }}> · saving will create a clash. You can save anyway and use Undo to revert.</span>
             ) : (
               <span style={{ color: C.greenDark }}> · ready to save</span>
             )}

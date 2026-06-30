@@ -292,7 +292,7 @@ export default function ProgrammeSettingsPanel() {
           </button>
         )}
         {dirty && (
-          <span style={{ fontSize: 11.5, color: C.amber, fontWeight: 600 }}>Unsaved changes</span>
+          <span style={{ fontSize: 11.5, color: C.amber, fontWeight: 600 }}>Changes not applied yet</span>
         )}
         {!dirty && justSaved && (
           <span style={{ fontSize: 11.5, color: C.greenDark, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>
