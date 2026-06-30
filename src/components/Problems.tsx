@@ -266,7 +266,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
             actionLabel="See on Timeline"
           />
           <KpiCard
-            label="Urgent"
+            label="Clashes"
             value={`${summary.critical}`}
             valueColor={summary.critical > 0 ? C.redDark : C.greenDark}
             sub="Same person, two tasks at once"
