@@ -361,10 +361,12 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 6 }}>{p.title}</div>
                   {/* Row 3: what + impact */}
                   <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: 6 }}>{p.what}</div>
-                  <div style={{ fontSize: 11.5, display: "flex", gap: 5 }}>
-                    <span style={{ fontWeight: 700, color: meta.accent }}>Impact:</span>
-                    <span style={{ color: C.text }}>{p.impact}</span>
-                  </div>
+                  {p.impact && (
+                    <div style={{ fontSize: 11.5, display: "flex", gap: 5 }}>
+                      <span style={{ fontWeight: 700, color: meta.accent }}>Impact:</span>
+                      <span style={{ color: C.text }}>{p.impact}</span>
+                    </div>
+                  )}
                   {/* Row 4: View in Timeline link */}
                   {onNav && (
                     <button
