@@ -273,7 +273,7 @@ export default function ScreenConflicts({ onNav }: { onNav?: (screen: string) =>
   const { conflicts, metrics, fragileTasks } = hub;
 
   if (loading && conflicts.length === 0 && fragileTasks.length === 0) {
-    return <div style={{ padding: 20, color: C.gray }}>Checking schedule conflicts...</div>;
+    return <div style={{ padding: 20, color: C.gray }}>Checking schedule clashes...</div>;
   }
 
   if (error) {
@@ -298,7 +298,7 @@ export default function ScreenConflicts({ onNav }: { onNav?: (screen: string) =>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 3 }}>
             {conflicts.length > 0
               ? `${metrics.hardConflicts} person${metrics.hardConflicts > 1 ? "s are" : " is"} assigned to overlapping tasks`
-              : "No active conflicts"}
+              : "No active clashes"}
           </div>
           <div style={{ fontSize: 12, color: C.gray }}>
             {conflicts.length > 0
@@ -324,8 +324,8 @@ export default function ScreenConflicts({ onNav }: { onNav?: (screen: string) =>
 
       {/* Stat strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
-        <KpiCard label="Active Conflicts" value={`${metrics.hardConflicts}`} valueColor={metrics.hardConflicts > 0 ? C.red : C.greenDark} sub="Same person, two jobs at once" />
-        <KpiCard label="Tight Gaps" value={`${metrics.fragileBufferSlots}`} valueColor={C.amber} sub="Less than 1 day of spare time" />
+        <KpiCard label="Active Clashes" value={`${metrics.hardConflicts}`} valueColor={metrics.hardConflicts > 0 ? C.red : C.greenDark} sub="Same person, two tasks at once" />
+        <KpiCard label="Tight Handovers" value={`${metrics.fragileBufferSlots}`} valueColor={C.amber} sub="Less than 1 day of buffer" />
         <KpiCard label="Resolved (14 days)" value={`${metrics.resolvedThisFortnight}`} valueColor={C.greenDark} sub="Reassignments completed" />
       </div>
 
@@ -333,7 +333,7 @@ export default function ScreenConflicts({ onNav }: { onNav?: (screen: string) =>
       {conflicts.length === 0 && fragileTasks.length === 0 && (
         <div style={{ padding: "40px 20px", textAlign: "center", background: C.white, borderRadius: 12, border: `0.5px solid ${C.grayLight}` }}>
           <div style={{ fontSize: 36, marginBottom: 10 }}>🎉</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 6 }}>Programme is conflict-free</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 6 }}>Schedule is clash-free</div>
           <div style={{ fontSize: 12, color: C.gray, marginBottom: 20 }}>No double-bookings detected. Head back to the Timeline to keep scheduling.</div>
           {onNav && (
             <button type="button" onClick={() => onNav("gantt")}
@@ -439,7 +439,7 @@ export default function ScreenConflicts({ onNav }: { onNav?: (screen: string) =>
       {fragileTasks.length > 0 && (
         <div style={{ marginTop: conflicts.length > 0 ? 8 : 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 10 }}>
-            ⚡ Tight gaps — tasks with less than 1 day of spare time
+            ⚡ Tight handovers — tasks with less than 1 day of buffer
           </div>
           {fragileTasks.map((task, i) => (
             <div key={i}><FragileTaskCard task={task} /></div>

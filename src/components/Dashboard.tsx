@@ -27,8 +27,8 @@ const C = {
 
 export const StatusBadge = ({ status }: { status: string }) => {
   const map: { [key: string]: { bg: string; color: string; label: string; icon: React.ReactNode } } = {
-    conflict:   { bg: C.redBg,    color: C.redDark,  label: "Conflict",     icon: <AlertTriangle size={11} /> },
-    fragile:    { bg: C.amberBg,  color: C.amber,    label: "Tight Gap",    icon: <Zap size={11} /> },
+    conflict:   { bg: C.redBg,    color: C.redDark,  label: "Clash",        icon: <AlertTriangle size={11} /> },
+    fragile:    { bg: C.amberBg,  color: C.amber,    label: "Tight handover", icon: <Zap size={11} /> },
     weather:    { bg: "#EFF6FF",  color: "#1D4ED8",  label: "Weather Risk", icon: <CloudRain size={11} /> },
     overdue:    { bg: C.redBg,    color: C.redDark,  label: "Overdue",      icon: <AlertCircle size={11} /> },
     inprogress: { bg: C.blueLight,color: C.blue,     label: "In Progress",  icon: null },
@@ -191,7 +191,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
           <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.white, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: `1px solid #BBF7D0` }}><CheckCircle2 size={24} color={C.green} /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.greenDark, marginBottom: 2 }}>Everything's on track</div>
-            <div style={{ fontSize: 12.5, color: C.text }}>No clashes, no late jobs across your projects.</div>
+            <div style={{ fontSize: 12.5, color: C.text }}>No clashes, no late tasks across your projects.</div>
           </div>
         </div>
       )}
@@ -199,7 +199,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
       {/* FOUR SIMPLE NUMBERS — stretch full width */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 16 }}>
         <KpiCard label="Projects Running" value={`${activeCount}`} sub="Live right now" />
-        <KpiCard label="On Track" value={`${onTrackPct}%`} valueColor={C.green} sub="Jobs going to plan" />
+        <KpiCard label="On Track" value={`${onTrackPct}%`} valueColor={C.green} sub="Tasks going to plan" />
         <KpiCard
           label="Total Issues"
           value={`${issues}`}
@@ -209,10 +209,10 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
           actionLabel="Open Problems"
         />
         <KpiCard
-          label="Unassigned Jobs"
+          label="Unassigned Tasks"
           value={`${unassignedNum}`}
           valueColor={unassignedNum > 0 ? C.red : C.greenDark}
-          sub={unassignedNum > 0 ? "Need someone assigned" : "All jobs staffed"}
+          sub={unassignedNum > 0 ? "Need someone assigned" : "All tasks staffed"}
           onClick={() => onNav("problems")}
           actionLabel="Open Problems"
         />
@@ -270,7 +270,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
                   </button>
                   {open && (
                     <div style={{ padding: "0 4px 10px 34px", display: "flex", flexDirection: "column", gap: 6 }}>
-                      {ptasks.length === 0 && <div style={{ fontSize: 11.5, color: C.gray }}>No jobs scheduled yet.</div>}
+                      {ptasks.length === 0 && <div style={{ fontSize: 11.5, color: C.gray }}>No tasks scheduled yet.</div>}
                       {ptasks.map(t => (
                         <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
                           <span style={{ flex: 1, color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>

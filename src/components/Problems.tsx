@@ -50,7 +50,7 @@ const CATEGORY_META: Record<
   Problem["category"],
   { label: string; icon: React.ReactNode; accent: string; bg: string; border: string }
 > = {
-  conflict: { label: "Double-booking", icon: <TriangleAlert size={16} />, accent: C.redDark, bg: "#FFF8F8", border: "#FECACA" },
+  conflict: { label: "Clash", icon: <TriangleAlert size={16} />, accent: C.redDark, bg: "#FFF8F8", border: "#FECACA" },
   late:     { label: "Running late",   icon: <Clock size={16} />,          accent: C.amber,   bg: "#FFFBEB", border: "#FCD34D" },
   fragile:  { label: "Tight handover", icon: <Link2 size={16} />,          accent: C.amber,   bg: "#FFFBF2", border: "#FDE68A" },
   weather:  { label: "Weather risk",   icon: <CloudRain size={16} />,      accent: C.blue,    bg: "#F1F7FE", border: "#BFDBFE" },
@@ -247,7 +247,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
               ? `${summary.projectsAffected} of ${summary.projectsTotal} projects have a problem. Pick a fix for each one.`
               : crossProblems.length > 0
               ? "But one of your changes affected another project — see below."
-              : "No clashes, no late jobs, nothing to worry about."}
+              : "No clashes, no late tasks, nothing to worry about."}
           </div>
         </div>
       </div>
@@ -269,7 +269,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
             label="Urgent"
             value={`${summary.critical}`}
             valueColor={summary.critical > 0 ? C.redDark : C.greenDark}
-            sub="Same person, two jobs at once"
+            sub="Same person, two tasks at once"
             onClick={onNav && summary.critical > 0
               ? () => onNav("gantt", undefined, criticalTaskIds.length > 0 ? { ganttTaskIds: criticalTaskIds } : { ganttStatus: "conflict" })
               : undefined}
@@ -308,7 +308,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
         <div style={{ padding: "44px 20px", textAlign: "center", background: C.white, borderRadius: 12, border: `0.5px solid ${C.grayLight}` }}>
           <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}><CheckCircle2 size={40} color={C.green} /></div>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Everything's on track</div>
-          <div style={{ fontSize: 12.5, color: C.gray }}>No clashes, no late jobs. Nothing needs you right now.</div>
+          <div style={{ fontSize: 12.5, color: C.gray }}>No clashes, no late tasks. Nothing needs you right now.</div>
         </div>
       )}
 
