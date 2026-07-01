@@ -220,7 +220,7 @@ export default function TimelineAdjustPanel({
         {staged && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11 }}>
             <SummaryChip label="tasks moved" value={summary.shifted} tone="neutral" />
-            <SummaryChip label="new double-bookings" value={summary.newlyConflict} tone="danger" />
+            <SummaryChip label="new clashes" value={summary.newlyConflict} tone="danger" />
             <SummaryChip label="now tight" value={summary.newlyFragile} tone="warn" />
             <SummaryChip label="now overdue" value={summary.newlyOverdue} tone="warn" />
           </div>
@@ -264,7 +264,7 @@ export default function TimelineAdjustPanel({
         {staged && warnings.length === 0 && (
           <div style={{ fontSize: 11.5, color: C.greenDark, fontWeight: 600 }}>
             <Check size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-            No conflicts created by this adjustment.
+            No clashes created by this adjustment.
           </div>
         )}
 
@@ -290,7 +290,7 @@ export default function TimelineAdjustPanel({
             type="button"
             onClick={onConfirm}
             disabled={!staged}
-            title={staged ? "Apply this adjustment to the live programme" : "Drag the slider to stage a delay"}
+            title={staged ? "Apply this adjustment to the live schedule" : "Drag the slider to stage a delay"}
             style={{
               padding: "8px 16px",
               fontSize: 12,

@@ -690,11 +690,11 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       const first = ids.map((id) => tasksRef.current.find((t) => t.id === id)).find(Boolean);
       const newCount = draftNewTasks.length;
       if (first) return taskDisplayName(first);
-      if (newCount > 0) return `${newCount} new job${newCount === 1 ? "" : "s"}`;
+      if (newCount > 0) return `${newCount} new task${newCount === 1 ? "" : "s"}`;
       return "Schedule change";
     })();
 
-    setSavingMsg("Saving programme changes…");
+    setSavingMsg("Saving schedule changes…");
     try {
       const dateAndEditIds = Object.entries(pendingDrafts).filter(
         ([, d]) => d.kind === "dates" || d.kind === "edit"
@@ -862,7 +862,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
           },
         };
       });
-      setSavingMsg(`Draft updated: ${resource.name} assigned to ${taskDisplayName(current)} (not saved yet).`);
+      setSavingMsg(`Draft updated: ${resource.name} assigned to ${taskDisplayName(current)}. Click "Save schedule" to apply.`);
       window.setTimeout(() => setSavingMsg(null), 7000);
       return;
     }
@@ -876,7 +876,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
         savedTask: serverTask || current,
       },
     }));
-    setSavingMsg(`Draft updated: ${resource.name} assigned to ${taskDisplayName(current)} (not saved yet).`);
+    setSavingMsg(`Draft updated: ${resource.name} assigned to ${taskDisplayName(current)}. Click "Save schedule" to apply.`);
     window.setTimeout(() => setSavingMsg(null), 7000);
   };
 
@@ -914,7 +914,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       }));
     }
 
-    setSavingMsg(`Draft updated: ${taskDisplayName(current)} moved to ${start} – ${end} (not saved yet).`);
+    setSavingMsg(`Draft updated: ${taskDisplayName(current)} moved to ${start} – ${end}. Click "Save schedule" to apply.`);
     window.setTimeout(() => setSavingMsg(null), 7000);
   };
 
@@ -959,7 +959,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       const ok = window.confirm(
         `This adjustment creates ${warningMessages.length} warning(s):\n\n` +
           warningMessages.slice(0, 8).join("\n") +
-          `\n\nConfirm and apply to the live programme anyway?`
+          `\n\nConfirm and apply to the live schedule anyway?`
       );
       if (!ok) return;
     }
@@ -1491,7 +1491,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
   const applyPmStatus = (task: Task, pmStatus: "not_started" | "in_progress" | "complete" | "delayed") => {
     let delayDays = 0;
     if (pmStatus === "delayed") {
-      const raw = window.prompt("How many working days is this job delayed?", "5");
+      const raw = window.prompt("How many working days is this task delayed?", "5");
       if (raw === null) return;
       delayDays = parseInt(raw, 10) || 0;
       if (delayDays === 0) return;
@@ -1509,7 +1509,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
     })
       .then(r => r.json())
       .then(res => {
-        if (!res.success) { alert(res.error || "Could not update the job."); return; }
+        if (!res.success) { alert(res.error || "Could not update the task."); return; }
         if (pmStatus === "delayed") {
           setPmCascadeNote({ newIssues: res.newIssues ?? 0, taskName: taskDisplayName(task) });
           // Log the delay + its cascade to Change History (visible to the owner too).
@@ -1564,7 +1564,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
         }
         loadAllData();
       })
-      .catch(() => alert("Network error while updating the job."));
+      .catch(() => alert("Network error while updating the task."));
   };
 
   // Open Create Dialog
@@ -1625,7 +1625,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
           savedTask: editingTask,
         },
       }));
-      setSavingMsg("Change saved as a draft. Check for clashes, then Save.");
+      setSavingMsg("Change added to your draft. Check for clashes, then click \"Save schedule\".");
       window.setTimeout(() => setSavingMsg(null), 7000);
       return;
     }
@@ -1664,7 +1664,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       ...prev,
       [tempId]: { kind: "create", payload },
     }));
-    setSavingMsg("New job saved as a draft. Check for clashes, then Save.");
+    setSavingMsg("New task added to your draft. Check for clashes, then click \"Save schedule\".");
     window.setTimeout(() => setSavingMsg(null), 7000);
   };
 
@@ -1727,7 +1727,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
   };
 
   if (loading) {
-    return <div style={{ padding: 25, color: C.gray, textAlign: "center", fontSize: 14 }}>Loading programme...</div>;
+    return <div style={{ padding: 25, color: C.gray, textAlign: "center", fontSize: 14 }}>Loading schedule...</div>;
   }
 
   // Committed problems on this schedule, scoped to what the viewer can see.
@@ -1740,7 +1740,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
     return acc;
   }, {});
   const ISSUE_META: Record<string, { label: string; color: string }> = {
-    conflict:   { label: "Double-booking", color: C.red },
+    conflict:   { label: "Clash", color: C.red },
     late:       { label: "Running late",   color: C.redDark },
     fragile:    { label: "Tight handover", color: C.amber },
     weather:    { label: "Weather risk",   color: C.blue },
@@ -1777,8 +1777,8 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
             : <Check size={16} color={C.greenDark} style={{ flexShrink: 0 }} />}
           <span style={{ flex: 1, minWidth: 200, fontSize: 12.5, color: pmCascadeNote.newIssues > 0 ? C.amber : C.greenDark, fontWeight: 600 }}>
             {pmCascadeNote.newIssues > 0
-              ? `Delaying "${pmCascadeNote.taskName}" moved the jobs that follow, and created ${pmCascadeNote.newIssues} new issue${pmCascadeNote.newIssues > 1 ? "s" : ""} across the portfolio.${isPM ? " Some may be on projects you don't manage. The owner will see them." : ""}`
-              : `Delaying "${pmCascadeNote.taskName}" moved the dependent jobs. No new clashes.`}
+              ? `Delaying "${pmCascadeNote.taskName}" moved the tasks that follow, and created ${pmCascadeNote.newIssues} new issue${pmCascadeNote.newIssues > 1 ? "s" : ""} across the portfolio.${isPM ? " Some may be on projects you don't manage. The owner will see them." : ""}`
+              : `Delaying "${pmCascadeNote.taskName}" moved the dependent tasks. No new clashes.`}
           </span>
           {!isPM && pmCascadeNote.newIssues > 0 && onNav && (
             <button type="button" onClick={() => onNav("problems")} style={{ padding: "5px 11px", fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: "none", background: C.blue, color: C.white, cursor: "pointer" }}>See Problems →</button>
@@ -1813,7 +1813,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
             <AlertTriangle size={18} color={C.red} style={{ flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.redDark }}>
-                {groupedDraftConflicts.length} clash{groupedDraftConflicts.length > 1 ? "es" : ""}: same person booked twice, not saved yet
+                {groupedDraftConflicts.length} clash{groupedDraftConflicts.length > 1 ? "es" : ""}: same person booked twice{hasPendingDrafts ? " — in your draft" : ""}
               </span>
               <span style={{ fontSize: 12, color: C.text, marginLeft: 8 }}>
                 {groupedDraftConflicts.map(([, cs]) => cs[0].resourceName).join(" · ")}
@@ -1845,7 +1845,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                 return (
                   <div key={resourceId} style={{ background: C.white, borderRadius: 10, border: `1px solid #FECACA`, padding: "12px 14px" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: C.redDark, marginBottom: 6 }}>
-                      {primary.resourceName} — booked on two jobs at once
+                      {primary.resourceName} — booked on two tasks at once
                     </div>
                     {conflicts.map((c, idx) => (
                       <div key={idx} style={{ fontSize: 12, color: C.text, marginBottom: 4 }}>
@@ -1879,7 +1879,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                           {recommendations.map((rec, idx) => (
                             <div key={rec.id} style={{ padding: "10px 12px", borderRadius: 8, border: `1px solid ${idx === 0 ? C.green : C.grayLight}`, background: idx === 0 ? C.greenBg : C.white }}>
                               <div style={{ fontSize: 10.5, fontWeight: 700, color: idx === 0 ? C.greenDark : C.gray, marginBottom: 4 }}>
-                                {idx === 0 ? "Best fix" : `Option ${idx + 1}`} · {rec.id.startsWith("push14") ? "Push 2 weeks" : rec.kind === "reschedule" ? "Move dates" : "Give job to someone else"}
+                                {idx === 0 ? "Best fix" : `Option ${idx + 1}`} · {rec.id.startsWith("push14") ? "Push 2 weeks" : rec.kind === "reschedule" ? "Move dates" : "Give task to someone else"}
                               </div>
                               <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text, marginBottom: 2 }}>{rec.headline}</div>
                               <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.45, marginBottom: 8 }}>{rec.detail}</div>
@@ -2034,8 +2034,8 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
           <option value="scheduled">Scheduled</option>
           <option value="inprogress">In progress</option>
           <option value="completed">Completed</option>
-          <option value="conflict">Conflict</option>
-          <option value="fragile">Tight gap</option>
+          <option value="conflict">Clash</option>
+          <option value="fragile">Tight handover</option>
           <option value="weather">Weather risk</option>
           <option value="overdue">Overdue</option>
         </select>
@@ -2112,9 +2112,9 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
           }}
         >
           <div style={{ fontSize: 12.5, color: C.text }}>
-            <strong>Draft mode</strong> · {pendingChangeCount} unsaved change{pendingChangeCount === 1 ? "" : "s"}
+            <strong>Draft mode</strong> · {pendingChangeCount} change{pendingChangeCount === 1 ? "" : "s"}
             {draftConflicts.length > 0 ? (
-              <span style={{ color: C.redDark, fontWeight: 600 }}> · this will create a clash. You can save anyway and Undo if it's not what you wanted.</span>
+              <span style={{ color: C.redDark, fontWeight: 600 }}> · saving will create a clash. You can save anyway and use Undo to revert.</span>
             ) : (
               <span style={{ color: C.greenDark }}> · ready to save</span>
             )}
@@ -2139,7 +2139,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
             <button
               type="button"
               onClick={() => void commitDrafts()}
-              title="Save to live programme"
+              title="Save to live schedule"
               style={{
                 padding: "7px 14px",
                 fontSize: 12,
@@ -2151,7 +2151,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                 cursor: "pointer",
               }}
             >
-              {draftConflicts.length > 0 ? "Save anyway" : "Save programme"}
+              {draftConflicts.length > 0 ? "Save anyway" : "Save schedule"}
             </button>
           </div>
         </div>
@@ -2189,9 +2189,9 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
       {/* Legend rail – hides in History mode for clarity */}
       {scheduleViewMode !== "history" && (
         <div style={{ display:"flex", gap:16, alignItems:"center", fontSize:12, color:C.textMuted, flexWrap: "wrap", marginBottom:14 }}>
-          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.red, borderRadius:"50%", display:"inline-block" }} />Conflict</span>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.red, borderRadius:"50%", display:"inline-block" }} />Clash</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.redDark, borderRadius:"50%", display:"inline-block" }} />Late</span>
-          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.amber, borderRadius:"50%", display:"inline-block" }} />Fragile</span>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.amber, borderRadius:"50%", display:"inline-block" }} />Tight handover</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.blue, borderRadius:"50%", display:"inline-block" }} />Weather</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.green, borderRadius:"50%", display:"inline-block" }} />Done</span>
           <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, background:C.blueMid, borderRadius:"50%", display:"inline-block" }} />On track</span>
@@ -2328,7 +2328,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                             <div style={{ minWidth:0 }}>
                               <div style={{ fontSize:12, fontWeight:600, color: isConflicted ? C.redDark : C.text, display:"flex", alignItems:"center", gap:4 }}>
                                 {res?.name || "Unknown"}
-                                {isConflicted && <span style={{ fontSize:10, background:C.redBg, color:C.redDark, padding:"1px 5px", borderRadius:4, fontWeight:700, flexShrink:0, display:"inline-flex", alignItems:"center", gap:3 }}><AlertTriangle size={10} /> Conflict</span>}
+                                {isConflicted && <span style={{ fontSize:10, background:C.redBg, color:C.redDark, padding:"1px 5px", borderRadius:4, fontWeight:700, flexShrink:0, display:"inline-flex", alignItems:"center", gap:3 }}><AlertTriangle size={10} /> Clash</span>}
                               </div>
                               <div style={{ fontSize:9.5, color:C.gray }}>{res?.trade || ""} · {res?.state || ""}</div>
                             </div>
@@ -2695,7 +2695,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                               {task.assignee} · {task.trade}
                               {depTask && (
                                 <span style={{ color: C.purple }}
-                                  title={`Starts after "${depTask.name}" finishes (${task.dependency_type || "FS"}). Move that job and this one moves too.`}>
+                                  title={`Starts after "${depTask.name}" finishes (${task.dependency_type || "FS"}). Move that task and this one moves too.`}>
                                   {"  ·  ↳ after "}{taskDisplayName(depTask)}{task.dependency_type === "SS" ? " (starts together)" : ""}
                                 </span>
                               )}
@@ -2915,11 +2915,11 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
             ))}
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, marginLeft: "auto" }}>
               <span style={{ width: 10, height: 10, borderRadius: 3, background: C.red, display: "inline-block" }} />
-              <span style={{ color: C.redDark, fontWeight: 600 }}>Conflict</span>
+              <span style={{ color: C.redDark, fontWeight: 600 }}>Clash</span>
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11 }}>
               <span style={{ width: 10, height: 10, borderRadius: 3, background: C.amber, display: "inline-block" }} />
-              <span style={{ color: C.amber, fontWeight: 600 }}>Fragile</span>
+              <span style={{ color: C.amber, fontWeight: 600 }}>Tight handover</span>
             </span>
           </div>
           <div ref={timelineScrollRef} style={{ overflow:"auto", maxHeight: GANTT_SCROLL_MAX_HEIGHT, flex: 1 }}>
@@ -3269,13 +3269,13 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
 
               {/* Must-finish-by deadline — the planned/required finish, separate from
                   the live end date. Drives the "behind schedule" warning when that
-                  check is turned on in Master Data → Programme settings. */}
+                  check is turned on in Master Data → Schedule settings. */}
               <div>
                 <label style={{ display:"block", fontSize:11, fontWeight:600, color:C.gray, marginBottom:4 }}>
                   <LabelWithInfo
                     label="MUST FINISH BY (DEADLINE)"
                     title="Must finish by (deadline)"
-                    body={"The date this job is supposed to finish — the planned or contractual finish.\n\nIt stays put even when the job's end date moves (e.g. after a delay or cascade). If the end date runs past this deadline, FlowIQ flags the job 'behind schedule' — but only when that check is turned on in Master Data → Programme settings."}
+                    body={"The date this task is supposed to finish — the planned or contractual finish.\n\nIt stays put even when the task's end date moves (e.g. after a delay or cascade). If the end date runs past this deadline, FlowIQ flags the task 'behind schedule' — but only when that check is turned on in Master Data → Schedule settings."}
                   />
                 </label>
                 <input
@@ -3286,7 +3286,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                 />
                 {formDeadline && formEnd && formEnd > formDeadline && (
                   <div style={{ fontSize:10.5, color:C.redDark, marginTop:4 }}>
-                    End date is after the deadline — this job is behind schedule.
+                    End date is after the deadline — this task is behind schedule.
                   </div>
                 )}
               </div>
@@ -3439,7 +3439,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
               {editingTask && !editingTask.id.startsWith("DRAFT-") && !editingTask.id.startsWith("DRAFT") && (
                 <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, background: "#F8FAFC", border: `0.5px solid ${C.grayLight}` }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, marginBottom: 8 }}>
-                    Job status {isPM ? "(you manage this job)" : ""}
+                    Task status {isPM ? "(you manage this task)" : ""}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     <button type="button" onClick={() => applyPmStatus(editingTask, "in_progress")}
@@ -3452,12 +3452,12 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
                     </button>
                     <button type="button" onClick={() => applyPmStatus(editingTask, "delayed")}
                       style={{ padding: "6px 12px", borderRadius: 7, background: C.amberBg, border: `0.5px solid #FCD34D`, color: C.amber, fontSize: 11.5, fontWeight: 600, cursor: "pointer", display:"inline-flex", alignItems:"center", gap:6 }}
-                      title="Push this job out by N working days. Jobs that depend on it move too.">
+                      title="Push this task out by N working days. Tasks that depend on it move too.">
                       <Clock size={12} /> Mark delayed…
                     </button>
                   </div>
                   <div style={{ fontSize: 10.5, color: C.gray, marginTop: 6 }}>
-                    Delaying a job moves the jobs that depend on it — and can create clashes on other projects.
+                    Delaying a task moves the tasks that depend on it — and can create clashes on other projects.
                   </div>
                 </div>
               )}

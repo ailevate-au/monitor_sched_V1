@@ -35,7 +35,7 @@ const C = {
 const ProgressBar = ({ pct, color }: { pct: number; color?: string }) => (
   <div style={{ marginTop:8 }}>
     <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.gray, marginBottom:3 }}>
-      <span>Programme progress</span><span>{pct}%</span>
+      <span>Schedule progress</span><span>{pct}%</span>
     </div>
     <div style={{ height:5, borderRadius:3, background:C.bgSecond }}>
       <div style={{ height:"100%", borderRadius:3, background:color||C.blueMid, width:`${pct}%` }} />
@@ -478,7 +478,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
             {/* Row 6: Programme dates */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
               <div>
-                <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Programme Start *</label>
+                <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Schedule Start *</label>
                 <input
                   type="date"
                   value={pcStartDate}
@@ -491,7 +491,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
                   <LabelWithInfo
                     label="Practical Completion *"
                     title="Practical Completion (PC)"
-                    body={"Contract deadline for project completion. LD exposure is calculated from this date if the programme overruns."}
+                    body={"Contract deadline for project completion. LD exposure is calculated from this date if the schedule overruns."}
                   />
                 </label>
                 <input

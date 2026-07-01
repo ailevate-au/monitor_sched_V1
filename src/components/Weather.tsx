@@ -177,7 +177,7 @@ export default function ScreenWeather() {
             <span>Bad weather coming</span>
           </div>
           <p style={{ fontSize: 12.5, color: C.redDark, margin: 0, lineHeight: 1.5 }}>
-            {weatherAlertText} Outdoor work like concrete pours, crane lifts and digging may need to stop. You can move those jobs to a clear day, or claim the lost time so it doesn't count against you.
+            {weatherAlertText} Outdoor work like concrete pours, crane lifts and digging may need to stop. You can move those tasks to a clear day, or claim the lost time so it doesn't count against you.
           </p>
         </div>
       ) : (
@@ -271,7 +271,7 @@ export default function ScreenWeather() {
             <div style={{ fontSize: 11, fontWeight: 600, color: C.text }}>How to claim it:</div>
             <ul style={{ fontSize: 11, color: C.gray, margin: "6px 0 0 16px", padding: 0, lineHeight: 1.4 }}>
               <li>Note the rain and wind in the site diary each day</li>
-              <li>Move the affected job to a later, clear day</li>
+              <li>Move the affected task to a later, clear day</li>
               <li>Send the proof to the client's rep for sign-off</li>
             </ul>
           </div>
@@ -329,7 +329,7 @@ export default function ScreenWeather() {
       {rescheduleTask && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15,31,61,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99 }}>
           <Card style={{ width: 360, padding: 22 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Move this job past the rain</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Move this task past the rain</div>
             <div style={{ fontSize: 12, color: C.gray, marginBottom: 10 }}>
               Moving: <strong style={{ color: C.text }}>{rescheduleTask.id} · {rescheduleTask.name}</strong>
             </div>

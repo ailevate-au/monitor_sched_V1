@@ -45,14 +45,14 @@ interface RecentExport {
 }
 
 const REPORTS_BASE: ReportDef[] = [
-  { icon: <BarChart3 size={18} color={C.blue} />, title: "All-Projects Programme Report", sub: "How the schedule is tracking and delivery status for the selected project", color: C.blue, category: "schedule", exportType: "Portfolio-Programme", metrics: [] },
+  { icon: <BarChart3 size={18} color={C.blue} />, title: "All-Projects Schedule Report", sub: "How the schedule is tracking and delivery status for the selected project", color: C.blue, category: "schedule", exportType: "Portfolio-Programme", metrics: [] },
   { icon: <DollarSign size={18} color={C.green} />, title: "Financial Variance Report", sub: "Contract sums, budget variance, and margin for selected project", color: C.green, category: "finance", exportType: "Financial-Variance-Ledger", metrics: [] },
   { icon: <ClipboardList size={18} color={C.amber} />, title: "Project Expense Summary", sub: "Recorded expenses and retention balance for selected project", color: C.amber, category: "finance", exportType: "Project-Expense-Summary", metrics: [] },
 ];
 
 const RECENT: RecentExport[] = [
   { icon: <FileText size={16} color={C.amber} />, name: "Project Expense Summary, May 2025.pdf", by: "S. Hughes", when: "3 hours ago", size: "1.8MB", type: "Project-Expense-Summary", category: "finance" },
-  { icon: <BarChart3 size={16} color={C.blue} />, name: "Portfolio Programme Report.xlsx", by: "M. O'Brien", when: "yesterday", size: "2.1MB", type: "Portfolio-Programme", category: "schedule" },
+  { icon: <BarChart3 size={16} color={C.blue} />, name: "Portfolio Schedule Report.xlsx", by: "M. O'Brien", when: "yesterday", size: "2.1MB", type: "Portfolio-Programme", category: "schedule" },
   { icon: <ShieldCheck size={16} color={C.green} />, name: "WHS Safety Council Audit, May 2025.pdf", by: "S. Hughes", when: "2 days ago", size: "940KB", type: "WHS-Compliance", category: "safety" },
 ];
 

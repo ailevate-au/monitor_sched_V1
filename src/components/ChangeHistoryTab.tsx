@@ -95,7 +95,7 @@ export default function ChangeHistoryTab({
           No changes yet
         </div>
         <div style={{ fontSize: 12 }}>
-          Move a job, change a date, or mark one delayed. Every change shows up here, and you can
+          Move a task, change a date, or mark one delayed. Every change shows up here, and you can
           undo it.
         </div>
       </div>
@@ -273,7 +273,7 @@ export default function ChangeHistoryTab({
                 </div>
                 <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.5, marginBottom: 8 }}>
                   This restores the original dates for all {cs.moves.length} task
-                  {cs.moves.length === 1 ? "" : "s"} in one step. Double-bookings, tight gaps and
+                  {cs.moves.length === 1 ? "" : "s"} in one step. Clashes, tight handovers and
                   overdue flags will be recalculated and may change across the app.
                 </div>
 

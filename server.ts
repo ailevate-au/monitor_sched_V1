@@ -846,7 +846,7 @@ async function startServer() {
         what: conflictTasks.length >= 2
           ? `${c.resource} is needed on ${conflictTasks.length} jobs at once${crossProject ? " (on different projects)" : ""}: ${conflictTasks.map(t => `"${jobLabelFor(t)}" (${t.start} to ${t.end})`).join(" and ")}.`
           : c.desc,
-        impact: "The same person can't be on two jobs at once. One of them will slip unless you fix it.",
+        impact: "",
         suggestedActions: actions,
       });
     }

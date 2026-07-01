@@ -127,14 +127,14 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
       {/* Active Work summary tab */}
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 700, color: C.navy, margin: 0, textTransform: "uppercase", letterSpacing: "0.03em" }}>📍 My Jobs This Week</h2>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: C.navy, margin: 0, textTransform: "uppercase", letterSpacing: "0.03em" }}>📍 My Tasks This Week</h2>
           <span style={{ background: C.blueLight, color: C.blue, fontSize: 10, padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>June Week 1</span>
         </div>
 
         {loading ? (
           <div style={{ textAlign: "center", padding: 24, fontSize: 12, color: C.gray }}>Loading your schedule…</div>
         ) : tasks.length === 0 ? (
-          <div style={{ background: C.white, borderRadius: 12, padding: 18, textAlign: "center", fontSize: 12, color: C.gray }}>No jobs assigned this week.</div>
+          <div style={{ background: C.white, borderRadius: 12, padding: 18, textAlign: "center", fontSize: 12, color: C.gray }}>No tasks assigned this week.</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {tasks.map(t => {
@@ -196,7 +196,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
                         disabled={updatingId === t.id}
                         onClick={() => handleReportBehind(t.id)}
                         style={{ padding: "6px 10px", fontSize: 11, background: C.redBg, color: C.red, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}
-                        title="Tell your manager this job is running behind"
+                        title="Tell your manager this task is running behind"
                       >
                         <AlertTriangle size={12} /> Report a delay
                       </button>
@@ -231,7 +231,7 @@ export default function MyWork({ onToggleRole }: MyWorkProps) {
 
       {/* Constraints disclosure */}
       <div style={{ padding: 12, background: "#F8FAFC", borderRadius: 10, border: `0.5px solid ${C.grayLight}`, fontSize: 11, color: C.gray, lineHeight: 1.4 }}>
-         ℹ️ <strong>What you can see</strong>: As an on-site team member, you can only view your own jobs. Pricing, the full programme, and other people's schedules are not shown here.
+         ℹ️ <strong>What you can see</strong>: As an on-site team member, you can only view your own tasks. Pricing, the full schedule, and other people's schedules are not shown here.
       </div>
 
     </div>
