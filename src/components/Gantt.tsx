@@ -1813,7 +1813,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
             <AlertTriangle size={18} color={C.red} style={{ flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.redDark }}>
-                {groupedDraftConflicts.length} clash{groupedDraftConflicts.length > 1 ? "es" : ""}: same person booked twice — in your draft
+                {groupedDraftConflicts.length} clash{groupedDraftConflicts.length > 1 ? "es" : ""}: same person booked twice{hasPendingDrafts ? " — in your draft" : ""}
               </span>
               <span style={{ fontSize: 12, color: C.text, marginLeft: 8 }}>
                 {groupedDraftConflicts.map(([, cs]) => cs[0].resourceName).join(" · ")}
