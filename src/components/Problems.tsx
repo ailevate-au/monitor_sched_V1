@@ -279,6 +279,56 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
         </div>
       )}
 
+      {/* Impact by project — the overall view: issues per project + how much
+          delay is at risk (sum of the least delay each problem needs; 0 when a
+          substitute is available). Click a project to open it on the Timeline. */}
+      {summary.total > 0 && (() => {
+        const byProject = new Map<string, { count: number; days: number }>();
+        for (const p of problems) {
+          const md = minDelayToFix(p.suggestedActions) ?? 0;
+          for (const name of splitProjects(p.projectName)) {
+            const cur = byProject.get(name) || { count: 0, days: 0 };
+            cur.count += 1;
+            cur.days += md;
+            byProject.set(name, cur);
+          }
+        }
+        const rows = Array.from(byProject.entries()).sort((a, b) => b[1].days - a[1].days || b[1].count - a[1].count);
+        if (rows.length === 0) return null;
+        return (
+          <div style={{ marginBottom: 20, border: `1px solid ${C.grayLight}`, borderRadius: 12, background: C.white, padding: "12px 14px" }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: C.gray, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
+              Impact by project
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {rows.map(([name, imp]) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => onNav?.("gantt")}
+                  title={onNav ? "Open this project on the Timeline" : undefined}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                    width: "100%", textAlign: "left", cursor: onNav ? "pointer" : "default",
+                    background: "#F8FAFC", border: `1px solid ${C.grayLight}`, borderRadius: 8, padding: "8px 11px",
+                  }}
+                >
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{name}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: C.gray }}>
+                      {imp.count} issue{imp.count === 1 ? "" : "s"}
+                    </span>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: imp.days > 0 ? C.amberBg : C.greenBg, color: imp.days > 0 ? C.amber : C.greenDark }}>
+                      {imp.days > 0 ? `up to ${imp.days}d at risk` : "no delay needed"}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* PM blind-spot notice — a change of theirs clashed into a project they
           don't manage. Read-only: only the owner can see the detail and fix it. */}
       {isPM && crossProblems.length > 0 && (
@@ -361,6 +411,15 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 6 }}>{p.title}</div>
                   {/* Row 3: what + impact */}
                   <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: 6 }}>{p.what}</div>
+                  {(() => {
+                    const md = minDelayToFix(p.suggestedActions);
+                    if (md === null) return null;
+                    return (
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: md === 0 ? C.greenDark : C.amber, marginBottom: 6 }}>
+                        {md === 0 ? "Fixable with no delay" : `Least delay to clear: ${md} day${md === 1 ? "" : "s"}`}
+                      </div>
+                    );
+                  })()}
                   {p.impact && (
                     <div style={{ fontSize: 11.5, display: "flex", gap: 5 }}>
                       <span style={{ fontWeight: 700, color: meta.accent }}>Impact:</span>
@@ -399,13 +458,9 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
                       : <ChevronUp size={15} color={C.gray} />}
                   </button>
 
-                  {/* Action rows */}
+                  {/* Action rows — grouped/filterable by fix type */}
                   {!fixesCollapsed && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingBottom: 14 }}>
-                      {p.suggestedActions.map(a => (
-                        <ActionRow key={a.id} action={a} onPick={() => setPending({ problem: p, action: a })} />
-                      ))}
-                    </div>
+                    <ProblemFixes actions={p.suggestedActions} onPick={(a) => setPending({ problem: p, action: a })} />
                   )}
                 </div>
               </>
@@ -424,6 +479,73 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
           onConfirm={confirmResolve}
         />
       )}
+    </div>
+  );
+}
+
+// ── Suggested-fix grouping ───────────────────────────────────────────
+// Group the fix options so a cluttered list becomes scannable: substitutes
+// (swap in another person, no date move), timeline shifts (push dates), and
+// deadline changes. Drives the filter pills on each problem.
+const FIX_GROUPS: { key: string; label: string; kinds: ProblemAction["kind"][] }[] = [
+  { key: "substitutes", label: "Substitutes",      kinds: ["reassign"] },
+  { key: "shifts",      label: "Timeline shifts",  kinds: ["accept_delay"] },
+  { key: "deadline",    label: "Deadline changes", kinds: ["extend_deadline"] },
+];
+
+function groupKeyForAction(a: ProblemAction): string {
+  return FIX_GROUPS.find(g => g.kinds.includes(a.kind))?.key ?? "other";
+}
+
+// Smallest schedule slip needed to clear a problem: 0 if a substitute (a
+// no-date-move reassign) exists, else the least delay among the shift options,
+// or null if we can't tell.
+function minDelayToFix(actions: ProblemAction[]): number | null {
+  if (actions.some(a => a.kind === "reassign")) return 0;
+  const delays = actions.map(a => Math.abs(a.delayDays ?? 0)).filter(d => d > 0);
+  return delays.length ? Math.min(...delays) : null;
+}
+
+function FilterPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, cursor: "pointer",
+        border: `1px solid ${active ? C.blue : C.grayLight}`,
+        background: active ? C.blue : C.white,
+        color: active ? C.white : C.gray,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+// One problem's fixes: filter pills (only when there's more than one fix type)
+// plus the action rows, narrowed to the chosen type.
+function ProblemFixes({ actions, onPick }: { actions: ProblemAction[]; onPick: (a: ProblemAction) => void }) {
+  const [filter, setFilter] = useState<string>("all");
+  const groups = FIX_GROUPS
+    .map(g => ({ ...g, count: actions.filter(a => g.kinds.includes(a.kind)).length }))
+    .filter(g => g.count > 0);
+  const showPills = groups.length > 1;
+  const visible = filter === "all" ? actions : actions.filter(a => groupKeyForAction(a) === filter);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingBottom: 14 }}>
+      {showPills && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingTop: 2 }}>
+          <FilterPill label={`All (${actions.length})`} active={filter === "all"} onClick={() => setFilter("all")} />
+          {groups.map(g => (
+            <FilterPill key={g.key} label={`${g.label} (${g.count})`} active={filter === g.key} onClick={() => setFilter(g.key)} />
+          ))}
+        </div>
+      )}
+      {visible.map(a => (
+        <ActionRow key={a.id} action={a} onPick={() => onPick(a)} />
+      ))}
     </div>
   );
 }
@@ -454,11 +576,15 @@ function ActionRow({ action, onPick }: { action: ProblemAction; onPick: () => vo
           {action.label}
           {recommended && <span style={{ fontSize: 9.5, background: C.green, color: C.white, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>RECOMMENDED</span>}
           {r && r.same_state === false && <span style={{ fontSize: 9.5, background: C.amberBg, color: C.amber, padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>Interstate · {r.state}</span>}
-          {action.delayDays != null && action.delayDays !== 0 && (
-            <span style={{ fontSize: 9.5, background: "#F1F5F9", color: C.gray, padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
-              {action.delayDays > 0 ? `+${action.delayDays}d` : `${action.delayDays}d`} shift
+          {action.kind === "reassign" ? (
+            <span style={{ fontSize: 9.5, background: C.greenBg, color: C.greenDark, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>
+              Keeps dates
             </span>
-          )}
+          ) : action.delayDays != null && action.delayDays !== 0 ? (
+            <span style={{ fontSize: 9.5, background: C.amberBg, color: C.amber, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>
+              Delays {Math.abs(action.delayDays)} day{Math.abs(action.delayDays) === 1 ? "" : "s"}
+            </span>
+          ) : null}
         </div>
         <div style={{ fontSize: 11, color: C.gray, marginTop: 2, lineHeight: 1.45 }}>{action.detail}</div>
         {r && r.skills && r.skills.length > 0 && (
