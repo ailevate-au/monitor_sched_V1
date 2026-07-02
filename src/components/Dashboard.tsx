@@ -178,12 +178,12 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
           <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.white, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: `1px solid #FECACA` }}><AlertTriangle size={24} color={C.red} /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.redDark, marginBottom: 2 }}>
-              {issues} thing{issues > 1 ? "s" : ""} need{issues > 1 ? "" : "s"} you
+              {issues} open issue{issues > 1 ? "s" : ""} require{issues > 1 ? "" : "s"} attention
             </div>
-            <div style={{ fontSize: 12.5, color: C.text }}>Open Problems to see what's wrong and how to fix it.</div>
+            <div style={{ fontSize: 12.5, color: C.text }}>Review Problems for details and recommended actions.</div>
           </div>
           <Btn primary onClick={() => onNav("problems")} style={{ flexShrink: 0, padding: "10px 20px", fontSize: 13, fontWeight: 700 }}>
-            Fix now →
+            Review issues →
           </Btn>
         </div>
       ) : (
