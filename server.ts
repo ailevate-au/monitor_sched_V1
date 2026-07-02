@@ -103,14 +103,14 @@ async function startServer() {
 
   // ─── API ENDPOINTS (v1) ──────────────────────────────────────────
 
-  // AUTH API — Owner / Admin / PM / Worker role-based controls (mock JWT)
+  // AUTH API — Owner / Project Coordinator / Admin / PM role-based controls (mock JWT)
   // Role is inferred from the email prefix so role-gated screens can be tested
-  // (owner@… → Owner, admin@… → Admin, worker@… → Worker, otherwise PM).
-  function roleFromEmail(email: string): "Owner" | "Admin" | "PM" | "Worker" {
+  // (owner@… → Owner, coordinator@/coord@ → Coordinator, admin@… → Admin, otherwise PM).
+  function roleFromEmail(email: string): "Owner" | "Coordinator" | "Admin" | "PM" {
     const e = (email || "").toLowerCase();
     if (e.startsWith("owner")) return "Owner";
+    if (e.startsWith("coordinator") || e.startsWith("coord")) return "Coordinator";
     if (e.startsWith("admin")) return "Admin";
-    if (e.startsWith("worker")) return "Worker";
     return "PM";
   }
 
@@ -129,11 +129,15 @@ async function startServer() {
   });
 
   // ── PERMISSION MATRIX (Access) — mock, in-memory ───────────────────────────
-  // Owner is implicitly full-access and never stored. Only Admin / PM / Worker
+  // Owner is implicitly full-access and never stored. Only Coordinator / Admin / PM
   // are configurable. always_on rows are locked ON; owner_only rows locked OFF.
-  type PermRole = "Admin" | "PM" | "Worker";
+  // A Project Coordinator is a portfolio-ops role: sees every project (like the
+  // Owner), assigns projects to PMs and manages Admin/PM accounts (User Management),
+  // but has no money access (Financial / Pricing stay owner-only) and leaves the
+  // hands-on system config (Master Data, Expenses) to Admin.
+  type PermRole = "Coordinator" | "Admin" | "PM";
   type PermType = "always_on" | "owner_only" | "configurable";
-  const PERM_ROLES: PermRole[] = ["Admin", "PM", "Worker"];
+  const PERM_ROLES: PermRole[] = ["Coordinator", "Admin", "PM"];
   const PERM_FEATURES: { key: string; label: string; group: string; type: PermType }[] = [
     { key: "dashboard",   label: "Dashboard / Overview",     group: "Overview",       type: "always_on" },
     { key: "projects",    label: "Projects",                 group: "Overview",       type: "configurable" },
@@ -146,18 +150,20 @@ async function startServer() {
     { key: "claims",      label: "Project Expenses",         group: "Finance",        type: "configurable" },
     { key: "reports",     label: "Reports",                  group: "Finance",        type: "configurable" },
     { key: "masterdata",  label: "Settings / Master Data",   group: "Administration", type: "configurable" },
-    { key: "users",       label: "User Management",          group: "Administration", type: "owner_only" },
+    { key: "users",       label: "User Management",          group: "Administration", type: "configurable" },
     { key: "permissions", label: "Access (Permissions)",     group: "Administration", type: "owner_only" },
   ];
   const PERM_DEFAULTS: Record<string, Record<PermRole, boolean>> = {
-    projects:   { Admin: true,  PM: true,  Worker: false },
-    conflicts:  { Admin: true,  PM: true,  Worker: false },
-    weather:    { Admin: true,  PM: true,  Worker: true  },
-    gantt:      { Admin: true,  PM: true,  Worker: true  },
-    resources:  { Admin: true,  PM: true,  Worker: false },
-    claims:     { Admin: true,  PM: true,  Worker: false },
-    reports:    { Admin: true,  PM: true,  Worker: false },
-    masterdata: { Admin: true,  PM: false, Worker: false },
+    projects:   { Coordinator: true,  Admin: true,  PM: true  },
+    conflicts:  { Coordinator: true,  Admin: true,  PM: true  },
+    weather:    { Coordinator: true,  Admin: true,  PM: true  },
+    gantt:      { Coordinator: true,  Admin: true,  PM: true  },
+    resources:  { Coordinator: true,  Admin: true,  PM: true  },
+    claims:     { Coordinator: false, Admin: true,  PM: true  },
+    reports:    { Coordinator: true,  Admin: true,  PM: false },
+    masterdata: { Coordinator: false, Admin: true,  PM: false },
+    // Portfolio lead creates/manages Admin + PM accounts; Admin/PM cannot.
+    users:      { Coordinator: true,  Admin: false, PM: false },
   };
   function buildDefaultMatrix(): Record<PermRole, Record<string, boolean>> {
     const matrix = {} as Record<PermRole, Record<string, boolean>>;

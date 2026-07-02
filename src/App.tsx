@@ -9,7 +9,6 @@ import ScreenFinancial from "./components/Financial";
 import ScreenClaims from "./components/Claims";
 import ScreenReports from "./components/Reports";
 import ScreenMasterData from "./components/MasterData";
-import ScreenMyWork from "./components/MyWork";
 import ScreenPermissions from "./components/Permissions";
 import Login from "./components/Login";
 import { useAuth } from "./lib/auth";
@@ -29,9 +28,6 @@ import {
 } from "lucide-react";
 import { AppNavigate, MasterTabId } from "./types/masters";
 import { parseProblemsResponse } from "./types";
-
-/** Roles that land on the mobile-first worker view; everyone else gets the full console. */
-const WORKER_ROLES = new Set(["Worker", "Resource"]);
 
 function initialsFromName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -96,10 +92,6 @@ export default function FlowIQApp() {
     return getScreenFromPath(window.location.pathname);
   });
   const [masterTab, setMasterTab] = useState<MasterTabId>("cost_categories");
-  // Seed the active view from the signed-in user's role; workers land on My Work.
-  const [role, setRole] = useState<"PM" | "Resource">(() =>
-    user && WORKER_ROLES.has(user.role) ? "Resource" : "PM"
-  );
 
   // When navigating to the Gantt with a filter intent, seed its status filter.
   // The Gantt remounts on each entry, so it reads this as its initial filter.
@@ -250,17 +242,6 @@ export default function FlowIQApp() {
   // Unauthenticated users see only the login screen (entry point to the app).
   if (!isAuthenticated) {
     return <Login />;
-  }
-
-  // If role is Resource, render only the standalone mobile-first My Work screen (no sidebar, simple and clean)
-  if (role === "Resource") {
-    return (
-      <div style={{ background: "#F1F5F9", minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center", padding: "12px" }}>
-        <div style={{ width: "100%", maxWidth: 430, background: "#FFF", borderRadius: 16, overflow: "hidden", boxShadow: "0 10px 25px rgba(15,23,42,0.08)", minHeight: "85vh" }}>
-          <ScreenMyWork onToggleRole={() => setRole("PM")} />
-        </div>
-      </div>
-    );
   }
 
   return (

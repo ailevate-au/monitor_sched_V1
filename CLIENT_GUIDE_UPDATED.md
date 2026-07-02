@@ -64,10 +64,10 @@ This demo build is optimized for a clear client walkthrough:
 
 Four roles (one-click login buttons on the sign-in screen):
 
-- **Owner / Director** — sees every project and every problem; lands on **Problems**. Full access.
-- **Admin** — day-to-day setup across all projects.
+- **Owner / Director** — sees every project and every problem; lands on **Problems**. Full access (incl. money).
+- **Project Coordinator** — sees and manages **every project** (like the Owner), **assigns projects to PMs**, and **creates/manages Admin + PM accounts**. No money access; leaves system config to Admin.
+- **Admin** — day-to-day setup across all projects (scheduling, expenses, master data).
 - **Project Manager** — **sees only the projects they manage.** Can change job status (incl. *Delayed*, which cascades). A PM's change can break a project they can't see — the Owner catches it in Problems.
-- **Field Worker** — mobile-first `My Work` screen; update progress and report delays; cannot edit the full programme.
 
 ---
 
@@ -99,7 +99,7 @@ Four roles (one-click login buttons on the sign-in screen):
 ## Overview
 
 - Portfolio KPIs and at-risk watchlist
-- PM alert stream from field workers
+- PM alert stream from project updates
 - Quick jump to other modules
 
 ## Projects
