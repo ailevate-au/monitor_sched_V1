@@ -10,6 +10,7 @@ import ScreenClaims from "./components/Claims";
 import ScreenReports from "./components/Reports";
 import ScreenMasterData from "./components/MasterData";
 import ScreenPermissions from "./components/Permissions";
+import ScreenUsers from "./components/Users";
 import Login from "./components/Login";
 import { useAuth } from "./lib/auth";
 import {
@@ -25,6 +26,7 @@ import {
   Settings,
   ShieldCheck,
   LogOut,
+  Users,
 } from "lucide-react";
 import { AppNavigate, MasterTabId } from "./types/masters";
 import { parseProblemsResponse } from "./types";
@@ -68,6 +70,7 @@ const SCREEN_TO_PATH: Record<string, string> = {
   reports: "/reports",
   masterdata: "/masterdata",
   permissions: "/permissions",
+  users: "/users",
 };
 
 const PATH_TO_SCREEN: Record<string, string> = {
@@ -203,6 +206,10 @@ export default function FlowIQApp() {
     { id:"claims",    label:"Project Expenses",   icon:<ReceiptText size={ICON_SIZE} />,  group:"Finance",    badge: expensesCount, badgeColor: C.amber },
     { id:"reports",   label:"Reports",            icon:<FileText size={ICON_SIZE} />,     group:"Finance"     },
     { id:"masterdata", label:"Settings",          icon:<Settings size={ICON_SIZE} />,     group:"Administration" },
+    // Owner + Coordinator: create/manage Admin, PM and Coordinator accounts
+    ...(user?.role === "Owner" || user?.role === "Coordinator"
+      ? [{ id:"users", label:"Users", icon:<Users size={ICON_SIZE} />, group:"Administration" }]
+      : []),
     // Owner-only: configure the role permission matrix (Access)
     ...(user?.role === "Owner"
       ? [{ id:"permissions", label:"Access", icon:<ShieldCheck size={ICON_SIZE} />, group:"Administration" }]
@@ -223,6 +230,7 @@ export default function FlowIQApp() {
     reports:   <ScreenReports />,
     masterdata: <ScreenMasterData initialTab={masterTab} />,
     permissions: <ScreenPermissions />,
+    users: <ScreenUsers />,
   };
 
   const titles: { [key: string]: string } = {
@@ -237,6 +245,7 @@ export default function FlowIQApp() {
     reports: "Reports",
     masterdata: "Settings",
     permissions: "Access — Role Permissions",
+    users: "Users",
   };
 
   // Unauthenticated users see only the login screen (entry point to the app).

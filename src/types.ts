@@ -1,3 +1,12 @@
+/** A projected (budget) or actual non-labour cost line item on a project. */
+export interface CostLine {
+  id: string;
+  label: string;
+  category: string;
+  /** A$M */
+  amount: number;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -19,6 +28,25 @@ export interface Project {
   retentionPercent?: number;
   /** Email of the PM who owns this project. PMs only see their own projects. */
   managerEmail?: string;
+  /** Non-labour cost lines set at creation (materials, custom costs) — the projected budget. */
+  budgetLines?: CostLine[];
+  /** Non-labour cost lines added while the project is in progress — the actual spend. */
+  actualLines?: CostLine[];
+  /** A$M received from the client so far. */
+  revenueReceived?: number;
+}
+
+/** An app account — Owner / Coordinator / Admin / PM. */
+export interface AppUserAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: "Owner" | "Coordinator" | "Admin" | "PM";
+  state?: string;
+  /** Project ids this PM manages (only meaningful for role === "PM"). */
+  managedProjectIds?: string[];
+  /** Linked schedulable Resource id, if "also add as schedulable resource" was used. */
+  linkedResourceId?: string;
 }
 
 export interface Resource {

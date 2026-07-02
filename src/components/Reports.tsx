@@ -77,7 +77,7 @@ export default function ScreenReports() {
   const [selectedRecent, setSelectedRecent] = useState<RecentExport | null>(null);
   const isDev = import.meta.env.DEV;
   const exportDisabledTooltip = isDev ? "On development" : undefined;
-  const showDevelopmentOverlay = true;
+  const showDevelopmentOverlay = false;
 
   const handleExport = (type: string, format: string) => {
     if (!selectedProjectId) return;

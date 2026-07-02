@@ -37,6 +37,13 @@ interface ProjectFinDetail {
   revenueVarianceVal: number;
   retentionBalanceVal: number;
   ldExposure: number;
+  budgetLinesTotalVal?: number;
+  actualLinesTotalVal?: number;
+  projectedFinalCostVal?: number;
+  revenueReceivedVal?: number;
+  projectedProfitVal?: number;
+  actualProfitVal?: number;
+  status?: string;
 }
 
 interface VariationLogItem {
@@ -284,7 +291,7 @@ export default function ScreenFinancial() {
 
   const tabs = [
     { id: "overview", label: "All Projects" },
-    { id: "planvscertified", label: "Planned vs Actual" },
+    { id: "planvscertified", label: "Projected vs Actual" },
     { id: "weekly", label: "Weekly Spend" },
     { id: "breakdown", label: "Cost Breakdown" },
     { id: "variance", label: "Variation Log" },
@@ -345,6 +352,20 @@ export default function ScreenFinancial() {
   const totalCertifiedFiltered = filteredProjects.reduce((acc, p) => acc + p.actualCost, 0);
   const portfolioVariance = totalCertifiedFiltered - totalScheduled;
   const MAX_VISIBLE_ROWS = 8;
+
+  // Projected (budget cost-lines + labour estimate) vs actual (incurred + labour),
+  // plus revenue received — the model the Owner uses to see if a project is
+  // tracking to plan and, once finished, whether it actually made money.
+  const totalProjectedFinal = filteredProjects.reduce(
+    (acc, p) => acc + (projectFinMap[p.id]?.projectedFinalCostVal ?? p.plannedCost),
+    0
+  );
+  const totalRevenueReceived = filteredProjects.reduce(
+    (acc, p) => acc + (projectFinMap[p.id]?.revenueReceivedVal ?? p.revenueReceived ?? 0),
+    0
+  );
+  const projectedVsActualVariance = totalCertifiedFiltered - totalProjectedFinal;
+  const completedProjectsList = filteredProjects.filter((p) => p.status === "COMPLETED");
   const activeProjects = filteredProjects.filter((p) => p.status !== "COMPLETED");
   const getOverrun = (p: Project) => p.actualCost - p.plannedCost;
   const getOpsVariance = (p: Project) => p.actualCost - (projectFinMap[p.id]?.scheduledCostVal ?? 0);
@@ -848,29 +869,6 @@ export default function ScreenFinancial() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 }}>
               <Card style={{ padding: 18 }}>
-                <SectionHeader title="Plan vs actual spend" />
-                {filteredProjects.map((p) => (
-                  <div key={p.id} style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 6 }}>{p.name}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                      <span style={{ fontSize: 10.5, color: C.gray, width: 52 }}>Planned</span>
-                      <div style={{ flex: 1, height: 7, background: C.bgSecond, borderRadius: 4 }}>
-                        <div style={{ height: "100%", width: `${Math.min(p.plannedCost, 100)}%`, background: "#94A3B8", borderRadius: 4 }} />
-                      </div>
-                      <span style={{ fontSize: 10.5, color: C.gray, width: 48, textAlign: "right" }}>A${p.plannedCost.toFixed(1)}M</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 10.5, color: C.gray, width: 52 }}>Actual</span>
-                      <div style={{ flex: 1, height: 7, background: C.bgSecond, borderRadius: 4 }}>
-                        <div style={{ height: "100%", width: `${Math.min(p.actualCost, 100)}%`, background: p.overBudget ? C.red : C.green, borderRadius: 4 }} />
-                      </div>
-                      <span style={{ fontSize: 10.5, color: p.overBudget ? C.red : C.green, width: 48, textAlign: "right", fontWeight: 600 }}>A${p.actualCost.toFixed(1)}M</span>
-                    </div>
-                  </div>
-                ))}
-              </Card>
-
-              <Card style={{ padding: 18 }}>
                 <SectionHeader title="Cost categories (certified claims)" />
                 {dynamicCategoriesData.length === 0 ? (
                   <div style={{ textAlign: "center", color: C.gray, padding: 16, fontSize: 12 }}>No categories configured. Add under Reference Data.</div>
@@ -895,33 +893,39 @@ export default function ScreenFinancial() {
           </>
         )}
 
-        {/* Plan vs Actual */}
+        {/* Projected vs Actual */}
         {tab === "planvscertified" && (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 16 }}>
               <KpiCard
-                label="Total scheduled (tasks)"
-                value={`A$${totalScheduled.toFixed(3)}M`}
+                label="Projected final cost"
+                value={`A$${totalProjectedFinal.toFixed(2)}M`}
                 valueColor={C.blue}
-                sub="Sum of task costs from schedule"
+                sub="Labour estimate + budget cost lines, set at creation"
               />
               <KpiCard
-                label="Total actual"
-                value={`A$${totalCertifiedFiltered.toFixed(1)}M`}
-                sub="From approved progress claims"
+                label="Actual cost"
+                value={`A$${totalCertifiedFiltered.toFixed(2)}M`}
+                sub="Labour + cost lines added while in progress"
               />
               <KpiCard
                 label="Portfolio variance"
-                value={`${portfolioVariance >= 0 ? "+" : ""}A$${portfolioVariance.toFixed(3)}M`}
-                valueColor={portfolioVariance > 0 ? C.red : C.green}
-                sub={portfolioVariance > 0 ? "Certified above scheduled" : "Certified within/below scheduled"}
+                value={`${projectedVsActualVariance >= 0 ? "+" : ""}A$${projectedVsActualVariance.toFixed(2)}M`}
+                valueColor={projectedVsActualVariance > 0 ? C.red : C.green}
+                sub={projectedVsActualVariance > 0 ? "Running above projected" : "Within or below projected"}
+              />
+              <KpiCard
+                label="Revenue received"
+                value={`A$${totalRevenueReceived.toFixed(2)}M`}
+                valueColor={C.greenDark}
+                sub="Received from clients so far"
               />
             </div>
 
             <Card>
               <SectionHeader
-                title="Plan vs actual by project"
-                right={<span style={{ fontSize: 10.5, color: C.gray }}>Sorted by variance (highest first) · Scheduled = task rate × duration</span>}
+                title="Projected vs actual by project"
+                right={<span style={{ fontSize: 10.5, color: C.gray }}>Sorted by variance (highest first) · Add cost lines from the Projects tab</span>}
               />
               {filteredProjects.length === 0 ? (
                 <div style={{ textAlign: "center", color: C.gray, padding: 24, fontSize: 12 }}>No projects match your filters.</div>
@@ -930,26 +934,27 @@ export default function ScreenFinancial() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>
                       <tr style={{ background: "#F8FAFC" }}>
-                        {["Project", "Planned budget", "Scheduled (tasks)", "Actual", "Variance"].map((h) => (
+                        {["Project", "Projected final", "Actual", "Variance", "Revenue received"].map((h) => (
                           <th key={h} style={{ textAlign: "left", padding: "10px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontSize: 11, color: C.gray, fontWeight: 500, whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {filteredProjects.map((p) => {
-                        const scheduled = projectFinMap[p.id]?.scheduledCostVal ?? 0;
-                        const certified = p.actualCost;
-                        const variance = certified - scheduled;
-                        const overScheduled = variance > 0;
+                        const projected = projectFinMap[p.id]?.projectedFinalCostVal ?? p.plannedCost;
+                        const actual = p.actualCost;
+                        const revenue = projectFinMap[p.id]?.revenueReceivedVal ?? p.revenueReceived ?? 0;
+                        const variance = actual - projected;
+                        const overProjected = variance > 0;
                         return (
                           <tr key={p.id} onClick={() => openProjectDetail(p)} style={{ cursor: "pointer" }}>
                             <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontWeight: 500 }}>{p.name}</td>
-                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}` }}>A${p.plannedCost.toFixed(2)}M</td>
-                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: C.blue, fontWeight: 600 }}>A${scheduled.toFixed(3)}M</td>
-                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontWeight: 600 }}>A${certified.toFixed(2)}M</td>
-                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: overScheduled ? C.red : C.green, fontWeight: 600 }}>
-                              {variance >= 0 ? "+" : ""}A${variance.toFixed(3)}M
+                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: C.blue, fontWeight: 600 }}>A${projected.toFixed(2)}M</td>
+                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontWeight: 600 }}>A${actual.toFixed(2)}M</td>
+                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: overProjected ? C.red : C.green, fontWeight: 600 }}>
+                              {variance >= 0 ? "+" : ""}A${variance.toFixed(2)}M
                             </td>
+                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}` }}>A${revenue.toFixed(2)}M</td>
                           </tr>
                         );
                       })}
@@ -973,10 +978,53 @@ export default function ScreenFinancial() {
               )}
             </Card>
 
+            {/* Completed projects P&L — did the finished job actually make money? */}
+            <Card style={{ marginTop: 14 }}>
+              <SectionHeader title={`Completed projects — projected vs actual (${completedProjectsList.length})`} />
+              {completedProjectsList.length === 0 ? (
+                <div style={{ textAlign: "center", color: C.gray, padding: 20, fontSize: 12 }}>No completed projects match your filters.</div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: "#F8FAFC" }}>
+                        {["Project", "Projected profit", "Actual profit", "Delta", "Revenue vs actual cost"].map((h) => (
+                          <th key={h} style={{ textAlign: "left", padding: "10px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontSize: 11, color: C.gray, fontWeight: 500, whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {completedProjectsList.map((p) => {
+                        const detail = projectFinMap[p.id];
+                        const projectedProfit = detail?.projectedProfitVal ?? (p.finalContractSum - p.plannedCost);
+                        const actualProfit = detail?.actualProfitVal ?? ((p.revenueReceived ?? 0) - p.actualCost);
+                        const delta = actualProfit - projectedProfit;
+                        return (
+                          <tr key={p.id} onClick={() => openProjectDetail(p)} style={{ cursor: "pointer" }}>
+                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontWeight: 500 }}>{p.name}</td>
+                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}` }}>A${projectedProfit.toFixed(2)}M</td>
+                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontWeight: 600, color: actualProfit >= 0 ? C.greenDark : C.red }}>A${actualProfit.toFixed(2)}M</td>
+                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: delta >= 0 ? C.green : C.red, fontWeight: 600 }}>
+                              {delta >= 0 ? "+" : ""}A${delta.toFixed(2)}M
+                            </td>
+                            <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}` }}>
+                              A${(p.revenueReceived ?? 0).toFixed(2)}M vs A${p.actualCost.toFixed(2)}M
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+
             <Card style={{ padding: 16, marginTop: 14 }}>
               <div style={{ fontSize: 12, color: C.gray, lineHeight: 1.55 }}>
-                <strong style={{ color: C.text }}>How to read this:</strong> Scheduled cost is calculated from Gantt tasks (resource rate × duration, including overrides).
-                Certified cost comes from progress claims. Use task selection when creating a claim to align certified values with schedule progress.
+                <strong style={{ color: C.text }}>How to read this:</strong> Projected final cost is the labour estimate from the schedule plus the budget cost lines
+                set when the project was created (materials, subcontractors, custom costs). Actual cost is the same labour estimate plus any cost lines added
+                from the Projects tab while the project is in progress. Revenue received is what has actually come in from the client — add or update it from
+                the New Project form or the project's Finance detail.
               </div>
             </Card>
           </>

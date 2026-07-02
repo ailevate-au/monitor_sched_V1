@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Project, Resource } from "../types";
+import { Project, Resource, CostLine } from "../types";
 import { KpiCard, StatusBadge, Btn, Card } from "./Dashboard";
 import { useMasters } from "../hooks/useMasters";
 import { AppNavigate } from "../types/masters";
 import { LabelWithInfo } from "./InfoTip";
 import { useAuth } from "../lib/auth";
 import { visibleProjects as scopeProjects } from "../lib/auth";
-import { Zap, RotateCcw, Calendar, DollarSign, Download, Plus } from "lucide-react";
+import { Zap, RotateCcw, Calendar, DollarSign, Download, Plus, Trash2, CheckCircle2, RefreshCcw } from "lucide-react";
 import { changeHistory } from "../lib/changeHistory";
 
 const iconRow = { display: "inline-flex", alignItems: "center", gap: 6 } as const;
@@ -72,11 +72,32 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
     }
   }, [masters, type, state]);
   const [originalSummaryVal, setOriginalSummaryVal] = useState("15.5");
-  const [plannedCost, setPlannedCost] = useState("");
   const [ldRatePerDay, setLdRatePerDay] = useState("8500");
   const [pcStartDate, setPcStartDate] = useState("2026-07-01");
   const [pcEndDate, setPcEndDate] = useState("2026-11-30");
   const [retentionPercent, setRetentionPercent] = useState("5.0");
+  const [revenueReceived, setRevenueReceived] = useState("0");
+  // Projected budget cost-lines (materials, subcontractors, custom costs) set
+  // at creation — these + the auto-computed labour estimate are the projected
+  // final cost shown on Finance and compared against actuals once the project
+  // is under way / complete.
+  const [budgetLines, setBudgetLines] = useState<{ label: string; category: string; amount: string }[]>([
+    { label: "Materials", category: "Materials", amount: "" },
+  ]);
+
+  const addBudgetLine = () => setBudgetLines(prev => [...prev, { label: "", category: "Materials", amount: "" }]);
+  const removeBudgetLine = (i: number) => setBudgetLines(prev => prev.filter((_, idx) => idx !== i));
+  const updateBudgetLine = (i: number, patch: Partial<{ label: string; category: string; amount: string }>) =>
+    setBudgetLines(prev => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  const budgetLinesTotal = budgetLines.reduce((acc, l) => acc + (parseFloat(l.amount) || 0), 0);
+
+  // Add-cost (in-progress) modal — appends an actual cost line to a live project.
+  const [showAddCostModal, setShowAddCostModal] = useState(false);
+  const [costTargetProj, setCostTargetProj] = useState<Project | null>(null);
+  const [costLabel, setCostLabel] = useState("");
+  const [costCategory, setCostCategory] = useState("Materials");
+  const [costAmount, setCostAmount] = useState("");
+  const [savingCost, setSavingCost] = useState(false);
 
   // Import projects state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -156,6 +177,9 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       alert("Please specify project name and main contractor.");
       return;
     }
+    const cleanLines = budgetLines
+      .filter(l => (parseFloat(l.amount) || 0) > 0)
+      .map(l => ({ label: l.label.trim() || l.category, category: l.category, amount: parseFloat(l.amount) || 0 }));
     fetch("/api/v1/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -166,18 +190,20 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
         contractor,
         state,
         originalContractSum: originalSummaryVal,
-        plannedCost: plannedCost || originalSummaryVal,
         ldRatePerDay,
         pcStartDate,
         pcEndDate,
-        retentionPercent
+        retentionPercent,
+        budgetLines: cleanLines,
+        revenueReceived,
       })
     })
       .then(res => res.json())
       .then(() => {
         setName("");
         setContractor("");
-        setPlannedCost("");
+        setBudgetLines([{ label: "Materials", category: "Materials", amount: "" }]);
+        setRevenueReceived("0");
         setLdRatePerDay("8500");
         setPcStartDate("2026-07-01");
         setPcEndDate("2026-11-30");
@@ -186,6 +212,52 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
         loadProjectsAndResources();
       })
       .catch(err => console.error("Error adding project contract:", err));
+  };
+
+  const openAddCost = (e: React.MouseEvent, proj: Project) => {
+    e.stopPropagation();
+    setCostTargetProj(proj);
+    setCostLabel("");
+    setCostCategory("Materials");
+    setCostAmount("");
+    setShowAddCostModal(true);
+  };
+
+  const handleAddCost = () => {
+    if (!costTargetProj) return;
+    const amt = parseFloat(costAmount);
+    if (!amt || amt <= 0) {
+      alert("Enter a cost amount greater than 0.");
+      return;
+    }
+    setSavingCost(true);
+    fetch(`/api/v1/projects/${costTargetProj.id}/cost-lines`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: costLabel || costCategory, category: costCategory, amount: amt }),
+    })
+      .then(res => res.json())
+      .then(() => {
+        setSavingCost(false);
+        setShowAddCostModal(false);
+        loadProjectsAndResources();
+      })
+      .catch(() => setSavingCost(false));
+  };
+
+  const handleToggleStatus = (e: React.MouseEvent, proj: Project) => {
+    e.stopPropagation();
+    const nextStatus = proj.status === "COMPLETED" ? "ACTIVE" : "COMPLETED";
+    const verb = nextStatus === "COMPLETED" ? "Finish" : "Reopen";
+    if (!window.confirm(`${verb} "${proj.name}"?`)) return;
+    fetch(`/api/v1/projects/${proj.id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: nextStatus }),
+    })
+      .then(res => res.json())
+      .then(() => loadProjectsAndResources())
+      .catch(err => console.error("Error updating project status:", err));
   };
 
   // Open Modal to manage rate overrides for a selected project
@@ -277,7 +349,83 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   // PMs only see the projects they manage; Owner/Admin see the whole portfolio.
   const visProjects = scopeProjects(user, projects);
   // Simple portfolio counts (deep finance figures live on the Finance tab).
-  const activeCount = visProjects.filter(p => p.status === "ACTIVE").length;
+  const inProgressProjects = visProjects.filter(p => p.status !== "COMPLETED");
+  const completedProjects = visProjects.filter(p => p.status === "COMPLETED");
+  const activeCount = inProgressProjects.filter(p => p.status === "ACTIVE").length;
+
+  const renderProjectCard = (p: Project) => {
+    const cats = issuesByProject[p.name] || new Set<string>();
+    const hasConflicts = cats.has("conflict");
+    const hasFragile = cats.has("fragile");
+    const hasLate = cats.has("late");
+    const hasWeather = cats.has("weather");
+    // Real margin — same formula as the Finance tab (finalContractSum - actualCost) / finalContractSum.
+    const marginVal = p.finalContractSum > 0
+      ? Math.round(((p.finalContractSum - p.actualCost) / p.finalContractSum) * 1000) / 10
+      : 0;
+    const isCompleted = p.status === "COMPLETED";
+
+    // Count how many overrides are active on this project
+    const overrideCount = resources.filter(r => r.projectRateOverrides && r.projectRateOverrides[p.id] !== undefined).length;
+
+    return (
+      <div key={p.id} onClick={() => onNav("gantt")} style={{
+        border:`0.5px solid ${hasConflicts ? "#FECACA" : C.grayLight}`,
+        borderRadius:12, padding:"14px 16px", marginBottom:10,
+        background:C.white, cursor:"pointer",
+        opacity: isCompleted || p.status === "PRACTICAL_COMPLETION" ? 0.85 : 1,
+        transition:"border-color .15s",
+      }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6, flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:500, color:C.text }}>{p.name}</div>
+            <div style={{ fontSize:11, color:C.gray, marginTop:2 }}>{p.type} · {p.location} · Contractor: {p.contractor}</div>
+          </div>
+          <div style={{ display:"flex", gap:5, flexWrap:"wrap", justifyContent:"flex-end" }}>
+            {hasConflicts && <StatusBadge status="conflict" />}
+            {hasLate && <StatusBadge status="overdue" />}
+            {hasFragile && <StatusBadge status="fragile" />}
+            {hasWeather && <StatusBadge status="weather" />}
+            <StatusBadge status={isCompleted ? "completed" : p.status === "PRACTICAL_COMPLETION" ? "practical" : "active"} />
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:20, fontSize:11, color:C.gray, marginBottom:10, flexWrap:"wrap", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <span style={iconRow}><Calendar size={12} /> {p.pcStartDate} to {p.pcEndDate}</span>
+            <span style={iconRow}><DollarSign size={12} /> A${p.finalContractSum.toFixed(1)}M contract</span>
+            <span style={{ color: p.overBudget ? C.red : C.green }}>
+              {p.overBudget ? "↓" : "↑"} Gross Margin: {marginVal}%
+            </span>
+            {isCompleted && (
+              <span style={{ color: (p.revenueReceived ?? 0) >= p.actualCost ? C.green : C.red }}>
+                Revenue A${(p.revenueReceived ?? 0).toFixed(1)}M vs actual A${p.actualCost.toFixed(1)}M
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            {overrideCount > 0 && (
+              <span style={{ fontSize: 10, background: C.blueLight, color: C.blue, fontWeight: 700, padding: "2px 6px", borderRadius: 4 }}>
+                {overrideCount} Custom Labor Rates
+              </span>
+            )}
+            {!isCompleted && (
+              <Btn small onClick={(e) => openAddCost(e, p)} style={{ background: C.bgSecond, color: C.navy, border: `0.5px solid ${C.grayLight}` }}>
+                <span style={iconRow}><DollarSign size={12} /> Add cost</span>
+              </Btn>
+            )}
+            <Btn small onClick={(e) => handleOpenRates(e, p)} style={{ background: C.bgSecond, color: C.navy, border: `0.5px solid ${C.grayLight}` }}>
+              ⚙️ Adjust Labor Rates
+            </Btn>
+            <Btn small onClick={(e) => handleToggleStatus(e, p)} style={{ background: isCompleted ? C.bgSecond : C.greenBg, color: isCompleted ? C.navy : C.greenDark, border: `0.5px solid ${isCompleted ? C.grayLight : C.green}` }}>
+              {isCompleted ? <span style={iconRow}><RefreshCcw size={12} /> Reopen</span> : <span style={iconRow}><CheckCircle2 size={12} /> Finish</span>}
+            </Btn>
+          </div>
+        </div>
+        <ProgressBar pct={p.progress} color={p.progress === 100 ? C.green : p.overBudget ? C.amber : C.blueMid} />
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -319,70 +467,26 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       </div>
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-        <span style={{ fontSize:12, fontWeight:600, color:C.gray, textTransform:"uppercase", letterSpacing:"0.05em" }}>Active Projects</span>
+        <span style={{ fontSize:12, fontWeight:600, color:C.gray, textTransform:"uppercase", letterSpacing:"0.05em" }}>In Progress <span style={{ color: C.text, fontWeight: 700 }}>· {inProgressProjects.length}</span></span>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn small onClick={() => { setShowImportModal(true); setImportMsg(null); }}><span style={iconRow}><Download size={13} /> Import projects</span></Btn>
           <Btn primary small onClick={() => setShowAddModal(true)}><span style={iconRow}><Plus size={13} /> New project</span></Btn>
         </div>
       </div>
 
-      {visProjects.map(p => {
-        const cats = issuesByProject[p.name] || new Set<string>();
-        const hasConflicts = cats.has("conflict");
-        const hasFragile = cats.has("fragile");
-        const hasLate = cats.has("late");
-        const hasWeather = cats.has("weather");
-        const marginVal = p.id === "p1" ? 11.2 : p.id === "p2" ? 13.8 : p.id === "p3" ? 16.2 : 14.1;
+      {inProgressProjects.length === 0 && (
+        <div style={{ fontSize: 12, color: C.gray, padding: "10px 4px", marginBottom: 10 }}>No projects in progress.</div>
+      )}
+      {inProgressProjects.map(renderProjectCard)}
 
-        // Count how many overrides are active on this project
-        const overrideCount = resources.filter(r => r.projectRateOverrides && r.projectRateOverrides[p.id] !== undefined).length;
-
-        return (
-          <div key={p.id} onClick={() => onNav("gantt")} style={{
-            border:`0.5px solid ${hasConflicts ? "#FECACA" : C.grayLight}`,
-            borderRadius:12, padding:"14px 16px", marginBottom:10,
-            background:C.white, cursor:"pointer",
-            opacity: p.status === "PRACTICAL_COMPLETION" ? 0.8 : 1,
-            transition:"border-color .15s",
-          }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6, flexWrap: "wrap", gap: 10 }}>
-              <div>
-                <div style={{ fontSize:13, fontWeight:500, color:C.text }}>{p.name}</div>
-                <div style={{ fontSize:11, color:C.gray, marginTop:2 }}>{p.type} · {p.location} · Contractor: {p.contractor}</div>
-              </div>
-              <div style={{ display:"flex", gap:5, flexWrap:"wrap", justifyContent:"flex-end" }}>
-                {hasConflicts && <StatusBadge status="conflict" />}
-                {hasLate && <StatusBadge status="overdue" />}
-                {hasFragile && <StatusBadge status="fragile" />}
-                {hasWeather && <StatusBadge status="weather" />}
-                <StatusBadge status={p.status === "PRACTICAL_COMPLETION" ? "practical" : "active"} />
-              </div>
-            </div>
-            <div style={{ display:"flex", gap:20, fontSize:11, color:C.gray, marginBottom:10, flexWrap:"wrap", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                <span style={iconRow}><Calendar size={12} /> {p.pcStartDate} to {p.pcEndDate}</span>
-                <span style={iconRow}><DollarSign size={12} /> A${p.finalContractSum.toFixed(1)}M contract</span>
-                <span style={{ color: p.overBudget ? C.red : C.green }}>
-                  {p.overBudget ? "↓" : "↑"} Gross Margin: {marginVal}%
-                </span>
-              </div>
-              
-              {/* Dynamic Rates Modifier Button */}
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {overrideCount > 0 && (
-                  <span style={{ fontSize: 10, background: C.blueLight, color: C.blue, fontWeight: 700, padding: "2px 6px", borderRadius: 4 }}>
-                    {overrideCount} Custom Labor Rates
-                  </span>
-                )}
-                <Btn small onClick={(e) => handleOpenRates(e, p)} style={{ background: C.bgSecond, color: C.navy, border: `0.5px solid ${C.grayLight}` }}>
-                  ⚙️ Adjust Labor Rates
-                </Btn>
-              </div>
-            </div>
-            <ProgressBar pct={p.progress} color={p.progress === 100 ? C.green : p.overBudget ? C.amber : C.blueMid} />
+      {completedProjects.length > 0 && (
+        <>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", margin:"22px 0 14px" }}>
+            <span style={{ fontSize:12, fontWeight:600, color:C.gray, textTransform:"uppercase", letterSpacing:"0.05em" }}>Completed <span style={{ color: C.text, fontWeight: 700 }}>· {completedProjects.length}</span></span>
           </div>
-        );
-      })}
+          {completedProjects.map(renderProjectCard)}
+        </>
+      )}
 
       {/* Add Project Modal — simplified */}
       {showAddModal && (
@@ -503,7 +607,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
               </div>
             </div>
 
-            {/* Row 7: Retention + optional cost budget */}
+            {/* Row 7: Retention + revenue received so far */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
               <div>
                 <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>
@@ -521,14 +625,58 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
                 />
               </div>
               <div>
-                <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Cost Budget A$M <span style={{ fontWeight:400, color:"#94A3B8" }}>(optional)</span></label>
+                <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Revenue received so far (A$M) <span style={{ fontWeight:400, color:"#94A3B8" }}>(optional)</span></label>
                 <input
                   type="number"
-                  value={plannedCost}
-                  placeholder="Defaults to contract value"
-                  onChange={e => setPlannedCost(e.target.value)}
+                  value={revenueReceived}
+                  onChange={e => setRevenueReceived(e.target.value)}
                   style={{ width:"100%", fontSize:12, padding:"7px 10px", borderRadius:6, border:`0.5px solid ${C.grayLight}` }}
                 />
+              </div>
+            </div>
+
+            {/* Row 8: Projected budget cost-lines — materials, subcontractors, custom costs.
+                Labour is auto-estimated from scheduled tasks and added on top by Finance. */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <label style={{ fontSize:11, color:C.gray, fontWeight: 600 }}>Projected budget cost lines <span style={{ fontWeight:400, color:"#94A3B8" }}>(optional — materials, subcontractors, custom costs)</span></label>
+                <button type="button" onClick={addBudgetLine} style={{ fontSize: 11, fontWeight: 600, color: C.blue, background: "none", border: "none", cursor: "pointer" }}>+ Add line</button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {budgetLines.map((line, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px 24px", gap: 6, alignItems: "center" }}>
+                    <input
+                      type="text"
+                      placeholder="Label (e.g. Cement)"
+                      value={line.label}
+                      onChange={e => updateBudgetLine(i, { label: e.target.value })}
+                      style={{ fontSize:11.5, padding:"6px 8px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, boxSizing: "border-box" }}
+                    />
+                    <select
+                      value={line.category}
+                      onChange={e => updateBudgetLine(i, { category: e.target.value })}
+                      style={{ fontSize:11.5, padding:"6px 6px", borderRadius:6, border:`0.5px solid ${C.grayLight}` }}
+                    >
+                      <option value="Materials">Materials</option>
+                      <option value="Subcontractors">Subcontractors</option>
+                      <option value="Plant & Equipment">Plant &amp; Equipment</option>
+                      <option value="Machinery">Machinery</option>
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="A$M"
+                      value={line.amount}
+                      onChange={e => updateBudgetLine(i, { amount: e.target.value })}
+                      style={{ fontSize:11.5, padding:"6px 8px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, boxSizing: "border-box" }}
+                    />
+                    <button type="button" onClick={() => removeBudgetLine(i)} title="Remove" style={{ border: "none", background: "none", cursor: "pointer", color: C.red, padding: 2 }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: C.gray, marginTop: 6 }}>
+                Projected budget lines total: <strong style={{ color: C.text }}>A${budgetLinesTotal.toFixed(1)}M</strong> (labour is estimated separately from the schedule)
               </div>
             </div>
 
@@ -635,6 +783,46 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
               <Btn onClick={() => setShowRatesModal(false)}>Cancel</Btn>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* Add Cost Modal — appends an actual (incurred) cost line to a live project,
+          e.g. a swapped-in subcontractor or a material overrun mid-project. */}
+      {showAddCostModal && costTargetProj && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(15,31,61,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:99 }}>
+          <div style={{ background:C.white, borderRadius:12, width: 380, padding: 22, border:`0.5px solid ${C.grayLight}`, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}>
+            <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:4 }}>Add cost — {costTargetProj.name}</div>
+            <div style={{ fontSize:11, color:C.gray, marginBottom:16 }}>Log an actual cost incurred while this project is in progress (extra materials, a swapped-in sub, more plant hire).</div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Label</label>
+              <input type="text" placeholder="e.g. Extra cement order" value={costLabel} onChange={e => setCostLabel(e.target.value)}
+                style={{ width:"100%", fontSize:12, padding:"7px 10px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, boxSizing: "border-box" }} />
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+              <div>
+                <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Category</label>
+                <select value={costCategory} onChange={e => setCostCategory(e.target.value)}
+                  style={{ width:"100%", fontSize:12, padding:"7px 6px", borderRadius:6, border:`0.5px solid ${C.grayLight}` }}>
+                  <option value="Materials">Materials</option>
+                  <option value="Subcontractors">Subcontractors</option>
+                  <option value="Plant & Equipment">Plant &amp; Equipment</option>
+                  <option value="Machinery">Machinery</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Amount (A$M)</label>
+                <input type="number" value={costAmount} onChange={e => setCostAmount(e.target.value)}
+                  style={{ width:"100%", fontSize:12, padding:"7px 10px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, boxSizing: "border-box" }} />
+              </div>
+            </div>
+
+            <div style={{ display:"flex", gap:8 }}>
+              <Btn primary onClick={handleAddCost} disabled={savingCost}>{savingCost ? "Saving…" : "Add cost"}</Btn>
+              <Btn onClick={() => setShowAddCostModal(false)}>Cancel</Btn>
+            </div>
+          </div>
         </div>
       )}
     </div>

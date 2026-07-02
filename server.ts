@@ -116,16 +116,114 @@ async function startServer() {
 
   app.post("/api/v1/auth/login", (req, res) => {
     const { email } = req.body;
-    const name = email ? email.split("@")[0] : "Director";
+    const db = dbInstance;
+    // A managed account (created via User Management) takes priority over the
+    // email-prefix inference, so a Coordinator/Owner-created user logs in with
+    // exactly the role/name/state they were given.
+    const account = db.users.find(u => u.email.toLowerCase() === String(email || "").toLowerCase());
+    const name = account?.name || (email ? email.split("@")[0] : "Director");
     res.json({
       token: "mock-jwt-token-xyz123",
       user: {
-        name: name.charAt(0).toUpperCase() + name.slice(1),
+        name: account ? account.name : name.charAt(0).toUpperCase() + name.slice(1),
         email: email || "director@interscale.com.au",
-        role: roleFromEmail(email),
-        state: "NSW"
+        role: account?.role || roleFromEmail(email),
+        state: account?.state || "NSW"
       }
     });
+  });
+
+  // ── USER MANAGEMENT ─────────────────────────────────────────────────────
+  // CRUD for Admin/PM/Coordinator accounts. Visible to Owner + Coordinator
+  // (see the `users` permission, PERM_DEFAULTS below). The Owner account is
+  // seeded and cannot be created/edited/deleted here.
+  app.get("/api/v1/users", (_req, res) => {
+    res.json(dbInstance.users);
+  });
+
+  app.post("/api/v1/users", (req, res) => {
+    const db = dbInstance;
+    const { name, email, role, state, managedProjectIds, alsoResource, trade, rate } = req.body || {};
+    if (!name || !email || !role) {
+      return res.status(400).json({ error: "Missing required fields: name, email and role" });
+    }
+    if (!["Coordinator", "Admin", "PM"].includes(role)) {
+      return res.status(400).json({ error: "role must be Coordinator, Admin or PM" });
+    }
+    if (db.users.some(u => u.email.toLowerCase() === String(email).toLowerCase())) {
+      return res.status(400).json({ error: "A user with this email already exists" });
+    }
+
+    let linkedResourceId: string | undefined;
+    if (alsoResource) {
+      const initials = String(name).split(" ").map((n: string) => n.charAt(0)).join("").toUpperCase().slice(0, 3) || "SR";
+      const rateVal = parseInt(rate) || 55;
+      linkedResourceId = `r${db.resources.length + 1}`;
+      db.resources.push({
+        id: linkedResourceId,
+        initials,
+        name,
+        trade: trade || role,
+        state: state || "NSW",
+        rate: `A$${rateVal}/hr`,
+        hourlyRateVal: rateVal,
+        util: 0,
+        status: "ok" as const,
+        email,
+        company: "FlowIQ",
+        overtimeRateVal: Math.round(rateVal * 1.5),
+        dailyAllowanceVal: 0,
+        projectRateOverrides: {},
+      });
+    }
+
+    const newUser = {
+      id: `u${Date.now()}`,
+      name,
+      email,
+      role: role as "Coordinator" | "Admin" | "PM",
+      state: state || "NSW",
+      managedProjectIds: role === "PM" && Array.isArray(managedProjectIds) ? managedProjectIds : [],
+      linkedResourceId,
+    };
+    db.users.push(newUser);
+    db.save();
+    res.json({ success: true, user: newUser });
+  });
+
+  app.put("/api/v1/users/:id", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const user = db.users.find(u => u.id === id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.role === "Owner") return res.status(400).json({ error: "The Owner account can't be edited here" });
+
+    const { name, email, role, state, managedProjectIds } = req.body || {};
+    if (role !== undefined) {
+      if (!["Coordinator", "Admin", "PM"].includes(role)) {
+        return res.status(400).json({ error: "role must be Coordinator, Admin or PM" });
+      }
+      user.role = role;
+    }
+    if (name !== undefined) user.name = name;
+    if (email !== undefined) user.email = email;
+    if (state !== undefined) user.state = state;
+    if (managedProjectIds !== undefined) user.managedProjectIds = user.role === "PM" ? managedProjectIds : [];
+
+    db.save();
+    res.json({ success: true, user });
+  });
+
+  app.delete("/api/v1/users/:id", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const user = db.users.find(u => u.id === id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.role === "Owner") return res.status(400).json({ error: "The Owner account can't be deleted" });
+
+    db.users = db.users.filter(u => u.id !== id);
+    db.save();
+    res.json({ success: true });
   });
 
   // ── PERMISSION MATRIX (Access) — mock, in-memory ───────────────────────────
@@ -306,14 +404,29 @@ async function startServer() {
   // POST /api/v1/projects: create a new project contract
   app.post("/api/v1/projects", (req, res) => {
     const db = dbInstance;
-    const { name, type, location, contractor, state, originalContractSum, plannedCost, ldRatePerDay, pcEndDate, retentionPercent } = req.body;
+    const { name, type, location, contractor, state, originalContractSum, plannedCost, ldRatePerDay, pcEndDate, retentionPercent, budgetLines, revenueReceived } = req.body;
     if (!name || !contractor) {
       return res.status(400).json({ error: "Missing required fields: name and contractor" });
     }
     const val = parseFloat(originalContractSum) || 5.0;
-    const parsedPlannedCost = plannedCost !== undefined && !isNaN(parseFloat(plannedCost)) ? parseFloat(plannedCost) : val * 0.85;
     const parsedLdRate = ldRatePerDay !== undefined && !isNaN(parseFloat(ldRatePerDay)) ? parseFloat(ldRatePerDay) : val * 1000;
     const parsedRetention = retentionPercent !== undefined && !isNaN(parseFloat(retentionPercent)) ? parseFloat(retentionPercent) : 5.0;
+
+    const cleanLines = Array.isArray(budgetLines)
+      ? budgetLines
+          .map((l: any, i: number) => ({
+            id: `bl-${Date.now()}-${i}`,
+            label: String(l?.label || "").trim() || "Cost line",
+            category: String(l?.category || "Materials"),
+            amount: parseFloat(l?.amount) || 0,
+          }))
+          .filter((l: any) => l.amount > 0)
+      : [];
+    const linesTotal = cleanLines.reduce((acc: number, l: any) => acc + l.amount, 0);
+    // Planned cost = whatever the caller specified, else the sum of budget lines, else the old 85%-of-contract default.
+    const parsedPlannedCost = plannedCost !== undefined && !isNaN(parseFloat(plannedCost))
+      ? parseFloat(plannedCost)
+      : linesTotal > 0 ? linesTotal : val * 0.85;
 
     const newProject = {
       id: `p${db.projects.length + 1}`,
@@ -333,11 +446,77 @@ async function startServer() {
       status: "ACTIVE" as const,
       progress: 0,
       weatherRisk: false,
-      overBudget: false
+      overBudget: false,
+      budgetLines: cleanLines,
+      actualLines: [] as typeof cleanLines,
+      revenueReceived: revenueReceived !== undefined && !isNaN(parseFloat(revenueReceived)) ? parseFloat(revenueReceived) : 0,
     };
     db.projects.push(newProject);
     db.save();
     res.json(newProject);
+  });
+
+  // POST /api/v1/projects/:id/cost-lines: add an actual (incurred) cost line
+  // while the project is in progress — the "biaya bahan / custom cost" added
+  // mid-project (material overrun, a swapped person, extra plant hire, etc).
+  app.post("/api/v1/projects/:id/cost-lines", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { label, category, amount } = req.body || {};
+    const project = db.projects.find(p => p.id === id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    const parsedAmount = parseFloat(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: "Invalid cost amount" });
+    }
+
+    const line = {
+      id: `al-${Date.now()}`,
+      label: String(label || "").trim() || "Cost line",
+      category: String(category || "Materials"),
+      amount: parsedAmount,
+    };
+    project.actualLines = [...(project.actualLines || []), line];
+    const nonLabourActual = project.actualLines.reduce((acc, l) => acc + l.amount, 0);
+    const scheduledLabour = sumProjectScheduledCost(db.tasks, db.resources, id);
+    project.actualCost = Math.round((nonLabourActual + scheduledLabour) * 100) / 100;
+    project.overBudget = project.actualCost > project.plannedCost;
+    db.save();
+    res.json({ success: true, project });
+  });
+
+  // POST /api/v1/projects/:id/revenue: set the revenue received so far
+  app.post("/api/v1/projects/:id/revenue", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { revenueReceived } = req.body || {};
+    const project = db.projects.find(p => p.id === id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    const parsed = parseFloat(revenueReceived);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return res.status(400).json({ error: "Invalid revenue amount" });
+    }
+    project.revenueReceived = parsed;
+    db.save();
+    res.json({ success: true, project });
+  });
+
+  // POST /api/v1/projects/:id/status: finish (mark COMPLETED) or reopen (back to ACTIVE)
+  app.post("/api/v1/projects/:id/status", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { status } = req.body || {};
+    const project = db.projects.find(p => p.id === id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    if (status !== "COMPLETED" && status !== "ACTIVE") {
+      return res.status(400).json({ error: "status must be COMPLETED or ACTIVE" });
+    }
+    project.status = status;
+    if (status === "COMPLETED") project.progress = 100;
+    db.save();
+    res.json({ success: true, project });
   });
 
   // POST /api/v1/projects/:id/rates: set project rate overrides for resources
@@ -1253,6 +1432,17 @@ async function startServer() {
 
     const scheduledCostVal = sumProjectScheduledCost(db.tasks, db.resources, id);
 
+    // Projected vs actual: labour (from the task cost engine) + the project's
+    // own budget/actual non-labour cost lines (materials, subcontractors, custom).
+    const budgetLines = project.budgetLines || [];
+    const actualLines = project.actualLines || [];
+    const budgetLinesTotal = budgetLines.reduce((acc, l) => acc + l.amount, 0);
+    const actualLinesTotal = actualLines.reduce((acc, l) => acc + l.amount, 0);
+    const projectedFinalCostVal = Math.round((scheduledCostVal + budgetLinesTotal) * 100) / 100;
+    const revenueReceivedVal = project.revenueReceived ?? 0;
+    const projectedProfitVal = Math.round((project.finalContractSum - projectedFinalCostVal) * 100) / 100;
+    const actualProfitVal = Math.round((revenueReceivedVal - project.actualCost) * 100) / 100;
+
     res.json({
       name: project.name,
       contractSumVal: project.finalContractSum,
@@ -1264,7 +1454,20 @@ async function startServer() {
       costOverrunVal: Math.round(costOverrun * 100) / 100,
       revenueVarianceVal: Math.round(revenueVariance * 100) / 100,
       retentionBalanceVal: totalRetention,
-      ldExposure: 68000 // A$68k standard penalty past schedule
+      // Was hardcoded to A$68,000 for every project (coincidentally p1's own rate).
+      // Now derived from the project's own ldRatePerDay; assumes a 10 working-day
+      // overrun once a project is flagged over budget (matches the worked example
+      // in the New Project form's LD tooltip: A$8,500/day x 10 days = A$85,000).
+      ldExposure: project.overBudget ? project.ldRatePerDay * 10 : 0,
+      budgetLines,
+      actualLines,
+      budgetLinesTotalVal: Math.round(budgetLinesTotal * 100) / 100,
+      actualLinesTotalVal: Math.round(actualLinesTotal * 100) / 100,
+      projectedFinalCostVal,
+      revenueReceivedVal,
+      projectedProfitVal,
+      actualProfitVal,
+      status: project.status,
     });
   });
 
