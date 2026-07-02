@@ -8,6 +8,7 @@ import { useAuth } from "../lib/auth";
 import { visibleProjects as scopeProjects } from "../lib/auth";
 import { Zap, RotateCcw, Calendar, DollarSign, Download, Plus, Trash2, CheckCircle2, RefreshCcw } from "lucide-react";
 import { changeHistory } from "../lib/changeHistory";
+import { fmtMoney, toDollars } from "../lib/money";
 
 const iconRow = { display: "inline-flex", alignItems: "center", gap: 6 } as const;
 
@@ -77,11 +78,12 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   const [pcEndDate, setPcEndDate] = useState("2026-11-30");
   const [retentionPercent, setRetentionPercent] = useState("5.0");
   const [revenueReceived, setRevenueReceived] = useState("0");
-  // Projected budget cost-lines (materials, subcontractors, custom costs) set
-  // at creation — these + the auto-computed labour estimate are the projected
-  // final cost shown on Finance and compared against actuals once the project
-  // is under way / complete.
+  // Projected budget cost-lines (Labour, Materials, Subcontractors, custom
+  // costs) set at creation — these are the projected final cost shown on
+  // Finance and compared against actuals once the project is under way / complete.
+  // Amounts are real dollars, not millions.
   const [budgetLines, setBudgetLines] = useState<{ label: string; category: string; amount: string }[]>([
+    { label: "Labour", category: "Labour", amount: "" },
     { label: "Materials", category: "Materials", amount: "" },
   ]);
 
@@ -202,7 +204,10 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       .then(() => {
         setName("");
         setContractor("");
-        setBudgetLines([{ label: "Materials", category: "Materials", amount: "" }]);
+        setBudgetLines([
+          { label: "Labour", category: "Labour", amount: "" },
+          { label: "Materials", category: "Materials", amount: "" },
+        ]);
         setRevenueReceived("0");
         setLdRatePerDay("8500");
         setPcStartDate("2026-07-01");
@@ -397,8 +402,8 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
               {p.overBudget ? "↓" : "↑"} Gross Margin: {marginVal}%
             </span>
             {isCompleted && (
-              <span style={{ color: (p.revenueReceived ?? 0) >= p.actualCost ? C.green : C.red }}>
-                Revenue A${(p.revenueReceived ?? 0).toFixed(1)}M vs actual A${p.actualCost.toFixed(1)}M
+              <span style={{ color: (p.revenueReceived ?? 0) >= toDollars(p.actualCost) ? C.green : C.red }}>
+                Revenue {fmtMoney(p.revenueReceived ?? 0)} vs actual {fmtMoney(toDollars(p.actualCost))}
               </span>
             )}
           </div>
@@ -625,7 +630,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
                 />
               </div>
               <div>
-                <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Revenue received so far (A$M) <span style={{ fontWeight:400, color:"#94A3B8" }}>(optional)</span></label>
+                <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Revenue received so far (A$) <span style={{ fontWeight:400, color:"#94A3B8" }}>(optional)</span></label>
                 <input
                   type="number"
                   value={revenueReceived}
@@ -635,16 +640,15 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
               </div>
             </div>
 
-            {/* Row 8: Projected budget cost-lines — materials, subcontractors, custom costs.
-                Labour is auto-estimated from scheduled tasks and added on top by Finance. */}
+            {/* Row 8: Projected budget cost-lines — Labour, Materials, Subcontractors, custom costs. */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <label style={{ fontSize:11, color:C.gray, fontWeight: 600 }}>Projected budget cost lines <span style={{ fontWeight:400, color:"#94A3B8" }}>(optional — materials, subcontractors, custom costs)</span></label>
+                <label style={{ fontSize:11, color:C.gray, fontWeight: 600 }}>Projected budget cost lines <span style={{ fontWeight:400, color:"#94A3B8" }}>(optional — labour, materials, subcontractors, custom costs)</span></label>
                 <button type="button" onClick={addBudgetLine} style={{ fontSize: 11, fontWeight: 600, color: C.blue, background: "none", border: "none", cursor: "pointer" }}>+ Add line</button>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {budgetLines.map((line, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px 24px", gap: 6, alignItems: "center" }}>
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 110px 24px", gap: 6, alignItems: "center" }}>
                     <input
                       type="text"
                       placeholder="Label (e.g. Cement)"
@@ -657,6 +661,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
                       onChange={e => updateBudgetLine(i, { category: e.target.value })}
                       style={{ fontSize:11.5, padding:"6px 6px", borderRadius:6, border:`0.5px solid ${C.grayLight}` }}
                     >
+                      <option value="Labour">Labour</option>
                       <option value="Materials">Materials</option>
                       <option value="Subcontractors">Subcontractors</option>
                       <option value="Plant & Equipment">Plant &amp; Equipment</option>
@@ -664,7 +669,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
                     </select>
                     <input
                       type="number"
-                      placeholder="A$M"
+                      placeholder="A$"
                       value={line.amount}
                       onChange={e => updateBudgetLine(i, { amount: e.target.value })}
                       style={{ fontSize:11.5, padding:"6px 8px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, boxSizing: "border-box" }}
@@ -676,7 +681,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
                 ))}
               </div>
               <div style={{ fontSize: 11, color: C.gray, marginTop: 6 }}>
-                Projected budget lines total: <strong style={{ color: C.text }}>A${budgetLinesTotal.toFixed(1)}M</strong> (labour is estimated separately from the schedule)
+                Projected budget lines total: <strong style={{ color: C.text }}>{fmtMoney(budgetLinesTotal)}</strong>
               </div>
             </div>
 
@@ -805,6 +810,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
                 <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Category</label>
                 <select value={costCategory} onChange={e => setCostCategory(e.target.value)}
                   style={{ width:"100%", fontSize:12, padding:"7px 6px", borderRadius:6, border:`0.5px solid ${C.grayLight}` }}>
+                  <option value="Labour">Labour</option>
                   <option value="Materials">Materials</option>
                   <option value="Subcontractors">Subcontractors</option>
                   <option value="Plant & Equipment">Plant &amp; Equipment</option>
@@ -812,7 +818,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
                 </select>
               </div>
               <div>
-                <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Amount (A$M)</label>
+                <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Amount (A$)</label>
                 <input type="number" value={costAmount} onChange={e => setCostAmount(e.target.value)}
                   style={{ width:"100%", fontSize:12, padding:"7px 10px", borderRadius:6, border:`0.5px solid ${C.grayLight}`, boxSizing: "border-box" }} />
               </div>

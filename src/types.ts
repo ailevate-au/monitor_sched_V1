@@ -1,9 +1,12 @@
-/** A projected (budget) or actual non-labour cost line item on a project. */
+/**
+ * A projected (budget) or actual cost line item on a project — Labour,
+ * Materials, Subcontractors, Plant & Equipment, or a custom category.
+ */
 export interface CostLine {
   id: string;
   label: string;
   category: string;
-  /** A$M */
+  /** Real dollars (not millions) — use fmtMoney (src/lib/money.ts) to render. */
   amount: number;
 }
 
@@ -28,11 +31,11 @@ export interface Project {
   retentionPercent?: number;
   /** Email of the PM who owns this project. PMs only see their own projects. */
   managerEmail?: string;
-  /** Non-labour cost lines set at creation (materials, custom costs) — the projected budget. */
+  /** Cost lines set at creation (Labour, Materials, custom costs) — the projected budget. Dollars. */
   budgetLines?: CostLine[];
-  /** Non-labour cost lines added while the project is in progress — the actual spend. */
+  /** Cost lines added while the project is in progress — the actual spend. Dollars. */
   actualLines?: CostLine[];
-  /** A$M received from the client so far. */
+  /** Real dollars received from the client so far (not millions). */
   revenueReceived?: number;
 }
 

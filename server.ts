@@ -412,6 +412,7 @@ async function startServer() {
     const parsedLdRate = ldRatePerDay !== undefined && !isNaN(parseFloat(ldRatePerDay)) ? parseFloat(ldRatePerDay) : val * 1000;
     const parsedRetention = retentionPercent !== undefined && !isNaN(parseFloat(retentionPercent)) ? parseFloat(retentionPercent) : 5.0;
 
+    // Cost line amounts are real dollars (Labour, Materials, Subcontractors, Plant, custom).
     const cleanLines = Array.isArray(budgetLines)
       ? budgetLines
           .map((l: any, i: number) => ({
@@ -422,11 +423,14 @@ async function startServer() {
           }))
           .filter((l: any) => l.amount > 0)
       : [];
-    const linesTotal = cleanLines.reduce((acc: number, l: any) => acc + l.amount, 0);
-    // Planned cost = whatever the caller specified, else the sum of budget lines, else the old 85%-of-contract default.
-    const parsedPlannedCost = plannedCost !== undefined && !isNaN(parseFloat(plannedCost))
-      ? parseFloat(plannedCost)
-      : linesTotal > 0 ? linesTotal : val * 0.85;
+    const linesTotalDollars = cleanLines.reduce((acc: number, l: any) => acc + l.amount, 0);
+    // Planned cost ($M, legacy contract-level field) = sum of the dollar budget
+    // lines, else whatever the caller specified directly, else the old 85%-of-contract default.
+    const parsedPlannedCost = linesTotalDollars > 0
+      ? linesTotalDollars / 1_000_000
+      : plannedCost !== undefined && !isNaN(parseFloat(plannedCost))
+        ? parseFloat(plannedCost)
+        : val * 0.85;
 
     const newProject = {
       id: `p${db.projects.length + 1}`,
@@ -449,6 +453,7 @@ async function startServer() {
       overBudget: false,
       budgetLines: cleanLines,
       actualLines: [] as typeof cleanLines,
+      // Real dollars, not millions.
       revenueReceived: revenueReceived !== undefined && !isNaN(parseFloat(revenueReceived)) ? parseFloat(revenueReceived) : 0,
     };
     db.projects.push(newProject);
@@ -478,9 +483,10 @@ async function startServer() {
       amount: parsedAmount,
     };
     project.actualLines = [...(project.actualLines || []), line];
-    const nonLabourActual = project.actualLines.reduce((acc, l) => acc + l.amount, 0);
-    const scheduledLabour = sumProjectScheduledCost(db.tasks, db.resources, id);
-    project.actualCost = Math.round((nonLabourActual + scheduledLabour) * 100) / 100;
+    // actualCost ($M, legacy contract-level field) = sum of all actual dollar lines / 1e6.
+    // Labour is one of those lines (seeded, or added here), not schedule-derived.
+    const actualLinesTotalDollars = project.actualLines.reduce((acc, l) => acc + l.amount, 0);
+    project.actualCost = Math.round((actualLinesTotalDollars / 1_000_000) * 1000) / 1000;
     project.overBudget = project.actualCost > project.plannedCost;
     db.save();
     res.json({ success: true, project });
@@ -1432,16 +1438,34 @@ async function startServer() {
 
     const scheduledCostVal = sumProjectScheduledCost(db.tasks, db.resources, id);
 
-    // Projected vs actual: labour (from the task cost engine) + the project's
-    // own budget/actual non-labour cost lines (materials, subcontractors, custom).
+    // Projected vs actual: the project's own budget/actual cost lines
+    // (Labour, Materials, Subcontractors, Plant, custom), in real dollars.
+    // Labour is a seeded/entered line like any other category — it is no
+    // longer derived from the task-cost engine, so completed projects (no
+    // live tasks) still carry a real labour figure.
     const budgetLines = project.budgetLines || [];
     const actualLines = project.actualLines || [];
-    const budgetLinesTotal = budgetLines.reduce((acc, l) => acc + l.amount, 0);
-    const actualLinesTotal = actualLines.reduce((acc, l) => acc + l.amount, 0);
-    const projectedFinalCostVal = Math.round((scheduledCostVal + budgetLinesTotal) * 100) / 100;
-    const revenueReceivedVal = project.revenueReceived ?? 0;
-    const projectedProfitVal = Math.round((project.finalContractSum - projectedFinalCostVal) * 100) / 100;
-    const actualProfitVal = Math.round((revenueReceivedVal - project.actualCost) * 100) / 100;
+    const budgetLinesTotalDollars = budgetLines.reduce((acc, l) => acc + l.amount, 0);
+    const actualLinesTotalDollars = actualLines.reduce((acc, l) => acc + l.amount, 0);
+    const revenueDollars = project.revenueReceived ?? 0;
+    const contractSumDollars = project.finalContractSum * 1_000_000;
+    const projectedProfitDollars = Math.round(contractSumDollars - budgetLinesTotalDollars);
+    const actualProfitDollars = Math.round(revenueDollars - actualLinesTotalDollars);
+
+    // Per-category Expected vs Actual vs Variance — the clean breakdown the
+    // Finance project drawer renders (union of every category that appears in
+    // either the budget or actual lines, so a one-off actual-only line shows too).
+    const categoryOrder = ["Labour", "Materials", "Subcontractors", "Plant & Equipment", "Machinery"];
+    const categories = new Set<string>([
+      ...categoryOrder.filter((c) => budgetLines.some((l) => l.category === c) || actualLines.some((l) => l.category === c)),
+      ...budgetLines.map((l) => l.category),
+      ...actualLines.map((l) => l.category),
+    ]);
+    const categoryBreakdown = Array.from(categories).map((category) => {
+      const expected = budgetLines.filter((l) => l.category === category).reduce((acc, l) => acc + l.amount, 0);
+      const actual = actualLines.filter((l) => l.category === category).reduce((acc, l) => acc + l.amount, 0);
+      return { category, expected, actual, variance: actual - expected };
+    });
 
     res.json({
       name: project.name,
@@ -1461,12 +1485,21 @@ async function startServer() {
       ldExposure: project.overBudget ? project.ldRatePerDay * 10 : 0,
       budgetLines,
       actualLines,
-      budgetLinesTotalVal: Math.round(budgetLinesTotal * 100) / 100,
-      actualLinesTotalVal: Math.round(actualLinesTotal * 100) / 100,
-      projectedFinalCostVal,
-      revenueReceivedVal,
-      projectedProfitVal,
-      actualProfitVal,
+      // Dollar-native fields — use fmtMoney (src/lib/money.ts) on the client.
+      categoryBreakdown,
+      budgetLinesTotalDollars,
+      actualLinesTotalDollars,
+      revenueDollars,
+      contractSumDollars,
+      projectedProfitDollars,
+      actualProfitDollars,
+      // Kept in A$M for the legacy Projected-vs-Actual tab / KPI cards.
+      budgetLinesTotalVal: Math.round((budgetLinesTotalDollars / 1_000_000) * 1000) / 1000,
+      actualLinesTotalVal: Math.round((actualLinesTotalDollars / 1_000_000) * 1000) / 1000,
+      projectedFinalCostVal: Math.round((budgetLinesTotalDollars / 1_000_000) * 1000) / 1000,
+      revenueReceivedVal: Math.round((revenueDollars / 1_000_000) * 1000) / 1000,
+      projectedProfitVal: Math.round((projectedProfitDollars / 1_000_000) * 1000) / 1000,
+      actualProfitVal: Math.round((actualProfitDollars / 1_000_000) * 1000) / 1000,
       status: project.status,
     });
   });
