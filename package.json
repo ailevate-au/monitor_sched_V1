@@ -29,6 +29,7 @@
     "pdfkit": "^0.18.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "recharts": "^3.9.1",
     "vite": "^6.2.3"
   },
   "devDependencies": {

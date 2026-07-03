@@ -110,7 +110,7 @@ export default function ProgrammeSettingsPanel() {
       }}
     >
       <h3 style={{ fontSize: 14, fontWeight: 700, color: C.navy, margin: "0 0 4px 0" }}>
-        Programme settings
+        Schedule settings
       </h3>
       <p style={{ fontSize: 12, color: C.gray, margin: "0 0 14px 0", lineHeight: 1.5 }}>
         Scheduling behaviour on the Gantt timeline and when editing tasks. Edit the options below,
@@ -175,13 +175,13 @@ export default function ProgrammeSettingsPanel() {
                 label="Flag tight handovers"
                 title="Tight Handover Warnings"
                 body={
-                  "When turned on, FlowIQ flags any job that starts with little or no gap after the job it depends on — if the first job runs even a little over, the next can't start.\n\nSet the number of working days below: a handover is flagged when the gap is under that many days. Turn the checkbox off to stop showing these warnings entirely."
+                  "When turned on, FlowIQ flags any task that starts with little or no gap after the task it depends on — if the first task runs even a little over, the next can't start.\n\nSet the number of working days below: a handover is flagged when the gap is under that many days. Turn the checkbox off to stop showing these warnings entirely."
                 }
               />
             </span>
             <span style={{ display: "block", fontSize: 11.5, color: C.gray, marginTop: 4, lineHeight: 1.45 }}>
               {tightEnabled
-                ? "Warn when the gap before a dependent job is under the days set below."
+                ? "Warn when the gap before a dependent task is under the days set below."
                 : "Tight-handover warnings are turned off."}
             </span>
           </span>
@@ -238,16 +238,16 @@ export default function ProgrammeSettingsPanel() {
           <span>
             <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: C.navy }}>
               <LabelWithInfo
-                label="Flag jobs behind schedule"
+                label="Flag tasks behind schedule"
                 title="Behind-Schedule (Deadline) Warnings"
                 body={
-                  "Each job has a 'Must finish by' deadline (set on the job in the Timeline). When this is turned on, FlowIQ flags any job whose end date has slipped past its deadline — it shows as 'behind schedule' on the Timeline and as a 'Running late' problem the owner can act on.\n\nLeave it off to ignore deadlines (handy to keep the demo simple)."
+                  "Each task has a 'Must finish by' deadline (set on the task in the Timeline). When this is turned on, FlowIQ flags any task whose end date has slipped past its deadline — it shows as 'behind schedule' on the Timeline and as a 'Running late' problem the owner can act on.\n\nLeave it off to ignore deadlines (handy to keep the demo simple)."
                 }
               />
             </span>
             <span style={{ display: "block", fontSize: 11.5, color: C.gray, marginTop: 4, lineHeight: 1.45 }}>
               {deadlineEnabled
-                ? "Jobs whose end date runs past their 'Must finish by' deadline are flagged behind schedule."
+                ? "Tasks whose end date runs past their 'Must finish by' deadline are flagged behind schedule."
                 : "Behind-schedule (deadline) warnings are turned off."}
             </span>
           </span>
@@ -292,7 +292,7 @@ export default function ProgrammeSettingsPanel() {
           </button>
         )}
         {dirty && (
-          <span style={{ fontSize: 11.5, color: C.amber, fontWeight: 600 }}>Unsaved changes</span>
+          <span style={{ fontSize: 11.5, color: C.amber, fontWeight: 600 }}>Changes not applied yet</span>
         )}
         {!dirty && justSaved && (
           <span style={{ fontSize: 11.5, color: C.greenDark, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>

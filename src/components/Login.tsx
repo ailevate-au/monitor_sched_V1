@@ -186,9 +186,9 @@ export default function Login() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {[
               { label: "Owner (sees everything)", email: "owner@flowiq.com.au" },
+              { label: "Project Coordinator", email: "coordinator@flowiq.com.au" },
               { label: "Admin", email: "admin@flowiq.com.au" },
               { label: "Project Manager", email: "pm@flowiq.com.au" },
-              { label: "Worker (on site)", email: "worker@flowiq.com.au" },
             ].map((role) => (
               <button
                 key={role.email}

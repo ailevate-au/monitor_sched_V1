@@ -9,7 +9,7 @@
  * Owner is implicitly full-access and is not part of the editable matrix.
  */
 
-export type PermRole = "Admin" | "PM" | "Worker";
+export type PermRole = "Coordinator" | "Admin" | "PM";
 export type PermType = "always_on" | "owner_only" | "configurable";
 
 export interface PermFeature {

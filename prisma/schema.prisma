@@ -26,10 +26,23 @@ model Project {
   progress            Int      @default(0)
   weatherRisk         Boolean  @default(false)
   overBudget          Boolean  @default(false)
+  budgetLinesJson     String   @default("[]")
+  actualLinesJson     String   @default("[]")
+  revenueReceived     Float?
 
   tasks         Task[]
   claims        ProgressClaim[]
   rateOverrides ProjectRateOverride[]
+}
+
+model AppUser {
+  id                 String   @id
+  name               String
+  email              String   @unique
+  role               String
+  state              String?
+  managedProjectIds  String   @default("")
+  linkedResourceId   String?
 }
 
 model Resource {

@@ -13,18 +13,18 @@ import React, { createContext, useCallback, useContext, useState } from "react";
 export interface AuthUser {
   name: string;
   email: string;
-  /** "Owner" | "Admin" | "PM" | "Worker" (legacy: "Resource"). Kept open for the v1.1 role matrix. */
+  /** "Owner" | "Coordinator" | "Admin" | "PM". Kept open for the role matrix. */
   role: string;
   state?: string;
 }
 
-/** Owner/Admin oversee the whole portfolio; a PM only sees projects they manage. */
+/** Owner/Coordinator/Admin oversee the whole portfolio; a PM only sees projects they manage. */
 export function canSeeAllProjects(user: AuthUser | null): boolean {
   return !user || user.role !== "PM";
 }
 
 /**
- * Scope a project list to what the signed-in user may see. Owner/Admin/Worker
+ * Scope a project list to what the signed-in user may see. Owner/Coordinator/Admin
  * get everything; a PM only gets projects whose `managerEmail` matches them.
  * Works on any object carrying `{ managerEmail }`.
  */

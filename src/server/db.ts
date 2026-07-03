@@ -13,6 +13,7 @@ import {
   DEFAULT_PROJECTS,
   DEFAULT_RESOURCES,
   DEFAULT_TASKS,
+  DEFAULT_USERS,
   PROJECT_MANAGERS,
   getDefaultMasters,
 } from "./seedData";
@@ -24,6 +25,8 @@ export type {
   ProgressClaim,
   Conflict,
   CostCategory,
+  CostLine,
+  AppUserAccount,
 } from "../types";
 
 import type {
@@ -33,7 +36,19 @@ import type {
   ProgressClaim,
   Conflict,
   CostCategory,
+  CostLine,
+  AppUserAccount,
 } from "../types";
+
+function safeParseCostLines(json: string | null | undefined): CostLine[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? (parsed as CostLine[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 function mastersFromRows(rows: Awaited<ReturnType<typeof prisma.masterItem.findMany>>): MastersBundle {
   const bundle: MastersBundle = { states: [], sectors: [], trades: [], companies: [] };
@@ -62,6 +77,7 @@ export class Datastore {
   claims: ProgressClaim[] = [];
   conflicts: Conflict[] = [];
   costCategories: CostCategory[] = [];
+  users: AppUserAccount[] = [];
   masters: MastersBundle = getDefaultMasters();
   alerts: any[] = [];
   // Demo scheduling knobs (in-memory; default on boot). `tightHandover.enabled`
@@ -119,6 +135,9 @@ export class Datastore {
           plannedCost: p.plannedCost, actualCost: p.actualCost, ldRatePerDay: p.ldRatePerDay,
           pcStartDate: p.pcStartDate, pcEndDate: p.pcEndDate, retentionPercent: p.retentionPercent,
           status: p.status, progress: p.progress, weatherRisk: p.weatherRisk, overBudget: p.overBudget,
+          budgetLinesJson: JSON.stringify((p as any).budgetLines ?? []),
+          actualLinesJson: JSON.stringify((p as any).actualLines ?? []),
+          revenueReceived: (p as any).revenueReceived ?? null,
         },
       });
     }
@@ -174,10 +193,19 @@ export class Datastore {
         },
       });
     }
+    for (const u of DEFAULT_USERS) {
+      await prisma.appUser.create({
+        data: {
+          id: u.id, name: u.name, email: u.email, role: u.role, state: u.state,
+          managedProjectIds: (u.managedProjectIds || []).join(","),
+          linkedResourceId: u.linkedResourceId,
+        },
+      });
+    }
   }
 
   private async loadFromPrisma() {
-    const [projects, resources, overrides, tasks, claims, categories, conflicts, masters, alerts, undo] =
+    const [projects, resources, overrides, tasks, claims, categories, conflicts, masters, alerts, undo, users] =
       await Promise.all([
         prisma.project.findMany(),
         prisma.resource.findMany(),
@@ -189,6 +217,7 @@ export class Datastore {
         prisma.masterItem.findMany(),
         prisma.alert.findMany(),
         prisma.undoEntry.findMany(),
+        prisma.appUser.findMany(),
       ]);
 
     const overrideMap: Record<string, Record<string, number>> = {};
@@ -203,6 +232,9 @@ export class Datastore {
       plannedCost: p.plannedCost, actualCost: p.actualCost, ldRatePerDay: p.ldRatePerDay,
       pcStartDate: p.pcStartDate, pcEndDate: p.pcEndDate, retentionPercent: p.retentionPercent,
       status: p.status as Project["status"], progress: p.progress, weatherRisk: p.weatherRisk, overBudget: p.overBudget,
+      budgetLines: safeParseCostLines((p as any).budgetLinesJson),
+      actualLines: safeParseCostLines((p as any).actualLinesJson),
+      revenueReceived: (p as any).revenueReceived ?? undefined,
     }));
 
     this.resources = resources.map(r => ({
@@ -251,13 +283,27 @@ export class Datastore {
       ...(a.payload ? JSON.parse(a.payload) : {}),
     }));
     this.undoStack = undo.map(u => ({ targetId: u.targetId, prevAssigneeId: u.prevAssigneeId }));
+    this.users = users.map(u => ({
+      id: u.id, name: u.name, email: u.email, role: u.role as AppUserAccount["role"],
+      state: u.state ?? undefined,
+      managedProjectIds: u.managedProjectIds ? u.managedProjectIds.split(",").filter(Boolean) : [],
+      linkedResourceId: u.linkedResourceId ?? undefined,
+    }));
   }
 
   private modernizeInMemory() {
-    // PM ownership is demo reference data (not persisted) — re-apply on every load.
+    // PM ownership: prefer the users store (managedProjectIds), fall back to the
+    // static seed map for projects nobody has explicitly been assigned to yet.
+    const pmByProject: Record<string, string> = { ...PROJECT_MANAGERS };
+    for (const u of this.users) {
+      if (u.role !== "PM") continue;
+      for (const pid of u.managedProjectIds || []) {
+        pmByProject[pid] = u.email;
+      }
+    }
     this.projects = this.projects.map(p => ({
       ...p,
-      managerEmail: PROJECT_MANAGERS[p.id],
+      managerEmail: pmByProject[p.id],
     }));
 
     const seenCategoryNames = new Set(this.costCategories.map((c) => c.name.trim().toLowerCase()));
@@ -313,6 +359,9 @@ export class Datastore {
           plannedCost: p.plannedCost, actualCost: p.actualCost, ldRatePerDay: p.ldRatePerDay,
           pcStartDate: p.pcStartDate, pcEndDate: p.pcEndDate, retentionPercent: p.retentionPercent ?? 5,
           status: p.status, progress: p.progress, weatherRisk: p.weatherRisk, overBudget: p.overBudget,
+          budgetLinesJson: JSON.stringify(p.budgetLines ?? []),
+          actualLinesJson: JSON.stringify(p.actualLines ?? []),
+          revenueReceived: p.revenueReceived ?? null,
         },
         update: {
           name: p.name, type: p.type, location: p.location, contractor: p.contractor, state: p.state,
@@ -320,6 +369,9 @@ export class Datastore {
           plannedCost: p.plannedCost, actualCost: p.actualCost, ldRatePerDay: p.ldRatePerDay,
           pcStartDate: p.pcStartDate, pcEndDate: p.pcEndDate, retentionPercent: p.retentionPercent ?? 5,
           status: p.status, progress: p.progress, weatherRisk: p.weatherRisk, overBudget: p.overBudget,
+          budgetLinesJson: JSON.stringify(p.budgetLines ?? []),
+          actualLinesJson: JSON.stringify(p.actualLines ?? []),
+          revenueReceived: p.revenueReceived ?? null,
         },
       })),
     ]);
@@ -447,6 +499,26 @@ export class Datastore {
     for (const u of this.undoStack) {
       await prisma.undoEntry.create({
         data: { targetId: u.targetId, prevAssigneeId: u.prevAssigneeId },
+      });
+    }
+
+    const userIds = this.users.map(u => u.id);
+    if (userIds.length > 0) {
+      await prisma.appUser.deleteMany({ where: { id: { notIn: userIds } } });
+    }
+    for (const u of this.users) {
+      await prisma.appUser.upsert({
+        where: { id: u.id },
+        create: {
+          id: u.id, name: u.name, email: u.email, role: u.role, state: u.state,
+          managedProjectIds: (u.managedProjectIds || []).join(","),
+          linkedResourceId: u.linkedResourceId,
+        },
+        update: {
+          name: u.name, email: u.email, role: u.role, state: u.state,
+          managedProjectIds: (u.managedProjectIds || []).join(","),
+          linkedResourceId: u.linkedResourceId,
+        },
       });
     }
   }

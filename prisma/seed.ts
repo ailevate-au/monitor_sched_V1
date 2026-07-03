@@ -6,6 +6,7 @@ import {
   DEFAULT_PROJECTS,
   DEFAULT_RESOURCES,
   DEFAULT_TASKS,
+  DEFAULT_USERS,
   getDefaultMasters,
 } from "../src/server/seedData";
 
@@ -22,6 +23,7 @@ async function main() {
   await prisma.project.deleteMany();
   await prisma.costCategory.deleteMany();
   await prisma.masterItem.deleteMany();
+  await prisma.appUser.deleteMany();
 
   for (const c of DEFAULT_COST_CATEGORIES) {
     await prisma.costCategory.create({
@@ -55,6 +57,9 @@ async function main() {
         progress: p.progress,
         weatherRisk: p.weatherRisk,
         overBudget: p.overBudget,
+        budgetLinesJson: JSON.stringify((p as any).budgetLines ?? []),
+        actualLinesJson: JSON.stringify((p as any).actualLines ?? []),
+        revenueReceived: (p as any).revenueReceived ?? null,
       },
     });
   }
@@ -148,6 +153,20 @@ async function main() {
         message: a.message,
         type: a.type,
         timestamp: a.timestamp,
+      },
+    });
+  }
+
+  for (const u of DEFAULT_USERS) {
+    await prisma.appUser.create({
+      data: {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        state: u.state,
+        managedProjectIds: (u.managedProjectIds || []).join(","),
+        linkedResourceId: u.linkedResourceId,
       },
     });
   }

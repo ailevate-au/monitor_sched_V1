@@ -103,37 +103,139 @@ async function startServer() {
 
   // ─── API ENDPOINTS (v1) ──────────────────────────────────────────
 
-  // AUTH API — Owner / Admin / PM / Worker role-based controls (mock JWT)
+  // AUTH API — Owner / Project Coordinator / Admin / PM role-based controls (mock JWT)
   // Role is inferred from the email prefix so role-gated screens can be tested
-  // (owner@… → Owner, admin@… → Admin, worker@… → Worker, otherwise PM).
-  function roleFromEmail(email: string): "Owner" | "Admin" | "PM" | "Worker" {
+  // (owner@… → Owner, coordinator@/coord@ → Coordinator, admin@… → Admin, otherwise PM).
+  function roleFromEmail(email: string): "Owner" | "Coordinator" | "Admin" | "PM" {
     const e = (email || "").toLowerCase();
     if (e.startsWith("owner")) return "Owner";
+    if (e.startsWith("coordinator") || e.startsWith("coord")) return "Coordinator";
     if (e.startsWith("admin")) return "Admin";
-    if (e.startsWith("worker")) return "Worker";
     return "PM";
   }
 
   app.post("/api/v1/auth/login", (req, res) => {
     const { email } = req.body;
-    const name = email ? email.split("@")[0] : "Director";
+    const db = dbInstance;
+    // A managed account (created via User Management) takes priority over the
+    // email-prefix inference, so a Coordinator/Owner-created user logs in with
+    // exactly the role/name/state they were given.
+    const account = db.users.find(u => u.email.toLowerCase() === String(email || "").toLowerCase());
+    const name = account?.name || (email ? email.split("@")[0] : "Director");
     res.json({
       token: "mock-jwt-token-xyz123",
       user: {
-        name: name.charAt(0).toUpperCase() + name.slice(1),
+        name: account ? account.name : name.charAt(0).toUpperCase() + name.slice(1),
         email: email || "director@interscale.com.au",
-        role: roleFromEmail(email),
-        state: "NSW"
+        role: account?.role || roleFromEmail(email),
+        state: account?.state || "NSW"
       }
     });
   });
 
+  // ── USER MANAGEMENT ─────────────────────────────────────────────────────
+  // CRUD for Admin/PM/Coordinator accounts. Visible to Owner + Coordinator
+  // (see the `users` permission, PERM_DEFAULTS below). The Owner account is
+  // seeded and cannot be created/edited/deleted here.
+  app.get("/api/v1/users", (_req, res) => {
+    res.json(dbInstance.users);
+  });
+
+  app.post("/api/v1/users", (req, res) => {
+    const db = dbInstance;
+    const { name, email, role, state, managedProjectIds, alsoResource, trade, rate } = req.body || {};
+    if (!name || !email || !role) {
+      return res.status(400).json({ error: "Missing required fields: name, email and role" });
+    }
+    if (!["Coordinator", "Admin", "PM"].includes(role)) {
+      return res.status(400).json({ error: "role must be Coordinator, Admin or PM" });
+    }
+    if (db.users.some(u => u.email.toLowerCase() === String(email).toLowerCase())) {
+      return res.status(400).json({ error: "A user with this email already exists" });
+    }
+
+    let linkedResourceId: string | undefined;
+    if (alsoResource) {
+      const initials = String(name).split(" ").map((n: string) => n.charAt(0)).join("").toUpperCase().slice(0, 3) || "SR";
+      const rateVal = parseInt(rate) || 55;
+      linkedResourceId = `r${db.resources.length + 1}`;
+      db.resources.push({
+        id: linkedResourceId,
+        initials,
+        name,
+        trade: trade || role,
+        state: state || "NSW",
+        rate: `A$${rateVal}/hr`,
+        hourlyRateVal: rateVal,
+        util: 0,
+        status: "ok" as const,
+        email,
+        company: "FlowIQ",
+        overtimeRateVal: Math.round(rateVal * 1.5),
+        dailyAllowanceVal: 0,
+        projectRateOverrides: {},
+      });
+    }
+
+    const newUser = {
+      id: `u${Date.now()}`,
+      name,
+      email,
+      role: role as "Coordinator" | "Admin" | "PM",
+      state: state || "NSW",
+      managedProjectIds: role === "PM" && Array.isArray(managedProjectIds) ? managedProjectIds : [],
+      linkedResourceId,
+    };
+    db.users.push(newUser);
+    db.save();
+    res.json({ success: true, user: newUser });
+  });
+
+  app.put("/api/v1/users/:id", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const user = db.users.find(u => u.id === id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.role === "Owner") return res.status(400).json({ error: "The Owner account can't be edited here" });
+
+    const { name, email, role, state, managedProjectIds } = req.body || {};
+    if (role !== undefined) {
+      if (!["Coordinator", "Admin", "PM"].includes(role)) {
+        return res.status(400).json({ error: "role must be Coordinator, Admin or PM" });
+      }
+      user.role = role;
+    }
+    if (name !== undefined) user.name = name;
+    if (email !== undefined) user.email = email;
+    if (state !== undefined) user.state = state;
+    if (managedProjectIds !== undefined) user.managedProjectIds = user.role === "PM" ? managedProjectIds : [];
+
+    db.save();
+    res.json({ success: true, user });
+  });
+
+  app.delete("/api/v1/users/:id", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const user = db.users.find(u => u.id === id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.role === "Owner") return res.status(400).json({ error: "The Owner account can't be deleted" });
+
+    db.users = db.users.filter(u => u.id !== id);
+    db.save();
+    res.json({ success: true });
+  });
+
   // ── PERMISSION MATRIX (Access) — mock, in-memory ───────────────────────────
-  // Owner is implicitly full-access and never stored. Only Admin / PM / Worker
+  // Owner is implicitly full-access and never stored. Only Coordinator / Admin / PM
   // are configurable. always_on rows are locked ON; owner_only rows locked OFF.
-  type PermRole = "Admin" | "PM" | "Worker";
+  // A Project Coordinator is a portfolio-ops role: sees every project (like the
+  // Owner), assigns projects to PMs and manages Admin/PM accounts (User Management),
+  // but has no money access (Financial / Pricing stay owner-only) and leaves the
+  // hands-on system config (Master Data, Expenses) to Admin.
+  type PermRole = "Coordinator" | "Admin" | "PM";
   type PermType = "always_on" | "owner_only" | "configurable";
-  const PERM_ROLES: PermRole[] = ["Admin", "PM", "Worker"];
+  const PERM_ROLES: PermRole[] = ["Coordinator", "Admin", "PM"];
   const PERM_FEATURES: { key: string; label: string; group: string; type: PermType }[] = [
     { key: "dashboard",   label: "Dashboard / Overview",     group: "Overview",       type: "always_on" },
     { key: "projects",    label: "Projects",                 group: "Overview",       type: "configurable" },
@@ -146,18 +248,20 @@ async function startServer() {
     { key: "claims",      label: "Project Expenses",         group: "Finance",        type: "configurable" },
     { key: "reports",     label: "Reports",                  group: "Finance",        type: "configurable" },
     { key: "masterdata",  label: "Settings / Master Data",   group: "Administration", type: "configurable" },
-    { key: "users",       label: "User Management",          group: "Administration", type: "owner_only" },
+    { key: "users",       label: "User Management",          group: "Administration", type: "configurable" },
     { key: "permissions", label: "Access (Permissions)",     group: "Administration", type: "owner_only" },
   ];
   const PERM_DEFAULTS: Record<string, Record<PermRole, boolean>> = {
-    projects:   { Admin: true,  PM: true,  Worker: false },
-    conflicts:  { Admin: true,  PM: true,  Worker: false },
-    weather:    { Admin: true,  PM: true,  Worker: true  },
-    gantt:      { Admin: true,  PM: true,  Worker: true  },
-    resources:  { Admin: true,  PM: true,  Worker: false },
-    claims:     { Admin: true,  PM: true,  Worker: false },
-    reports:    { Admin: true,  PM: true,  Worker: false },
-    masterdata: { Admin: true,  PM: false, Worker: false },
+    projects:   { Coordinator: true,  Admin: true,  PM: true  },
+    conflicts:  { Coordinator: true,  Admin: true,  PM: true  },
+    weather:    { Coordinator: true,  Admin: true,  PM: true  },
+    gantt:      { Coordinator: true,  Admin: true,  PM: true  },
+    resources:  { Coordinator: true,  Admin: true,  PM: true  },
+    claims:     { Coordinator: false, Admin: true,  PM: true  },
+    reports:    { Coordinator: true,  Admin: true,  PM: false },
+    masterdata: { Coordinator: false, Admin: true,  PM: false },
+    // Portfolio lead creates/manages Admin + PM accounts; Admin/PM cannot.
+    users:      { Coordinator: true,  Admin: false, PM: false },
   };
   function buildDefaultMatrix(): Record<PermRole, Record<string, boolean>> {
     const matrix = {} as Record<PermRole, Record<string, boolean>>;
@@ -300,14 +404,33 @@ async function startServer() {
   // POST /api/v1/projects: create a new project contract
   app.post("/api/v1/projects", (req, res) => {
     const db = dbInstance;
-    const { name, type, location, contractor, state, originalContractSum, plannedCost, ldRatePerDay, pcEndDate, retentionPercent } = req.body;
+    const { name, type, location, contractor, state, originalContractSum, plannedCost, ldRatePerDay, pcEndDate, retentionPercent, budgetLines, revenueReceived } = req.body;
     if (!name || !contractor) {
       return res.status(400).json({ error: "Missing required fields: name and contractor" });
     }
     const val = parseFloat(originalContractSum) || 5.0;
-    const parsedPlannedCost = plannedCost !== undefined && !isNaN(parseFloat(plannedCost)) ? parseFloat(plannedCost) : val * 0.85;
     const parsedLdRate = ldRatePerDay !== undefined && !isNaN(parseFloat(ldRatePerDay)) ? parseFloat(ldRatePerDay) : val * 1000;
     const parsedRetention = retentionPercent !== undefined && !isNaN(parseFloat(retentionPercent)) ? parseFloat(retentionPercent) : 5.0;
+
+    // Cost line amounts are real dollars (Labour, Materials, Subcontractors, Plant, custom).
+    const cleanLines = Array.isArray(budgetLines)
+      ? budgetLines
+          .map((l: any, i: number) => ({
+            id: `bl-${Date.now()}-${i}`,
+            label: String(l?.label || "").trim() || "Cost line",
+            category: String(l?.category || "Materials"),
+            amount: parseFloat(l?.amount) || 0,
+          }))
+          .filter((l: any) => l.amount > 0)
+      : [];
+    const linesTotalDollars = cleanLines.reduce((acc: number, l: any) => acc + l.amount, 0);
+    // Planned cost ($M, legacy contract-level field) = sum of the dollar budget
+    // lines, else whatever the caller specified directly, else the old 85%-of-contract default.
+    const parsedPlannedCost = linesTotalDollars > 0
+      ? linesTotalDollars / 1_000_000
+      : plannedCost !== undefined && !isNaN(parseFloat(plannedCost))
+        ? parseFloat(plannedCost)
+        : val * 0.85;
 
     const newProject = {
       id: `p${db.projects.length + 1}`,
@@ -327,11 +450,79 @@ async function startServer() {
       status: "ACTIVE" as const,
       progress: 0,
       weatherRisk: false,
-      overBudget: false
+      overBudget: false,
+      budgetLines: cleanLines,
+      actualLines: [] as typeof cleanLines,
+      // Real dollars, not millions.
+      revenueReceived: revenueReceived !== undefined && !isNaN(parseFloat(revenueReceived)) ? parseFloat(revenueReceived) : 0,
     };
     db.projects.push(newProject);
     db.save();
     res.json(newProject);
+  });
+
+  // POST /api/v1/projects/:id/cost-lines: add an actual (incurred) cost line
+  // while the project is in progress — the "biaya bahan / custom cost" added
+  // mid-project (material overrun, a swapped person, extra plant hire, etc).
+  app.post("/api/v1/projects/:id/cost-lines", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { label, category, amount } = req.body || {};
+    const project = db.projects.find(p => p.id === id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    const parsedAmount = parseFloat(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: "Invalid cost amount" });
+    }
+
+    const line = {
+      id: `al-${Date.now()}`,
+      label: String(label || "").trim() || "Cost line",
+      category: String(category || "Materials"),
+      amount: parsedAmount,
+    };
+    project.actualLines = [...(project.actualLines || []), line];
+    // actualCost ($M, legacy contract-level field) = sum of all actual dollar lines / 1e6.
+    // Labour is one of those lines (seeded, or added here), not schedule-derived.
+    const actualLinesTotalDollars = project.actualLines.reduce((acc, l) => acc + l.amount, 0);
+    project.actualCost = Math.round((actualLinesTotalDollars / 1_000_000) * 1000) / 1000;
+    project.overBudget = project.actualCost > project.plannedCost;
+    db.save();
+    res.json({ success: true, project });
+  });
+
+  // POST /api/v1/projects/:id/revenue: set the revenue received so far
+  app.post("/api/v1/projects/:id/revenue", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { revenueReceived } = req.body || {};
+    const project = db.projects.find(p => p.id === id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    const parsed = parseFloat(revenueReceived);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return res.status(400).json({ error: "Invalid revenue amount" });
+    }
+    project.revenueReceived = parsed;
+    db.save();
+    res.json({ success: true, project });
+  });
+
+  // POST /api/v1/projects/:id/status: finish (mark COMPLETED) or reopen (back to ACTIVE)
+  app.post("/api/v1/projects/:id/status", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+    const { status } = req.body || {};
+    const project = db.projects.find(p => p.id === id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    if (status !== "COMPLETED" && status !== "ACTIVE") {
+      return res.status(400).json({ error: "status must be COMPLETED or ACTIVE" });
+    }
+    project.status = status;
+    if (status === "COMPLETED") project.progress = 100;
+    db.save();
+    res.json({ success: true, project });
   });
 
   // POST /api/v1/projects/:id/rates: set project rate overrides for resources
@@ -846,7 +1037,7 @@ async function startServer() {
         what: conflictTasks.length >= 2
           ? `${c.resource} is needed on ${conflictTasks.length} jobs at once${crossProject ? " (on different projects)" : ""}: ${conflictTasks.map(t => `"${jobLabelFor(t)}" (${t.start} to ${t.end})`).join(" and ")}.`
           : c.desc,
-        impact: "The same person can't be on two jobs at once. One of them will slip unless you fix it.",
+        impact: "",
         suggestedActions: actions,
       });
     }
@@ -1247,6 +1438,35 @@ async function startServer() {
 
     const scheduledCostVal = sumProjectScheduledCost(db.tasks, db.resources, id);
 
+    // Projected vs actual: the project's own budget/actual cost lines
+    // (Labour, Materials, Subcontractors, Plant, custom), in real dollars.
+    // Labour is a seeded/entered line like any other category — it is no
+    // longer derived from the task-cost engine, so completed projects (no
+    // live tasks) still carry a real labour figure.
+    const budgetLines = project.budgetLines || [];
+    const actualLines = project.actualLines || [];
+    const budgetLinesTotalDollars = budgetLines.reduce((acc, l) => acc + l.amount, 0);
+    const actualLinesTotalDollars = actualLines.reduce((acc, l) => acc + l.amount, 0);
+    const revenueDollars = project.revenueReceived ?? 0;
+    const contractSumDollars = project.finalContractSum * 1_000_000;
+    const projectedProfitDollars = Math.round(contractSumDollars - budgetLinesTotalDollars);
+    const actualProfitDollars = Math.round(revenueDollars - actualLinesTotalDollars);
+
+    // Per-category Expected vs Actual vs Variance — the clean breakdown the
+    // Finance project drawer renders (union of every category that appears in
+    // either the budget or actual lines, so a one-off actual-only line shows too).
+    const categoryOrder = ["Labour", "Materials", "Subcontractors", "Plant & Equipment", "Machinery"];
+    const categories = new Set<string>([
+      ...categoryOrder.filter((c) => budgetLines.some((l) => l.category === c) || actualLines.some((l) => l.category === c)),
+      ...budgetLines.map((l) => l.category),
+      ...actualLines.map((l) => l.category),
+    ]);
+    const categoryBreakdown = Array.from(categories).map((category) => {
+      const expected = budgetLines.filter((l) => l.category === category).reduce((acc, l) => acc + l.amount, 0);
+      const actual = actualLines.filter((l) => l.category === category).reduce((acc, l) => acc + l.amount, 0);
+      return { category, expected, actual, variance: actual - expected };
+    });
+
     res.json({
       name: project.name,
       contractSumVal: project.finalContractSum,
@@ -1258,7 +1478,29 @@ async function startServer() {
       costOverrunVal: Math.round(costOverrun * 100) / 100,
       revenueVarianceVal: Math.round(revenueVariance * 100) / 100,
       retentionBalanceVal: totalRetention,
-      ldExposure: 68000 // A$68k standard penalty past schedule
+      // Was hardcoded to A$68,000 for every project (coincidentally p1's own rate).
+      // Now derived from the project's own ldRatePerDay; assumes a 10 working-day
+      // overrun once a project is flagged over budget (matches the worked example
+      // in the New Project form's LD tooltip: A$8,500/day x 10 days = A$85,000).
+      ldExposure: project.overBudget ? project.ldRatePerDay * 10 : 0,
+      budgetLines,
+      actualLines,
+      // Dollar-native fields — use fmtMoney (src/lib/money.ts) on the client.
+      categoryBreakdown,
+      budgetLinesTotalDollars,
+      actualLinesTotalDollars,
+      revenueDollars,
+      contractSumDollars,
+      projectedProfitDollars,
+      actualProfitDollars,
+      // Kept in A$M for the legacy Projected-vs-Actual tab / KPI cards.
+      budgetLinesTotalVal: Math.round((budgetLinesTotalDollars / 1_000_000) * 1000) / 1000,
+      actualLinesTotalVal: Math.round((actualLinesTotalDollars / 1_000_000) * 1000) / 1000,
+      projectedFinalCostVal: Math.round((budgetLinesTotalDollars / 1_000_000) * 1000) / 1000,
+      revenueReceivedVal: Math.round((revenueDollars / 1_000_000) * 1000) / 1000,
+      projectedProfitVal: Math.round((projectedProfitDollars / 1_000_000) * 1000) / 1000,
+      actualProfitVal: Math.round((actualProfitDollars / 1_000_000) * 1000) / 1000,
+      status: project.status,
     });
   });
 
@@ -1273,7 +1515,14 @@ async function startServer() {
     if (type === "contract_sum_addition") {
       project.finalContractSum = Math.round((project.finalContractSum + val) * 10) / 10;
     } else {
-      project.actualCost = Math.round((project.actualCost + val) * 10) / 10;
+      // Same actual-cost-line model as certify / POST /projects/:id/cost-lines —
+      // keeps actualCost always derived from actualLines, never incremented directly.
+      project.actualLines = [
+        ...(project.actualLines || []),
+        { id: `al-var-${Date.now()}`, label: description || "Variation", category: "Materials", amount: val * 1_000_000 },
+      ];
+      const actualLinesTotalDollars = project.actualLines.reduce((acc, l) => acc + l.amount, 0);
+      project.actualCost = Math.round((actualLinesTotalDollars / 1_000_000) * 1000) / 1000;
       project.overBudget = project.actualCost > project.plannedCost;
     }
     db.save();
@@ -1349,9 +1598,25 @@ async function startServer() {
     claim.certifiedVal = numericCertified;
     claim.retentionVal = retention;
 
-    // Increment Project Actual Cost accordingly
+    // Certifying a claim is real incurred cost, so it becomes an actual cost
+    // line (like a manual "Add cost" from the Projects tab) instead of
+    // incrementing actualCost directly — previously this bypassed the
+    // cost-line model entirely, so a certified claim never showed up in the
+    // Finance dashboard's category breakdown and actualCost could drift from
+    // the sum of actualLines.
     if (project) {
-      project.actualCost = Math.round((project.actualCost + parseFloat(certifiedAmountVal)) * 10) / 10;
+      project.actualLines = [
+        ...(project.actualLines || []),
+        {
+          id: `al-claim-${claim.id}`,
+          label: `Certified claim ${claim.claimNumber}`,
+          category: claim.costCategoryName || "Materials",
+          amount: numericCertified,
+        },
+      ];
+      const actualLinesTotalDollars = project.actualLines.reduce((acc, l) => acc + l.amount, 0);
+      project.actualCost = Math.round((actualLinesTotalDollars / 1_000_000) * 1000) / 1000;
+      project.overBudget = project.actualCost > project.plannedCost;
     }
 
     db.save();

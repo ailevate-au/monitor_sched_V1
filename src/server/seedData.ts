@@ -1,5 +1,6 @@
 import { MastersBundle } from "../types/masters";
 import { cloneDefaultMasters } from "./mastersDefaults";
+import type { AppUserAccount } from "../types";
 
 /**
  * Which PM owns which project. PMs only see their own projects, so when a PM
@@ -21,28 +22,232 @@ export const DEFAULT_COST_CATEGORIES = [
   { id: "cc5", name: "Machinery", is_active: true, sort_order: 5 },
 ];
 
+// Cost line `amount` and `revenueReceived` are REAL DOLLARS (not millions) —
+// use fmtMoney (src/lib/money.ts) to render. plannedCost/actualCost stay in
+// A$M (legacy contract-level fields) and equal the dollar line totals / 1e6,
+// so the two views (contract-level $M vs category-level $) always agree.
+// Labour is a seeded cost category line (budget + actual) like Materials —
+// it is no longer derived from the schedule, so completed projects (which
+// have no live tasks) still carry a real labour figure.
 export const DEFAULT_PROJECTS = [
   {
     id: "p1", name: "Parramatta Square — Tower C", type: "Mixed-use development",
     location: "Parramatta NSW", contractor: "Lendlease", state: "NSW",
-    originalContractSum: 58.0, finalContractSum: 68.0, plannedCost: 58.0, actualCost: 60.4,
+    originalContractSum: 58.0, finalContractSum: 68.0, plannedCost: 70.0, actualCost: 73.5,
     ldRatePerDay: 68000, pcStartDate: "2026-03-01", pcEndDate: "2026-09-30",
     retentionPercent: 5.0, status: "ACTIVE", progress: 41, weatherRisk: true, overBudget: true,
+    budgetLines: [
+      { id: "bl-p1-0", label: "Labour", category: "Labour", amount: 12_000_000 },
+      { id: "bl-p1-1", label: "Materials", category: "Materials", amount: 32_000_000 },
+      { id: "bl-p1-2", label: "Subcontractors", category: "Subcontractors", amount: 18_000_000 },
+      { id: "bl-p1-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 8_000_000 },
+    ],
+    actualLines: [
+      { id: "al-p1-0", label: "Labour", category: "Labour", amount: 13_100_000 },
+      { id: "al-p1-1", label: "Materials", category: "Materials", amount: 33_500_000 },
+      { id: "al-p1-2", label: "Subcontractors", category: "Subcontractors", amount: 18_900_000 },
+      { id: "al-p1-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 8_000_000 },
+    ],
+    revenueReceived: 40_000_000,
   },
   {
     id: "p2", name: "Victoria Harbour — Stage 2", type: "High-density residential",
     location: "Docklands VIC", contractor: "CPB Contractors", state: "VIC",
-    originalContractSum: 36.0, finalContractSum: 54.0, plannedCost: 36.0, actualCost: 34.0,
+    originalContractSum: 36.0, finalContractSum: 54.0, plannedCost: 46.0, actualCost: 44.8,
     ldRatePerDay: 54000, pcStartDate: "2026-02-15", pcEndDate: "2026-11-30",
     retentionPercent: 5.0, status: "ACTIVE", progress: 28, weatherRisk: false, overBudget: false,
+    budgetLines: [
+      { id: "bl-p2-0", label: "Labour", category: "Labour", amount: 10_000_000 },
+      { id: "bl-p2-1", label: "Materials", category: "Materials", amount: 20_000_000 },
+      { id: "bl-p2-2", label: "Subcontractors", category: "Subcontractors", amount: 12_000_000 },
+      { id: "bl-p2-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 4_000_000 },
+    ],
+    actualLines: [
+      { id: "al-p2-0", label: "Labour", category: "Labour", amount: 10_800_000 },
+      { id: "al-p2-1", label: "Materials", category: "Materials", amount: 18_500_000 },
+      { id: "al-p2-2", label: "Subcontractors", category: "Subcontractors", amount: 11_500_000 },
+      { id: "al-p2-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 4_000_000 },
+    ],
+    revenueReceived: 22_000_000,
   },
   {
     id: "p3", name: "Southbank Residences — T1", type: "High-density residential",
     location: "South Brisbane QLD", contractor: "John Holland", state: "QLD",
-    originalContractSum: 41.0, finalContractSum: 41.0, plannedCost: 8.2, actualCost: 7.4,
+    originalContractSum: 41.0, finalContractSum: 41.0, plannedCost: 11.2, actualCost: 10.3,
     ldRatePerDay: 41000, pcStartDate: "2026-05-01", pcEndDate: "2026-12-20",
     retentionPercent: 5.0, status: "ACTIVE", progress: 18, weatherRisk: false, overBudget: false,
+    budgetLines: [
+      { id: "bl-p3-0", label: "Labour", category: "Labour", amount: 3_000_000 },
+      { id: "bl-p3-1", label: "Materials", category: "Materials", amount: 5_000_000 },
+      { id: "bl-p3-2", label: "Subcontractors", category: "Subcontractors", amount: 2_500_000 },
+      { id: "bl-p3-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 700_000 },
+    ],
+    actualLines: [
+      { id: "al-p3-0", label: "Labour", category: "Labour", amount: 2_900_000 },
+      { id: "al-p3-1", label: "Materials", category: "Materials", amount: 4_500_000 },
+      { id: "al-p3-2", label: "Subcontractors", category: "Subcontractors", amount: 2_200_000 },
+      { id: "al-p3-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 700_000 },
+    ],
+    revenueReceived: 5_000_000,
   },
+
+  // ─── COMPLETED PROJECTS (p4–p10) — closed-out jobs for the Finance /
+  // Projects "Completed" section, so projected-vs-actual has real history to
+  // compare (some under budget, some over) rather than just the 3 live jobs.
+  {
+    id: "p4", name: "Bondi Junction Tower", type: "Commercial office",
+    location: "Bondi Junction NSW", contractor: "Multiplex", state: "NSW",
+    originalContractSum: 32.0, finalContractSum: 34.0, plannedCost: 36.0, actualCost: 39.6,
+    ldRatePerDay: 34000, pcStartDate: "2024-11-01", pcEndDate: "2025-10-15",
+    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
+    budgetLines: [
+      { id: "bl-p4-0", label: "Labour", category: "Labour", amount: 9_000_000 },
+      { id: "bl-p4-1", label: "Materials", category: "Materials", amount: 16_000_000 },
+      { id: "bl-p4-2", label: "Subcontractors", category: "Subcontractors", amount: 8_500_000 },
+      { id: "bl-p4-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 2_500_000 },
+    ],
+    actualLines: [
+      { id: "al-p4-0", label: "Labour", category: "Labour", amount: 10_100_000 },
+      { id: "al-p4-1", label: "Materials", category: "Materials", amount: 18_000_000 },
+      { id: "al-p4-2", label: "Subcontractors", category: "Subcontractors", amount: 9_200_000 },
+      { id: "al-p4-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 2_300_000 },
+    ],
+    revenueReceived: 34_000_000,
+  },
+  {
+    id: "p5", name: "Chatswood Central", type: "Mixed-use development",
+    location: "Chatswood NSW", contractor: "Built", state: "NSW",
+    originalContractSum: 25.0, finalContractSum: 25.0, plannedCost: 27.0, actualCost: 24.7,
+    ldRatePerDay: 25000, pcStartDate: "2024-06-01", pcEndDate: "2025-04-30",
+    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: false,
+    budgetLines: [
+      { id: "bl-p5-0", label: "Labour", category: "Labour", amount: 7_000_000 },
+      { id: "bl-p5-1", label: "Materials", category: "Materials", amount: 12_000_000 },
+      { id: "bl-p5-2", label: "Subcontractors", category: "Subcontractors", amount: 6_000_000 },
+      { id: "bl-p5-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 2_000_000 },
+    ],
+    actualLines: [
+      { id: "al-p5-0", label: "Labour", category: "Labour", amount: 6_300_000 },
+      { id: "al-p5-1", label: "Materials", category: "Materials", amount: 11_000_000 },
+      { id: "al-p5-2", label: "Subcontractors", category: "Subcontractors", amount: 5_600_000 },
+      { id: "al-p5-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 1_800_000 },
+    ],
+    revenueReceived: 25_000_000,
+  },
+  {
+    id: "p6", name: "Geelong Waterfront", type: "High-density residential",
+    location: "Geelong VIC", contractor: "Probuild", state: "VIC",
+    originalContractSum: 40.0, finalContractSum: 44.0, plannedCost: 46.0, actualCost: 52.6,
+    ldRatePerDay: 44000, pcStartDate: "2024-08-15", pcEndDate: "2025-09-01",
+    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
+    budgetLines: [
+      { id: "bl-p6-0", label: "Labour", category: "Labour", amount: 12_000_000 },
+      { id: "bl-p6-1", label: "Materials", category: "Materials", amount: 20_000_000 },
+      { id: "bl-p6-2", label: "Subcontractors", category: "Subcontractors", amount: 11_000_000 },
+      { id: "bl-p6-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 3_000_000 },
+    ],
+    actualLines: [
+      { id: "al-p6-0", label: "Labour", category: "Labour", amount: 13_900_000 },
+      { id: "al-p6-1", label: "Materials", category: "Materials", amount: 23_000_000 },
+      { id: "al-p6-2", label: "Subcontractors", category: "Subcontractors", amount: 12_400_000 },
+      { id: "al-p6-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 3_300_000 },
+    ],
+    revenueReceived: 42_000_000,
+  },
+  {
+    id: "p7", name: "Adelaide Oval Precinct", type: "Commercial office",
+    location: "Adelaide SA", contractor: "Hansen Yuncken", state: "SA",
+    originalContractSum: 55.0, finalContractSum: 58.0, plannedCost: 62.0, actualCost: 69.5,
+    ldRatePerDay: 58000, pcStartDate: "2024-02-01", pcEndDate: "2025-06-30",
+    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
+    budgetLines: [
+      { id: "bl-p7-0", label: "Labour", category: "Labour", amount: 16_000_000 },
+      { id: "bl-p7-1", label: "Materials", category: "Materials", amount: 27_000_000 },
+      { id: "bl-p7-2", label: "Subcontractors", category: "Subcontractors", amount: 14_000_000 },
+      { id: "bl-p7-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 5_000_000 },
+    ],
+    actualLines: [
+      { id: "al-p7-0", label: "Labour", category: "Labour", amount: 18_300_000 },
+      { id: "al-p7-1", label: "Materials", category: "Materials", amount: 30_500_000 },
+      { id: "al-p7-2", label: "Subcontractors", category: "Subcontractors", amount: 15_400_000 },
+      { id: "al-p7-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 5_300_000 },
+    ],
+    revenueReceived: 58_000_000,
+  },
+  {
+    id: "p8", name: "Fremantle Wharf", type: "Industrial",
+    location: "Fremantle WA", contractor: "BGC Construction", state: "WA",
+    originalContractSum: 22.0, finalContractSum: 22.0, plannedCost: 24.0, actualCost: 28.2,
+    ldRatePerDay: 22000, pcStartDate: "2024-09-01", pcEndDate: "2025-05-15",
+    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
+    budgetLines: [
+      { id: "bl-p8-0", label: "Labour", category: "Labour", amount: 6_000_000 },
+      { id: "bl-p8-1", label: "Materials", category: "Materials", amount: 11_000_000 },
+      { id: "bl-p8-2", label: "Subcontractors", category: "Subcontractors", amount: 5_500_000 },
+      { id: "bl-p8-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 1_500_000 },
+    ],
+    actualLines: [
+      { id: "al-p8-0", label: "Labour", category: "Labour", amount: 7_300_000 },
+      { id: "al-p8-1", label: "Materials", category: "Materials", amount: 13_000_000 },
+      { id: "al-p8-2", label: "Subcontractors", category: "Subcontractors", amount: 6_200_000 },
+      { id: "al-p8-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 1_700_000 },
+    ],
+    revenueReceived: 21_500_000,
+  },
+  {
+    id: "p9", name: "Newcastle Foreshore", type: "Mixed-use development",
+    location: "Newcastle NSW", contractor: "Richard Crookes", state: "NSW",
+    originalContractSum: 18.0, finalContractSum: 19.0, plannedCost: 20.0, actualCost: 19.1,
+    ldRatePerDay: 19000, pcStartDate: "2024-12-01", pcEndDate: "2025-07-20",
+    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: false,
+    budgetLines: [
+      { id: "bl-p9-0", label: "Labour", category: "Labour", amount: 5_000_000 },
+      { id: "bl-p9-1", label: "Materials", category: "Materials", amount: 9_000_000 },
+      { id: "bl-p9-2", label: "Subcontractors", category: "Subcontractors", amount: 4_500_000 },
+      { id: "bl-p9-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 1_500_000 },
+    ],
+    actualLines: [
+      { id: "al-p9-0", label: "Labour", category: "Labour", amount: 4_900_000 },
+      { id: "al-p9-1", label: "Materials", category: "Materials", amount: 8_500_000 },
+      { id: "al-p9-2", label: "Subcontractors", category: "Subcontractors", amount: 4_300_000 },
+      { id: "al-p9-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 1_400_000 },
+    ],
+    revenueReceived: 19_000_000,
+  },
+  {
+    id: "p10", name: "Cairns Marina", type: "High-density residential",
+    location: "Cairns QLD", contractor: "Hutchinson Builders", state: "QLD",
+    originalContractSum: 29.0, finalContractSum: 30.0, plannedCost: 32.0, actualCost: 37.3,
+    ldRatePerDay: 30000, pcStartDate: "2024-10-15", pcEndDate: "2025-08-10",
+    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
+    budgetLines: [
+      { id: "bl-p10-0", label: "Labour", category: "Labour", amount: 8_000_000 },
+      { id: "bl-p10-1", label: "Materials", category: "Materials", amount: 14_500_000 },
+      { id: "bl-p10-2", label: "Subcontractors", category: "Subcontractors", amount: 7_000_000 },
+      { id: "bl-p10-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 2_500_000 },
+    ],
+    actualLines: [
+      { id: "al-p10-0", label: "Labour", category: "Labour", amount: 9_500_000 },
+      { id: "al-p10-1", label: "Materials", category: "Materials", amount: 16_700_000 },
+      { id: "al-p10-2", label: "Subcontractors", category: "Subcontractors", amount: 8_100_000 },
+      { id: "al-p10-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 3_000_000 },
+    ],
+    revenueReceived: 29_000_000,
+  },
+];
+
+/**
+ * Seeded app-user accounts (Owner / Coordinator / Admin / PM). User
+ * Management (Owner + Coordinator) can add, edit and remove accounts on top
+ * of this baseline; role is normally inferred from the email prefix
+ * (see roleFromEmail in server.ts), but a match here takes priority so admins
+ * can rename/re-role/re-scope a seeded account.
+ */
+export const DEFAULT_USERS: AppUserAccount[] = [
+  { id: "u1", name: "Owner", email: "owner@flowiq.com.au", role: "Owner", state: "NSW", managedProjectIds: [] },
+  { id: "u2", name: "Coordinator", email: "coordinator@flowiq.com.au", role: "Coordinator", state: "NSW", managedProjectIds: [] },
+  { id: "u3", name: "Admin", email: "admin@flowiq.com.au", role: "Admin", state: "NSW", managedProjectIds: [] },
+  { id: "u4", name: "Pm", email: "pm@flowiq.com.au", role: "PM", state: "VIC", managedProjectIds: ["p2"] },
 ];
 
 // 10 resources — 2 in conflict (Ben and Tom), rest available at varying load
