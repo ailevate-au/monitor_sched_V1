@@ -433,7 +433,7 @@ export default function ScreenClaims() {
 
       <Card>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12, flexWrap: "wrap", gap: 10 }}>
-          <span style={{ fontSize:13, fontWeight:500, color:C.text }}>Project Expenses — History</span>
+          <span style={{ fontSize:13, fontWeight:500, color:C.text }}>Progress Claims — History</span>
           <Btn primary small onClick={openNewClaimModal}>+ New Expense</Btn>
         </div>
 

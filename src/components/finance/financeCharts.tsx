@@ -50,31 +50,35 @@ export const PieCard = ({
   </Card>
 );
 
+// Pie sits left-of-centre with the legend in its own column to the right —
+// at 50/50 the legend text crowds right up against the slices.
+const PIE_CHART_WIDTH = PIE_SIZE + 160;
+
 /** Categorical pie — identity, not magnitude. Fixed slice order via caller. */
 export function CountPie({ data, colors }: { data: Array<{ name: string; value: number }>; colors: string[] }) {
   return (
-    <PieChart width={PIE_SIZE + 60} height={PIE_SIZE}>
-      <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} isAnimationActive={false}>
+    <PieChart width={PIE_CHART_WIDTH} height={PIE_SIZE}>
+      <Pie data={data} dataKey="value" nameKey="name" cx="38%" cy="50%" outerRadius={80} isAnimationActive={false}>
         {data.map((_, i) => (
           <Cell key={i} fill={colors[i % colors.length]} stroke="#fff" strokeWidth={2} />
         ))}
       </Pie>
       <Tooltip formatter={(v: number, n: string) => [v, n]} />
-      <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: 11 }} />
+      <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: 11, paddingLeft: 20 }} />
     </PieChart>
   );
 }
 
 export function DollarPie({ data, colors }: { data: Array<{ name: string; value: number }>; colors: string[] }) {
   return (
-    <PieChart width={PIE_SIZE + 60} height={PIE_SIZE}>
-      <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} isAnimationActive={false}>
+    <PieChart width={PIE_CHART_WIDTH} height={PIE_SIZE}>
+      <Pie data={data} dataKey="value" nameKey="name" cx="38%" cy="50%" outerRadius={80} isAnimationActive={false}>
         {data.map((_, i) => (
           <Cell key={i} fill={colors[i % colors.length]} stroke="#fff" strokeWidth={2} />
         ))}
       </Pie>
       <Tooltip formatter={(v: number) => fmtMoney(v)} />
-      <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: 11 }} />
+      <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: 11, paddingLeft: 20 }} />
     </PieChart>
   );
 }
@@ -97,7 +101,13 @@ export function HorizontalBar({
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
       <XAxis type="number" tick={AXIS_FONT} tickFormatter={unit === "dollars" ? dollarTick : undefined} />
       <YAxis type="category" dataKey="name" width={120} tick={AXIS_FONT} />
-      <Tooltip formatter={(v: number) => (unit === "dollars" ? fmtMoney(v) : v)} />
+      <Tooltip
+        formatter={(v: number) => (unit === "dollars" ? fmtMoney(v) : v)}
+        labelFormatter={(label, payload) => {
+          const row = payload?.[0]?.payload as { start?: string; end?: string } | undefined;
+          return row?.start && row?.end ? `${label} (${row.start} → ${row.end})` : label;
+        }}
+      />
       <Bar dataKey={dataKey} fill={color} radius={[0, 4, 4, 0]} maxBarSize={22} />
     </BarChart>
   );
@@ -150,17 +160,22 @@ export function ContractorComposed({
   );
 }
 
-/** Multi-series area — weekly expenses per project. Fixed color per project (by index). */
-export function WeeklyExpensesArea({
+/**
+ * Multi-series area — spend over time (real calendar months) per project.
+ * Legend pinned to the TOP: with many series the bottom legend wraps onto
+ * several lines and the cursor-following tooltip from hovering the plot can
+ * land right on top of it — putting the legend above the axis avoids that.
+ */
+export function SpendOverTimeArea({
   rows, seriesNames, colors,
 }: { rows: Array<Record<string, number | string>>; seriesNames: string[]; colors: string[] }) {
   return (
-    <AreaChart data={rows} margin={{ left: 4, right: 8 }}>
+    <AreaChart data={rows} margin={{ left: 4, right: 8, top: 8 }}>
+      <Legend verticalAlign="top" align="left" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} />
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
-      <XAxis dataKey="week" tick={AXIS_FONT} label={{ value: "Week", position: "insideBottom", offset: -4, fontSize: 10.5, fill: AXIS }} />
+      <XAxis dataKey="label" tick={AXIS_FONT} />
       <YAxis tick={AXIS_FONT} tickFormatter={dollarTick} />
       <Tooltip formatter={(v: number) => fmtMoney(v)} />
-      <Legend wrapperStyle={{ fontSize: 11 }} />
       {seriesNames.map((name, i) => (
         <Area key={name} type="monotone" dataKey={name} stackId="1" stroke={colors[i % colors.length]} fill={colors[i % colors.length]} fillOpacity={0.35} isAnimationActive={false} />
       ))}
@@ -168,17 +183,17 @@ export function WeeklyExpensesArea({
   );
 }
 
-/** Stacked bar — cost category breakdown per project. Fixed category → color order. */
+/** Stacked bar — cost category breakdown per project. Fixed category → color order. Top legend (see SpendOverTimeArea). */
 export function CategoryStackedBar({
   data, categories, colors,
 }: { data: Array<Record<string, number | string>>; categories: string[]; colors: string[] }) {
   return (
-    <BarChart data={data} margin={{ left: 4, right: 8 }}>
+    <BarChart data={data} margin={{ left: 4, right: 8, top: 8 }}>
+      <Legend verticalAlign="top" align="left" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} />
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="name" tick={AXIS_FONT} interval={0} />
       <YAxis tick={AXIS_FONT} tickFormatter={dollarTick} />
       <Tooltip formatter={(v: number) => fmtMoney(v)} />
-      <Legend wrapperStyle={{ fontSize: 11 }} />
       {categories.map((cat, i) => (
         <Bar key={cat} dataKey={cat} name={cat} stackId="cat" fill={colors[i % colors.length]} maxBarSize={44} />
       ))}

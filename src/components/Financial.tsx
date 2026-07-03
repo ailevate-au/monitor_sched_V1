@@ -6,15 +6,16 @@ import { fmtMoney, toDollars } from "../lib/money";
 import {
   FinMap, CATEGORY_ORDER,
   portfolioKpis, projectsByType, projectsByRegion, durationWeeks,
-  weeklyExpensesSeries, budgetVsCostByType, budgetVsCostByRegion,
+  monthlySpendSeries, monthRangeOf, budgetVsCostByType, budgetVsCostByRegion,
   budgetVsCostByContractor, marginByProject, costOverrunByProject,
-  expensesShareByProject, categoryStackedByProject,
+  expensesShareByProject, categoryStackedByProject, ymOf, monthLabel,
 } from "./finance/financeData";
 import {
   ChartCard, PieCard, CountPie, DollarPie, RegionTreemap, HorizontalBar,
-  GroupedDollarBar, PercentColumn, ContractorComposed, WeeklyExpensesArea,
+  GroupedDollarBar, PercentColumn, ContractorComposed, SpendOverTimeArea,
   CategoryStackedBar,
 } from "./finance/financeCharts";
+import { ChevronDown } from "lucide-react";
 
 const C = {
   blue:       "#1A5FA8",
@@ -56,7 +57,8 @@ function projectHasAlert(p: Project) {
 const PAGES = [
   { id: "overview", label: "Overview" },
   { id: "budgetcost", label: "Budget vs Cost" },
-  { id: "expenses", label: "Expenses" },
+  { id: "expenses", label: "Cost Breakdown" },
+  { id: "compare", label: "Compare" },
 ];
 
 export default function ScreenFinancial() {
@@ -72,6 +74,16 @@ export default function ScreenFinancial() {
   const [filterLocation, setFilterLocation] = useState("all");
   const [filterContractor, setFilterContractor] = useState("all");
   const [filterType, setFilterType] = useState("all");
+
+  // Project show/hide checkboxes — null means "all visible" (default, before
+  // the project list has loaded or nothing's been unchecked yet).
+  const [hiddenProjectIds, setHiddenProjectIds] = useState<Set<string>>(new Set());
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
+
+  // Date range (year-month, e.g. "2026-03") — clips the spend-over-time chart
+  // and narrows every tab to projects active within the range.
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectDetail, setProjectDetail] = useState<FinMap[string] | null>(null);
@@ -143,7 +155,8 @@ export default function ScreenFinancial() {
 
   const hasActiveFilters =
     filterSearch.trim() !== "" || filterProject !== "all" || filterLocation !== "all" ||
-    filterContractor !== "all" || filterType !== "all";
+    filterContractor !== "all" || filterType !== "all" || hiddenProjectIds.size > 0 ||
+    dateFrom !== "" || dateTo !== "";
 
   const clearFilters = () => {
     setFilterSearch("");
@@ -151,15 +164,44 @@ export default function ScreenFinancial() {
     setFilterLocation("all");
     setFilterContractor("all");
     setFilterType("all");
+    setHiddenProjectIds(new Set());
+    setDateFrom("");
+    setDateTo("");
   };
+
+  const fullRange = useMemo(() => monthRangeOf(projList), [projList]);
+  const monthOptions = useMemo(() => {
+    if (!fullRange) return [] as string[];
+    const opts: string[] = [];
+    let [y, m] = fullRange.minYM.split("-").map(Number);
+    const [ey, em] = fullRange.maxYM.split("-").map(Number);
+    let guard = 0;
+    while ((y < ey || (y === ey && m <= em)) && guard < 240) {
+      opts.push(`${y}-${String(m).padStart(2, "0")}`);
+      m++;
+      if (m > 12) { m = 1; y++; }
+      guard++;
+    }
+    return opts;
+  }, [fullRange]);
+
+  const toggleProjectVisible = (id: string) =>
+    setHiddenProjectIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const filteredProjects = useMemo(() => {
     const q = filterSearch.trim().toLowerCase();
     return projList.filter((p) => {
+      if (hiddenProjectIds.has(p.id)) return false;
       if (filterProject !== "all" && p.id !== filterProject) return false;
       if (filterLocation !== "all" && p.location !== filterLocation) return false;
       if (filterContractor !== "all" && p.contractor !== filterContractor) return false;
       if (filterType !== "all" && p.type !== filterType) return false;
+      if (dateFrom && ymOf(p.pcEndDate) < dateFrom) return false;
+      if (dateTo && ymOf(p.pcStartDate) > dateTo) return false;
       if (!q) return true;
       return (
         p.name.toLowerCase().includes(q) ||
@@ -167,7 +209,7 @@ export default function ScreenFinancial() {
         p.location.toLowerCase().includes(q)
       );
     });
-  }, [projList, filterSearch, filterProject, filterLocation, filterContractor, filterType]);
+  }, [projList, filterSearch, filterProject, filterLocation, filterContractor, filterType, hiddenProjectIds, dateFrom, dateTo]);
 
   const detailClaims = selectedProject ? claims.filter((c) => c.projectId === selectedProject.id) : [];
 
@@ -210,7 +252,10 @@ export default function ScreenFinancial() {
   const typeData = useMemo(() => projectsByType(filteredProjects), [filteredProjects]);
   const regionData = useMemo(() => projectsByRegion(filteredProjects), [filteredProjects]);
   const durationData = useMemo(() => durationWeeks(filteredProjects), [filteredProjects]);
-  const weekly = useMemo(() => weeklyExpensesSeries(filteredProjects, projectFinMap), [filteredProjects, projectFinMap]);
+  const spendOverTime = useMemo(
+    () => monthlySpendSeries(filteredProjects, projectFinMap, { fromYM: dateFrom || undefined, toYM: dateTo || undefined }),
+    [filteredProjects, projectFinMap, dateFrom, dateTo]
+  );
   const byType = useMemo(() => budgetVsCostByType(filteredProjects, projectFinMap), [filteredProjects, projectFinMap]);
   const byRegion = useMemo(() => budgetVsCostByRegion(filteredProjects, projectFinMap), [filteredProjects, projectFinMap]);
   const byContractor = useMemo(() => budgetVsCostByContractor(filteredProjects, projectFinMap), [filteredProjects, projectFinMap]);
@@ -429,6 +474,43 @@ export default function ScreenFinancial() {
             <option value="all">Project Type: All</option>
             {types.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
+
+          {/* Show/hide projects by checkbox — complements the single-select Project
+              Name dropdown above; ticking off a few also declutters busy legends. */}
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setShowProjectPicker((v) => !v)}
+              style={{ ...filterInputStyle, minWidth: 130, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, background: hiddenProjectIds.size > 0 ? C.blueLight : C.white }}
+            >
+              Projects{hiddenProjectIds.size > 0 ? ` (${projList.length - hiddenProjectIds.size}/${projList.length})` : ": All"}
+              <ChevronDown size={13} />
+            </button>
+            {showProjectPicker && (
+              <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 30, background: C.white, border: `0.5px solid ${C.grayLight}`, borderRadius: 8, boxShadow: "0 8px 20px rgba(0,0,0,0.1)", padding: 10, width: 240, maxHeight: 280, overflowY: "auto" }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8, fontSize: 11 }}>
+                  <button type="button" onClick={() => setHiddenProjectIds(new Set())} style={{ border: "none", background: "none", color: C.blue, cursor: "pointer", fontWeight: 600 }}>All</button>
+                  <button type="button" onClick={() => setHiddenProjectIds(new Set(projList.map((p) => p.id)))} style={{ border: "none", background: "none", color: C.gray, cursor: "pointer", fontWeight: 600 }}>None</button>
+                </div>
+                {projList.map((p) => (
+                  <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 2px", fontSize: 12, cursor: "pointer", color: C.text }}>
+                    <input type="checkbox" checked={!hiddenProjectIds.has(p.id)} onChange={() => toggleProjectVisible(p.id)} />
+                    {p.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <select value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ ...filterInputStyle, minWidth: 110 }}>
+            <option value="">From: earliest</option>
+            {monthOptions.map((ym) => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+          </select>
+          <select value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ ...filterInputStyle, minWidth: 110 }}>
+            <option value="">To: latest</option>
+            {monthOptions.map((ym) => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+          </select>
+
           {hasActiveFilters && (
             <button type="button" onClick={clearFilters} style={{ ...filterInputStyle, background: C.bgSecond, cursor: "pointer", color: C.gray }}>
               Clear filters
@@ -487,8 +569,8 @@ export default function ScreenFinancial() {
               </ChartCard>
             </div>
 
-            <ChartCard title="Weekly Expenses" height={300}>
-              <WeeklyExpensesArea rows={weekly.rows} seriesNames={weekly.seriesNames} colors={COLOR_PALETTE} />
+            <ChartCard title="Spend Over Time" height={300}>
+              <SpendOverTimeArea rows={spendOverTime.rows} seriesNames={spendOverTime.seriesNames} colors={COLOR_PALETTE} />
             </ChartCard>
           </>
         )}
@@ -527,10 +609,53 @@ export default function ScreenFinancial() {
             <ChartCard title="Expenses Category" height={320}>
               <CategoryStackedBar data={categoryStacked} categories={CATEGORY_ORDER} colors={CATEGORY_COLORS} />
             </ChartCard>
-            <ChartCard title="Weekly Expenses" height={300}>
-              <WeeklyExpensesArea rows={weekly.rows} seriesNames={weekly.seriesNames} colors={COLOR_PALETTE} />
+            <ChartCard title="Spend Over Time" height={300}>
+              <SpendOverTimeArea rows={spendOverTime.rows} seriesNames={spendOverTime.seriesNames} colors={COLOR_PALETTE} />
             </ChartCard>
           </>
+        )}
+
+        {/* Compare — plain numbers table, no charts. Click a row for the full category drawer. */}
+        {page === "compare" && filteredProjects.length > 0 && (
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: C.navy }}>Projected vs actual, by project</span>
+              <span style={{ fontSize: 10.5, color: C.gray }}>Click a row for the full category breakdown</span>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#F8FAFC" }}>
+                    {["Project", "Projected final", "Actual", "Variance", "Revenue received", "Profit (actual)"].map((h) => (
+                      <th key={h} style={{ textAlign: "left", padding: "10px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontSize: 11, color: C.gray, fontWeight: 500, whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProjects.map((p) => {
+                    const fin = projectFinMap[p.id];
+                    const projected = fin?.budgetLinesTotalDollars ?? toDollars(p.plannedCost);
+                    const actual = fin?.actualLinesTotalDollars ?? toDollars(p.actualCost);
+                    const revenue = fin?.revenueDollars ?? p.revenueReceived ?? 0;
+                    const profit = fin?.actualProfitDollars ?? (revenue - actual);
+                    const variance = actual - projected;
+                    return (
+                      <tr key={p.id} onClick={() => openProjectDetail(p)} style={{ cursor: "pointer" }}>
+                        <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontWeight: 500 }}>{p.name}</td>
+                        <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: C.blue, fontWeight: 600 }}>{fmtMoney(projected)}</td>
+                        <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontWeight: 600 }}>{fmtMoney(actual)}</td>
+                        <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, color: variance > 0 ? C.red : C.green, fontWeight: 600 }}>
+                          {variance >= 0 ? "+" : ""}{fmtMoney(variance)}
+                        </td>
+                        <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}` }}>{fmtMoney(revenue)}</td>
+                        <td style={{ padding: "11px 12px", borderBottom: `0.5px solid ${C.grayLight}`, fontWeight: 600, color: profit >= 0 ? C.greenDark : C.red }}>{fmtMoney(profit)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
       </div>
 

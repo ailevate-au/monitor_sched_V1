@@ -203,7 +203,7 @@ export default function FlowIQApp() {
     { id:"gantt",     label:"Timeline",           icon:<CalendarDays size={ICON_SIZE} />, group:"Scheduling"  },
     { id:"resources", label:"Resources",          icon:<HardHat size={ICON_SIZE} />,      group:"Scheduling"  },
     { id:"financial", label:"Finance",            icon:<Wallet size={ICON_SIZE} />,       group:"Finance"     },
-    { id:"claims",    label:"Project Expenses",   icon:<ReceiptText size={ICON_SIZE} />,  group:"Finance",    badge: expensesCount, badgeColor: C.amber },
+    { id:"claims",    label:"Progress Claims",    icon:<ReceiptText size={ICON_SIZE} />,  group:"Finance",    badge: expensesCount, badgeColor: C.amber, title: "Client payment claims to review and certify" },
     { id:"reports",   label:"Reports",            icon:<FileText size={ICON_SIZE} />,     group:"Finance"     },
     { id:"masterdata", label:"Settings",          icon:<Settings size={ICON_SIZE} />,     group:"Administration" },
     // Owner + Coordinator: create/manage Admin, PM and Coordinator accounts
@@ -241,7 +241,7 @@ export default function FlowIQApp() {
     resources: "Resources",
     problems: "Problems",
     financial: "Finance",
-    claims: "Project Expenses",
+    claims: "Progress Claims",
     reports: "Reports",
     masterdata: "Settings",
     permissions: "Access — Role Permissions",
@@ -274,7 +274,7 @@ export default function FlowIQApp() {
             {navItems.filter(n => n.group === g).map(n => {
               const isConflictAlert = n.id === "problems" && conflictsCount > 0 && screen !== "problems";
               return (
-              <div key={n.id} onClick={() => navigate(n.id)} style={{
+              <div key={n.id} onClick={() => navigate(n.id)} title={n.title} style={{
                 display:"flex",
                 alignItems:"center",
                 gap:8,

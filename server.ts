@@ -1515,7 +1515,14 @@ async function startServer() {
     if (type === "contract_sum_addition") {
       project.finalContractSum = Math.round((project.finalContractSum + val) * 10) / 10;
     } else {
-      project.actualCost = Math.round((project.actualCost + val) * 10) / 10;
+      // Same actual-cost-line model as certify / POST /projects/:id/cost-lines —
+      // keeps actualCost always derived from actualLines, never incremented directly.
+      project.actualLines = [
+        ...(project.actualLines || []),
+        { id: `al-var-${Date.now()}`, label: description || "Variation", category: "Materials", amount: val * 1_000_000 },
+      ];
+      const actualLinesTotalDollars = project.actualLines.reduce((acc, l) => acc + l.amount, 0);
+      project.actualCost = Math.round((actualLinesTotalDollars / 1_000_000) * 1000) / 1000;
       project.overBudget = project.actualCost > project.plannedCost;
     }
     db.save();
@@ -1591,9 +1598,25 @@ async function startServer() {
     claim.certifiedVal = numericCertified;
     claim.retentionVal = retention;
 
-    // Increment Project Actual Cost accordingly
+    // Certifying a claim is real incurred cost, so it becomes an actual cost
+    // line (like a manual "Add cost" from the Projects tab) instead of
+    // incrementing actualCost directly — previously this bypassed the
+    // cost-line model entirely, so a certified claim never showed up in the
+    // Finance dashboard's category breakdown and actualCost could drift from
+    // the sum of actualLines.
     if (project) {
-      project.actualCost = Math.round((project.actualCost + parseFloat(certifiedAmountVal)) * 10) / 10;
+      project.actualLines = [
+        ...(project.actualLines || []),
+        {
+          id: `al-claim-${claim.id}`,
+          label: `Certified claim ${claim.claimNumber}`,
+          category: claim.costCategoryName || "Materials",
+          amount: numericCertified,
+        },
+      ];
+      const actualLinesTotalDollars = project.actualLines.reduce((acc, l) => acc + l.amount, 0);
+      project.actualCost = Math.round((actualLinesTotalDollars / 1_000_000) * 1000) / 1000;
+      project.overBudget = project.actualCost > project.plannedCost;
     }
 
     db.save();

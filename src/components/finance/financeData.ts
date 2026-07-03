@@ -63,7 +63,7 @@ export function projectsByRegion(projects: Project[]): Array<{ name: string; siz
   return Array.from(byRegion.entries()).map(([name, size]) => ({ name, size }));
 }
 
-export function durationWeeks(projects: Project[]): Array<{ name: string; weeks: number }> {
+export function durationWeeks(projects: Project[]): Array<{ name: string; weeks: number; start: string; end: string }> {
   return projects
     .map((p) => {
       const start = new Date(p.pcStartDate).getTime();
@@ -71,7 +71,7 @@ export function durationWeeks(projects: Project[]): Array<{ name: string; weeks:
       const weeks = Number.isFinite(start) && Number.isFinite(end) && end > start
         ? Math.max(1, Math.round((end - start) / (7 * 24 * 3600 * 1000)))
         : 0;
-      return { name: p.name, weeks };
+      return { name: p.name, weeks, start: p.pcStartDate, end: p.pcEndDate };
     })
     .sort((a, b) => b.weeks - a.weeks);
 }
@@ -83,37 +83,87 @@ export function durationWeeks(projects: Project[]): Array<{ name: string; weeks:
  * closeout bump) — the same shape every time for a given project, not random.
  * This is an approximation for the chart, not a source of truth.
  */
-const WEEK_WEIGHT_CURVE = [1.3, 0.9, 1.05, 0.75, 1.4, 0.85, 0.9, 0.9, 0.75, 1.1, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9];
+const SPEND_WEIGHT_CURVE = [1.3, 0.9, 1.05, 0.75, 1.4, 0.85, 0.9, 0.9, 0.75, 1.1, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9];
 
-export function weeklyExpensesSeries(
-  projects: Project[],
-  fin: FinMap
-): { weeks: number; rows: Array<Record<string, number | string>>; seriesNames: string[] } {
-  const perProject = projects.map((p) => {
-    const weeks = Math.max(4, Math.min(16, durationWeeksFor(p)));
-    const total = actualOf(p, fin[p.id]);
-    const curve = WEEK_WEIGHT_CURVE.slice(0, weeks);
-    const curveSum = curve.reduce((a, b) => a + b, 0) || 1;
-    const values = curve.map((w) => (total * w) / curveSum);
-    return { name: p.name, weeks, values };
-  });
-  const maxWeeks = perProject.reduce((m, p) => Math.max(m, p.weeks), 0);
-  const rows: Array<Record<string, number | string>> = [];
-  for (let w = 0; w < maxWeeks; w++) {
-    const row: Record<string, number | string> = { week: w + 1 };
-    for (const p of perProject) {
-      if (w < p.values.length) row[p.name] = Math.round(p.values[w]);
-    }
-    rows.push(row);
-  }
-  return { weeks: maxWeeks, rows, seriesNames: perProject.map((p) => p.name) };
+export const ymOf = (dateStr: string): string => {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+const addMonths = (ym: string, n: number): string => {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+export const monthLabel = (ym: string): string => {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-AU", { month: "short", year: "numeric" });
+};
+
+export interface MonthRange {
+  minYM: string;
+  maxYM: string;
 }
 
-function durationWeeksFor(p: Project): number {
-  const start = new Date(p.pcStartDate).getTime();
-  const end = new Date(p.pcEndDate).getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 8;
-  return Math.max(4, Math.round((end - start) / (7 * 24 * 3600 * 1000)));
+/** Bounds for a date-range picker, spanning every (filtered) project's active months. */
+export function monthRangeOf(projects: Project[]): MonthRange | null {
+  if (!projects.length) return null;
+  let min = ymOf(projects[0].pcStartDate);
+  let max = ymOf(projects[0].pcEndDate);
+  for (const p of projects) {
+    const s = ymOf(p.pcStartDate);
+    const e = ymOf(p.pcEndDate);
+    if (s < min) min = s;
+    if (e > max) max = e;
+  }
+  return { minYM: min, maxYM: max };
+}
+
+/**
+ * Real-calendar spend-over-time series — each project's actual cost spread
+ * across the real months it's active (pcStartDate → pcEndDate), using the
+ * same deterministic weight curve as before but against a real month axis
+ * instead of an unlabelled "week 1..N". `range` (from monthRangeOf bounds)
+ * clips the returned months and drops projects with no overlap.
+ */
+export function monthlySpendSeries(
+  projects: Project[],
+  fin: FinMap,
+  range?: { fromYM?: string; toYM?: string } | null
+): { rows: Array<Record<string, number | string>>; seriesNames: string[] } {
+  const perProject = projects.map((p) => {
+    const startYM = ymOf(p.pcStartDate);
+    const endYM = ymOf(p.pcEndDate);
+    const months: string[] = [];
+    let cur = startYM;
+    let guard = 0;
+    while (cur <= endYM && guard < 240) {
+      months.push(cur);
+      cur = addMonths(cur, 1);
+      guard++;
+    }
+    const total = actualOf(p, fin[p.id]);
+    const curve = SPEND_WEIGHT_CURVE;
+    const usedCurve = months.map((_, i) => curve[i % curve.length]);
+    const curveSum = usedCurve.reduce((a, b) => a + b, 0) || 1;
+    const values = usedCurve.map((w) => (total * w) / curveSum);
+    return { name: p.name, months, values };
+  });
+
+  let allYMs = Array.from(new Set(perProject.flatMap((p) => p.months))).sort();
+  if (range?.fromYM) allYMs = allYMs.filter((ym) => ym >= range.fromYM!);
+  if (range?.toYM) allYMs = allYMs.filter((ym) => ym <= range.toYM!);
+
+  const rows = allYMs.map((ym) => {
+    const row: Record<string, number | string> = { ym, label: monthLabel(ym) };
+    for (const p of perProject) {
+      const idx = p.months.indexOf(ym);
+      if (idx >= 0) row[p.name] = Math.round(p.values[idx]);
+    }
+    return row;
+  });
+
+  const seriesNames = perProject.filter((p) => p.months.some((m) => allYMs.includes(m))).map((p) => p.name);
+  return { rows, seriesNames };
 }
 
 function groupSum(
