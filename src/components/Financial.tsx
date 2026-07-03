@@ -582,13 +582,14 @@ export default function ScreenFinancial() {
               <ChartCard title="Budget vs Cost by Project Type">
                 <GroupedDollarBar data={byType} seriesA="Contract sum" seriesB="Actual cost" colorA={C.blueMid} colorB={C.amber} />
               </ChartCard>
-              <ChartCard title="Profit Margin (projected)">
-                <PercentColumn data={marginData} color={C.green} />
-              </ChartCard>
               <ChartCard title="Budget vs Cost by Region">
                 <GroupedDollarBar data={byRegion} seriesA="Contract sum" seriesB="Actual cost" colorA={C.blueMid} colorB={C.amber} />
               </ChartCard>
             </div>
+            {/* Full-width — one bar per project, needs more room per label than the 2-up grid gives it. */}
+            <ChartCard title="Profit Margin (projected)" height={280}>
+              <PercentColumn data={marginData} color={C.green} />
+            </ChartCard>
             <ChartCard title="Budget vs Cost by Contractor" height={320}>
               <ContractorComposed data={byContractor} barColor={C.amber} lineColor={C.blue} />
             </ChartCard>
