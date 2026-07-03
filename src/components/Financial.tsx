@@ -558,13 +558,13 @@ export default function ScreenFinancial() {
             </div>
 
             <div style={chartGrid}>
-              <PieCard title="Project Type" description="Share of your projects by sector (e.g. residential vs commercial).">
+              <PieCard title="Project Type" description="Share of projects by sector (e.g. residential vs commercial).">
                 <CountPie data={typeData} colors={COLOR_PALETTE} />
               </PieCard>
-              <ChartCard title="Project Location" description="Number of projects in each state — bigger box, more projects there.">
+              <ChartCard title="Project Location" description="Number of projects in each state; a larger box means more projects there.">
                 <RegionTreemap data={regionData} baseColor={C.blue} />
               </ChartCard>
-              <ChartCard title="Project Duration (weeks)" description="How many weeks each project runs, start to finish — longest at the top.">
+              <ChartCard title="Project Duration (weeks)" description="Duration of each project in weeks, start to finish, with the longest at the top.">
                 <HorizontalBar data={durationData} dataKey="weeks" color={C.blueMid} />
               </ChartCard>
             </div>
@@ -579,18 +579,18 @@ export default function ScreenFinancial() {
         {page === "budgetcost" && filteredProjects.length > 0 && (
           <>
             <div style={chartGrid}>
-              <ChartCard title="Budget vs Cost by Project Type" description="Contract value vs what's actually being spent, grouped by sector.">
+              <ChartCard title="Budget vs Cost by Project Type" description="Contract value vs actual cost to date, grouped by sector.">
                 <GroupedDollarBar data={byType} seriesA="Contract sum" seriesB="Actual cost" colorA={C.blueMid} colorB={C.amber} />
               </ChartCard>
-              <ChartCard title="Budget vs Cost by Region" description="Contract value vs what's actually being spent, grouped by state.">
+              <ChartCard title="Budget vs Cost by Region" description="Contract value vs actual cost to date, grouped by state.">
                 <GroupedDollarBar data={byRegion} seriesA="Contract sum" seriesB="Actual cost" colorA={C.blueMid} colorB={C.amber} />
               </ChartCard>
             </div>
             {/* Full-width — one bar per project, needs more room per label than the 2-up grid gives it. */}
-            <ChartCard title="Profit Margin (projected)" description="Expected profit on each project as a % of its contract value — negative means it's projected to lose money." height={280}>
+            <ChartCard title="Profit Margin (projected)" description="Projected profit on each project as a percentage of its contract value; a negative value indicates a projected loss." height={280}>
               <PercentColumn data={marginData} color={C.green} />
             </ChartCard>
-            <ChartCard title="Budget vs Cost by Contractor" description="Contract value (line) vs actual cost (bars) for each head contractor you work with." height={320}>
+            <ChartCard title="Budget vs Cost by Contractor" description="Contract value (line) vs actual cost (bars) for each head contractor." height={320}>
               <ContractorComposed data={byContractor} barColor={C.amber} lineColor={C.blue} />
             </ChartCard>
           </>
@@ -600,17 +600,17 @@ export default function ScreenFinancial() {
         {page === "expenses" && filteredProjects.length > 0 && (
           <>
             <div style={chartGrid}>
-              <ChartCard title="Cost Overrun by Project" description="How far actual cost has gone over (or stayed under) the projected budget — bar to the right of A$0 means over budget.">
+              <ChartCard title="Cost Overrun by Project" description="How far actual cost is over or under the projected budget; a bar to the right of A$0 is over budget.">
                 <HorizontalBar data={overrunData} dataKey="overrun" color={C.red} unit="dollars" />
               </ChartCard>
-              <PieCard title="Expenses by Project" description="Share of total actual spend, by project.">
+              <PieCard title="Actual Spend by Project" description="Each slice is one project's share of total actual spend across the portfolio. A larger slice means higher spend; the percentage is that project's share of the total.">
                 <DollarPie data={expensesShare} colors={COLOR_PALETTE} />
               </PieCard>
             </div>
-            <ChartCard title="Expenses Category" description="Actual spend per project, split into Labour / Materials / Subcontractors / Plant." height={320}>
+            <ChartCard title="Cost Breakdown by Project" description="Total actual spend per project, split by cost type — Labour, Materials, Subcontractors, Plant. Bar height is the project's total spend; each segment is that category's amount. Hover a segment for the exact figure." height={320}>
               <CategoryStackedBar data={categoryStacked} categories={CATEGORY_ORDER} colors={CATEGORY_COLORS} />
             </ChartCard>
-            <ChartCard title="Spend Over Time" description="Actual cost incurred each month across the portfolio, one colour per project." height={300}>
+            <ChartCard title="Monthly Spend" description="Actual spend per calendar month across all projects. Each segment within a month is one project; a taller month means higher total spend." height={300}>
               <SpendOverTimeArea rows={spendOverTime.rows} seriesNames={spendOverTime.seriesNames} colors={COLOR_PALETTE} />
             </ChartCard>
           </>

@@ -376,6 +376,21 @@ export default function ScreenClaims() {
 
   return (
     <div>
+      <div style={{
+        marginBottom: 16, padding: "12px 14px",
+        background: C.blueLight, border: `0.5px solid ${C.grayLight}`, borderRadius: 10,
+        fontSize: 12, color: C.text, lineHeight: 1.5,
+      }}>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>What this screen does</div>
+        <div style={{ color: C.gray }}>
+          A <strong>progress claim</strong> records money spent on a project as work gets done — each row is one
+          expense against a project and a cost category (Labour, Materials, Subcontractors, Plant).
+          Add an entry with <strong>+ New Expense</strong>: pick the project and category, then enter the amount.
+          For <strong>Labour</strong>, select completed tasks and the amount is suggested automatically from each
+          task's cost × % complete. Every entry feeds the cost figures on the <strong>Finance</strong> dashboard.
+        </div>
+      </div>
+
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:10, marginBottom:16 }}>
         <KpiCard label="Total Expenses" value={`A$${claimsTotalValue.toFixed(1)}M`} sub={`${claims.length} entries`} />
         <KpiCard label="Recorded Expenses" value={`${claims.length}`} valueColor={C.blue} sub="All logged expenses" />

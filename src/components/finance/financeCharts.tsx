@@ -11,6 +11,21 @@ const GRID = "#E2E8F0";
 const AXIS = "#64748B";
 const AXIS_FONT = { fontSize: 10.5, fill: AXIS };
 
+/**
+ * Shared hover-tooltip styling. `zIndex` lifts the cursor-following tooltip
+ * above the legend so it never blends into the legend text behind it;
+ * `contentStyle` gives it a solid white card (opaque bg + border + shadow)
+ * so nothing shows through. Passed to every <Tooltip> in this file.
+ */
+const TOOLTIP_WRAPPER = { zIndex: 100 };
+const TOOLTIP_CONTENT = {
+  background: "#fff",
+  border: "1px solid #E2E8F0",
+  borderRadius: 8,
+  boxShadow: "0 6px 16px rgba(15,31,61,0.14)",
+  fontSize: 11.5,
+};
+
 export const ChartCard = ({
   title, description, right, height = 280, children,
 }: {
@@ -65,33 +80,68 @@ export const PieCard = ({
 
 // Pie sits left-of-centre with the legend in its own column to the right —
 // at 50/50 the legend text crowds right up against the slices.
-const PIE_CHART_WIDTH = PIE_SIZE + 160;
+const PIE_CHART_WIDTH = PIE_SIZE + 240;
+
+const pct = (value: number, total: number) => (total > 0 ? (value / total) * 100 : 0);
+
+/**
+ * On-slice percentage label, drawn at the slice centroid. Suppressed for
+ * slices under 6% — the text won't fit and would overlap its neighbours;
+ * those slices still carry their % in the legend and tooltip.
+ */
+function sliceLabel(p: {
+  cx?: number; cy?: number; midAngle?: number; innerRadius?: number; outerRadius?: number; percent?: number;
+}) {
+  const cx = p.cx ?? 0, cy = p.cy ?? 0, midAngle = p.midAngle ?? 0;
+  const innerRadius = p.innerRadius ?? 0, outerRadius = p.outerRadius ?? 0, percent = p.percent ?? 0;
+  if (percent < 0.06) return null;
+  const r = innerRadius + (outerRadius - innerRadius) * 0.6;
+  const rad = -midAngle * (Math.PI / 180);
+  const x = cx + r * Math.cos(rad);
+  const y = cy + r * Math.sin(rad);
+  return (
+    <text x={x} y={y} fill="#fff" fontSize={11} fontWeight={600} textAnchor="middle" dominantBaseline="central">
+      {`${Math.round(percent * 100)}%`}
+    </text>
+  );
+}
+
+/** Legend row: "Name — 32%". Total closed over so each row knows its share. */
+const pctLegendFormatter = (data: Array<{ name: string; value: number }>) => {
+  const total = data.reduce((a, d) => a + d.value, 0);
+  return (value: string) => {
+    const row = data.find((d) => d.name === value);
+    return `${value} — ${Math.round(pct(row?.value ?? 0, total))}%`;
+  };
+};
 
 /** Categorical pie — identity, not magnitude. Fixed slice order via caller. */
 export function CountPie({ data, colors }: { data: Array<{ name: string; value: number }>; colors: string[] }) {
+  const total = data.reduce((a, d) => a + d.value, 0);
   return (
     <PieChart width={PIE_CHART_WIDTH} height={PIE_SIZE}>
-      <Pie data={data} dataKey="value" nameKey="name" cx="38%" cy="50%" outerRadius={80} isAnimationActive={false}>
+      <Pie data={data} dataKey="value" nameKey="name" cx="36%" cy="50%" outerRadius={80} isAnimationActive={false} labelLine={false} label={sliceLabel}>
         {data.map((_, i) => (
           <Cell key={i} fill={colors[i % colors.length]} stroke="#fff" strokeWidth={2} />
         ))}
       </Pie>
-      <Tooltip formatter={(v: number, n: string) => [v, n]} />
-      <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: 11, paddingLeft: 20 }} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number, n: string) => [`${v} (${Math.round(pct(v, total))}%)`, n]} />
+      <Legend layout="vertical" verticalAlign="middle" align="right" formatter={pctLegendFormatter(data)} wrapperStyle={{ fontSize: 11, paddingLeft: 20 }} />
     </PieChart>
   );
 }
 
 export function DollarPie({ data, colors }: { data: Array<{ name: string; value: number }>; colors: string[] }) {
+  const total = data.reduce((a, d) => a + d.value, 0);
   return (
     <PieChart width={PIE_CHART_WIDTH} height={PIE_SIZE}>
-      <Pie data={data} dataKey="value" nameKey="name" cx="38%" cy="50%" outerRadius={80} isAnimationActive={false}>
+      <Pie data={data} dataKey="value" nameKey="name" cx="36%" cy="50%" outerRadius={80} isAnimationActive={false} labelLine={false} label={sliceLabel}>
         {data.map((_, i) => (
           <Cell key={i} fill={colors[i % colors.length]} stroke="#fff" strokeWidth={2} />
         ))}
       </Pie>
-      <Tooltip formatter={(v: number) => fmtMoney(v)} />
-      <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: 11, paddingLeft: 20 }} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => `${fmtMoney(v)} (${Math.round(pct(v, total))}%)`} />
+      <Legend layout="vertical" verticalAlign="middle" align="right" formatter={pctLegendFormatter(data)} wrapperStyle={{ fontSize: 11, paddingLeft: 20 }} />
     </PieChart>
   );
 }
@@ -100,7 +150,7 @@ export function DollarPie({ data, colors }: { data: Array<{ name: string; value:
 export function RegionTreemap({ data, baseColor }: { data: Array<{ name: string; size: number }>; baseColor: string }) {
   return (
     <Treemap data={data} dataKey="size" nameKey="name" stroke="#fff" fill={baseColor} isAnimationActive={false}>
-      <Tooltip formatter={(v: number) => [v, "Projects"]} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => [v, "Projects"]} />
     </Treemap>
   );
 }
@@ -129,6 +179,8 @@ export function HorizontalBar({
       <XAxis type="number" tick={AXIS_FONT} tickFormatter={unit === "dollars" ? dollarTick : undefined} />
       <YAxis type="category" dataKey="name" width={120} interval={0} tick={<SingleLineYTick />} />
       <Tooltip
+        wrapperStyle={TOOLTIP_WRAPPER}
+        contentStyle={TOOLTIP_CONTENT}
         formatter={(v: number) => (unit === "dollars" ? fmtMoney(v) : v)}
         labelFormatter={(label, payload) => {
           const row = payload?.[0]?.payload as { start?: string; end?: string } | undefined;
@@ -149,7 +201,7 @@ export function GroupedDollarBar({
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="name" tick={AXIS_FONT} interval={0} tickFormatter={(v) => truncateLabel(v)} />
       <YAxis tick={AXIS_FONT} tickFormatter={dollarTick} />
-      <Tooltip formatter={(v: number) => fmtMoney(v)} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => fmtMoney(v)} />
       <Legend wrapperStyle={{ fontSize: 11 }} />
       <Bar dataKey="contract" name={seriesA} fill={colorA} radius={[4, 4, 0, 0]} maxBarSize={36} />
       <Bar dataKey="actual" name={seriesB} fill={colorB} radius={[4, 4, 0, 0]} maxBarSize={36} />
@@ -164,7 +216,7 @@ export function PercentColumn({ data, color }: { data: Array<{ name: string; mar
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="name" tick={AXIS_FONT} interval={0} tickFormatter={(v) => truncateLabel(v)} />
       <YAxis tick={AXIS_FONT} tickFormatter={(v) => `${v}%`} />
-      <Tooltip formatter={(v: number) => `${v}%`} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => `${v}%`} />
       <Bar dataKey="marginPct" name="Projected margin" fill={color} radius={[4, 4, 0, 0]} maxBarSize={44} />
     </BarChart>
   );
@@ -179,7 +231,7 @@ export function ContractorComposed({
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="name" tick={AXIS_FONT} interval={0} tickFormatter={(v) => truncateLabel(v)} />
       <YAxis tick={AXIS_FONT} tickFormatter={dollarTick} />
-      <Tooltip formatter={(v: number) => fmtMoney(v)} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => fmtMoney(v)} />
       <Legend wrapperStyle={{ fontSize: 11 }} />
       <Bar dataKey="actual" name="Actual cost" fill={barColor} radius={[4, 4, 0, 0]} maxBarSize={36} />
       <Line type="monotone" dataKey="contract" name="Contract sum" stroke={lineColor} strokeWidth={2} dot={{ r: 4 }} />
@@ -204,7 +256,7 @@ export function SpendOverTimeArea({
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="label" tick={AXIS_FONT} />
       <YAxis tick={AXIS_FONT} tickFormatter={dollarTick} />
-      <Tooltip formatter={(v: number) => fmtMoney(v)} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => fmtMoney(v)} />
       {seriesNames.map((name, i) => (
         <Bar key={name} dataKey={name} name={name} stackId="spend" fill={colors[i % colors.length]} isAnimationActive={false} />
       ))}
@@ -222,7 +274,7 @@ export function CategoryStackedBar({
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="name" tick={AXIS_FONT} interval={0} tickFormatter={(v) => truncateLabel(v)} />
       <YAxis tick={AXIS_FONT} tickFormatter={dollarTick} />
-      <Tooltip formatter={(v: number) => fmtMoney(v)} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => fmtMoney(v)} />
       {categories.map((cat, i) => (
         <Bar key={cat} dataKey={cat} name={cat} stackId="cat" fill={colors[i % colors.length]} maxBarSize={44} />
       ))}
