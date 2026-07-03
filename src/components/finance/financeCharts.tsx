@@ -12,15 +12,18 @@ const AXIS = "#64748B";
 const AXIS_FONT = { fontSize: 10.5, fill: AXIS };
 
 export const ChartCard = ({
-  title, right, height = 280, children,
+  title, description, right, height = 280, children,
 }: {
   title: string;
+  /** One-line plain-English explanation of what the chart shows — always visible, not a hover tooltip. */
+  description?: string;
   right?: React.ReactNode;
   height?: number;
   children: React.ReactElement;
 }) => (
   <Card style={{ padding: 16 }}>
     <SectionHeader title={title} right={right} />
+    {description && <div style={{ fontSize: 11, color: "#64748B", marginTop: -6, marginBottom: 10 }}>{description}</div>}
     <div style={{ width: "100%", height }}>
       <ResponsiveContainer width="100%" height="100%">
         {children}
@@ -51,10 +54,11 @@ const truncateLabel = (value: string, max = 12): string =>
 const PIE_SIZE = 260;
 
 export const PieCard = ({
-  title, right, children,
-}: { title: string; right?: React.ReactNode; children: React.ReactElement }) => (
+  title, description, right, children,
+}: { title: string; description?: string; right?: React.ReactNode; children: React.ReactElement }) => (
   <Card style={{ padding: 16 }}>
     <SectionHeader title={title} right={right} />
+    {description && <div style={{ fontSize: 11, color: "#64748B", marginTop: -6, marginBottom: 10 }}>{description}</div>}
     <div style={{ display: "flex", justifyContent: "center" }}>{children}</div>
   </Card>
 );
