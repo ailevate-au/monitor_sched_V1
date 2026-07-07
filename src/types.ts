@@ -1,3 +1,15 @@
+/**
+ * A projected (budget) or actual cost line item on a project — Labour,
+ * Materials, Subcontractors, Plant & Equipment, or a custom category.
+ */
+export interface CostLine {
+  id: string;
+  label: string;
+  category: string;
+  /** Real dollars (not millions) — use fmtMoney (src/lib/money.ts) to render. */
+  amount: number;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -19,6 +31,25 @@ export interface Project {
   retentionPercent?: number;
   /** Email of the PM who owns this project. PMs only see their own projects. */
   managerEmail?: string;
+  /** Cost lines set at creation (Labour, Materials, custom costs) — the projected budget. Dollars. */
+  budgetLines?: CostLine[];
+  /** Cost lines added while the project is in progress — the actual spend. Dollars. */
+  actualLines?: CostLine[];
+  /** Real dollars received from the client so far (not millions). */
+  revenueReceived?: number;
+}
+
+/** An app account — Owner / Coordinator / Admin / PM. */
+export interface AppUserAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: "Owner" | "Coordinator" | "Admin" | "PM";
+  state?: string;
+  /** Project ids this PM manages (only meaningful for role === "PM"). */
+  managedProjectIds?: string[];
+  /** Linked schedulable Resource id, if "also add as schedulable resource" was used. */
+  linkedResourceId?: string;
 }
 
 export interface Resource {

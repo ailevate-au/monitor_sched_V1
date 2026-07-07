@@ -9,8 +9,8 @@ import ScreenFinancial from "./components/Financial";
 import ScreenClaims from "./components/Claims";
 import ScreenReports from "./components/Reports";
 import ScreenMasterData from "./components/MasterData";
-import ScreenMyWork from "./components/MyWork";
 import ScreenPermissions from "./components/Permissions";
+import ScreenUsers from "./components/Users";
 import Login from "./components/Login";
 import { useAuth } from "./lib/auth";
 import {
@@ -26,12 +26,10 @@ import {
   Settings,
   ShieldCheck,
   LogOut,
+  Users,
 } from "lucide-react";
 import { AppNavigate, MasterTabId } from "./types/masters";
 import { parseProblemsResponse } from "./types";
-
-/** Roles that land on the mobile-first worker view; everyone else gets the full console. */
-const WORKER_ROLES = new Set(["Worker", "Resource"]);
 
 function initialsFromName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -72,6 +70,7 @@ const SCREEN_TO_PATH: Record<string, string> = {
   reports: "/reports",
   masterdata: "/masterdata",
   permissions: "/permissions",
+  users: "/users",
 };
 
 const PATH_TO_SCREEN: Record<string, string> = {
@@ -96,10 +95,6 @@ export default function FlowIQApp() {
     return getScreenFromPath(window.location.pathname);
   });
   const [masterTab, setMasterTab] = useState<MasterTabId>("cost_categories");
-  // Seed the active view from the signed-in user's role; workers land on My Work.
-  const [role, setRole] = useState<"PM" | "Resource">(() =>
-    user && WORKER_ROLES.has(user.role) ? "Resource" : "PM"
-  );
 
   // When navigating to the Gantt with a filter intent, seed its status filter.
   // The Gantt remounts on each entry, so it reads this as its initial filter.
@@ -158,12 +153,12 @@ export default function FlowIQApp() {
         .catch(() => {});
     }
 
-    // Sync project expenses badge count
+    // Sync project expenses badge count — only claims still awaiting certification
     fetch("/api/v1/claims")
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setExpensesCount(data.length);
+          setExpensesCount(data.filter((c: { status: string }) => c.status === "pending").length);
         }
       })
       .catch(() => {});
@@ -208,9 +203,13 @@ export default function FlowIQApp() {
     { id:"gantt",     label:"Timeline",           icon:<CalendarDays size={ICON_SIZE} />, group:"Scheduling"  },
     { id:"resources", label:"Resources",          icon:<HardHat size={ICON_SIZE} />,      group:"Scheduling"  },
     { id:"financial", label:"Finance",            icon:<Wallet size={ICON_SIZE} />,       group:"Finance"     },
-    { id:"claims",    label:"Project Expenses",   icon:<ReceiptText size={ICON_SIZE} />,  group:"Finance",    badge: expensesCount, badgeColor: C.amber },
+    { id:"claims",    label:"Progress Claims",    icon:<ReceiptText size={ICON_SIZE} />,  group:"Finance",    badge: expensesCount, badgeColor: C.amber, title: "Client payment claims to review and certify" },
     { id:"reports",   label:"Reports",            icon:<FileText size={ICON_SIZE} />,     group:"Finance"     },
     { id:"masterdata", label:"Settings",          icon:<Settings size={ICON_SIZE} />,     group:"Administration" },
+    // Owner + Coordinator: create/manage Admin, PM and Coordinator accounts
+    ...(user?.role === "Owner" || user?.role === "Coordinator"
+      ? [{ id:"users", label:"Users", icon:<Users size={ICON_SIZE} />, group:"Administration" }]
+      : []),
     // Owner-only: configure the role permission matrix (Access)
     ...(user?.role === "Owner"
       ? [{ id:"permissions", label:"Access", icon:<ShieldCheck size={ICON_SIZE} />, group:"Administration" }]
@@ -231,6 +230,7 @@ export default function FlowIQApp() {
     reports:   <ScreenReports />,
     masterdata: <ScreenMasterData initialTab={masterTab} />,
     permissions: <ScreenPermissions />,
+    users: <ScreenUsers />,
   };
 
   const titles: { [key: string]: string } = {
@@ -241,26 +241,16 @@ export default function FlowIQApp() {
     resources: "Resources",
     problems: "Problems",
     financial: "Finance",
-    claims: "Project Expenses",
+    claims: "Progress Claims",
     reports: "Reports",
     masterdata: "Settings",
     permissions: "Access — Role Permissions",
+    users: "Users",
   };
 
   // Unauthenticated users see only the login screen (entry point to the app).
   if (!isAuthenticated) {
     return <Login />;
-  }
-
-  // If role is Resource, render only the standalone mobile-first My Work screen (no sidebar, simple and clean)
-  if (role === "Resource") {
-    return (
-      <div style={{ background: "#F1F5F9", minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center", padding: "12px" }}>
-        <div style={{ width: "100%", maxWidth: 430, background: "#FFF", borderRadius: 16, overflow: "hidden", boxShadow: "0 10px 25px rgba(15,23,42,0.08)", minHeight: "85vh" }}>
-          <ScreenMyWork onToggleRole={() => setRole("PM")} />
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -284,7 +274,7 @@ export default function FlowIQApp() {
             {navItems.filter(n => n.group === g).map(n => {
               const isConflictAlert = n.id === "problems" && conflictsCount > 0 && screen !== "problems";
               return (
-              <div key={n.id} onClick={() => navigate(n.id)} style={{
+              <div key={n.id} onClick={() => navigate(n.id)} title={n.title} style={{
                 display:"flex",
                 alignItems:"center",
                 gap:8,

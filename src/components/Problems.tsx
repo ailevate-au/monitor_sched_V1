@@ -237,17 +237,17 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 3 }}>
             {summary.total > 0
-              ? `${summary.total} thing${summary.total > 1 ? "s" : ""} need${summary.total > 1 ? "" : "s"} you`
+              ? `${summary.total} open issue${summary.total > 1 ? "s" : ""} require${summary.total > 1 ? "" : "s"} attention`
               : crossProblems.length > 0
-              ? "Nothing here for you to fix"
+              ? "No issues assigned to you"
               : "Everything's on track"}
           </div>
           <div style={{ fontSize: 12.5, color: C.gray }}>
             {summary.total > 0
-              ? `${summary.projectsAffected} of ${summary.projectsTotal} projects have a problem. Pick a fix for each one.`
+              ? `${summary.projectsAffected} of ${summary.projectsTotal} projects affected. Select a fix for each.`
               : crossProblems.length > 0
-              ? "But one of your changes affected another project — see below."
-              : "No clashes, no late tasks, nothing to worry about."}
+              ? "A change of yours affected another project — see below."
+              : "No clashes, no late tasks."}
           </div>
         </div>
       </div>
@@ -259,7 +259,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
             label="Total Issues"
             value={`${summary.total}`}
             valueColor={summary.total > 0 ? C.red : C.greenDark}
-            sub="Everything that needs you"
+            sub="All open issues"
             onClick={onNav && summary.total > 0
               ? () => onNav("gantt", undefined, allProblemTaskIds.length > 0 ? { ganttTaskIds: allProblemTaskIds } : { ganttStatus: "problems" })
               : undefined}
@@ -358,7 +358,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
         <div style={{ padding: "44px 20px", textAlign: "center", background: C.white, borderRadius: 12, border: `0.5px solid ${C.grayLight}` }}>
           <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}><CheckCircle2 size={40} color={C.green} /></div>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Everything's on track</div>
-          <div style={{ fontSize: 12.5, color: C.gray }}>No clashes, no late tasks. Nothing needs you right now.</div>
+          <div style={{ fontSize: 12.5, color: C.gray }}>No clashes, no late tasks.</div>
         </div>
       )}
 

@@ -39,6 +39,8 @@ interface RecentExport {
   name: string;
   by: string;
   when: string;
+  /** Real date behind "when" (e.g. "3 hours ago") — filterable by the date-range picker. */
+  dateISO: string;
   size: string;
   type: string;
   category: ReportCategory;
@@ -51,9 +53,9 @@ const REPORTS_BASE: ReportDef[] = [
 ];
 
 const RECENT: RecentExport[] = [
-  { icon: <FileText size={16} color={C.amber} />, name: "Project Expense Summary, May 2025.pdf", by: "S. Hughes", when: "3 hours ago", size: "1.8MB", type: "Project-Expense-Summary", category: "finance" },
-  { icon: <BarChart3 size={16} color={C.blue} />, name: "Portfolio Schedule Report.xlsx", by: "M. O'Brien", when: "yesterday", size: "2.1MB", type: "Portfolio-Programme", category: "schedule" },
-  { icon: <ShieldCheck size={16} color={C.green} />, name: "WHS Safety Council Audit, May 2025.pdf", by: "S. Hughes", when: "2 days ago", size: "940KB", type: "WHS-Compliance", category: "safety" },
+  { icon: <FileText size={16} color={C.amber} />, name: "Project Expense Summary, May 2025.pdf", by: "S. Hughes", when: "3 hours ago", dateISO: "2026-07-03", size: "1.8MB", type: "Project-Expense-Summary", category: "finance" },
+  { icon: <BarChart3 size={16} color={C.blue} />, name: "Portfolio Schedule Report.xlsx", by: "M. O'Brien", when: "yesterday", dateISO: "2026-07-02", size: "2.1MB", type: "Portfolio-Programme", category: "schedule" },
+  { icon: <ShieldCheck size={16} color={C.green} />, name: "WHS Safety Council Audit, May 2025.pdf", by: "S. Hughes", when: "2 days ago", dateISO: "2026-07-01", size: "940KB", type: "WHS-Compliance", category: "safety" },
 ];
 
 const CATEGORY_LABELS: Record<ReportCategory, string> = {
@@ -68,6 +70,8 @@ const CATEGORY_LABELS: Record<ReportCategory, string> = {
 export default function ScreenReports() {
   const [filterSearch, setFilterSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<ReportCategory>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [financialSummary, setFinancialSummary] = useState<any | null>(null);
@@ -77,12 +81,13 @@ export default function ScreenReports() {
   const [selectedRecent, setSelectedRecent] = useState<RecentExport | null>(null);
   const isDev = import.meta.env.DEV;
   const exportDisabledTooltip = isDev ? "On development" : undefined;
-  const showDevelopmentOverlay = true;
+  const showDevelopmentOverlay = false;
 
   const handleExport = (type: string, format: string) => {
     if (!selectedProjectId) return;
     const encodedType = encodeURIComponent(type.replace(/\s+/g, "-"));
-    window.open(`/api/v1/reports/export?type=${encodedType}&format=${format}&projectId=${encodeURIComponent(selectedProjectId)}`, "_blank");
+    const rangeParams = `${dateFrom ? `&fromDate=${dateFrom}` : ""}${dateTo ? `&toDate=${dateTo}` : ""}`;
+    window.open(`/api/v1/reports/export?type=${encodedType}&format=${format}&projectId=${encodeURIComponent(selectedProjectId)}${rangeParams}`, "_blank");
   };
 
   useEffect(() => {
@@ -173,12 +178,14 @@ export default function ScreenReports() {
     const q = filterSearch.trim().toLowerCase();
     return RECENT.filter((r) => {
       if (filterCategory !== "all" && r.category !== filterCategory) return false;
+      if (dateFrom && r.dateISO < dateFrom) return false;
+      if (dateTo && r.dateISO > dateTo) return false;
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || r.by.toLowerCase().includes(q);
     });
-  }, [filterSearch, filterCategory]);
+  }, [filterSearch, filterCategory, dateFrom, dateTo]);
 
-  const hasFilters = filterSearch.trim() !== "" || filterCategory !== "all";
+  const hasFilters = filterSearch.trim() !== "" || filterCategory !== "all" || dateFrom !== "" || dateTo !== "";
 
   const inputStyle = {
     padding: "6px 10px",
@@ -226,8 +233,10 @@ export default function ScreenReports() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ ...inputStyle, minWidth: 130 }} title="From date" />
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ ...inputStyle, minWidth: 130 }} title="To date" />
           {hasFilters && (
-            <button type="button" onClick={() => { setFilterSearch(""); setFilterCategory("all"); }} style={{ ...inputStyle, background: C.bgSecond, cursor: "pointer", color: C.gray }}>
+            <button type="button" onClick={() => { setFilterSearch(""); setFilterCategory("all"); setDateFrom(""); setDateTo(""); }} style={{ ...inputStyle, background: C.bgSecond, cursor: "pointer", color: C.gray }}>
               Clear
             </button>
           )}

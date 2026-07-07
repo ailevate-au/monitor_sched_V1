@@ -680,10 +680,16 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
     // knock-on isn't what they wanted. Snapshot first so Undo has a target.
     captureUndo("schedule change");
 
-    // Snapshot dates BEFORE the save so we can diff against the reloaded schedule
-    // and write a Change History entry (covers the dragged job + any cascade).
+    // Snapshot dates + assignee BEFORE the save so we can diff against the
+    // reloaded schedule and write a Change History entry (covers the dragged
+    // job, any cascade, AND a person swap with no date change — e.g. a
+    // reassign applied from the Timeline top clash bar's "Fix" panel, which
+    // previously produced no entry because only dates were diffed).
     const beforeById = new Map(
-      tasksRef.current.map((t) => [t.id, { start: t.start, end: t.end, name: t.name, projectId: t.projectId }])
+      tasksRef.current.map((t) => [
+        t.id,
+        { start: t.start, end: t.end, name: t.name, projectId: t.projectId, assigneeId: t.assigneeId, assignee: t.assignee },
+      ])
     );
     const draftLabel = (() => {
       const ids = Object.keys(pendingDrafts);
@@ -762,8 +768,8 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
 
       // Log this save to Change History by diffing dates before vs after the save
       // (this captures the moved job AND any jobs the cascade pushed with it).
-      const loggedMoves = reloadedTasks
-        .filter((t) => !isPM || visibleProjectIdSet.has(t.projectId))
+      const visibleReloaded = reloadedTasks.filter((t) => !isPM || visibleProjectIdSet.has(t.projectId));
+      const loggedMoves = visibleReloaded
         .map((t) => {
           const b = beforeById.get(t.id);
           if (!b || (b.start === t.start && b.end === t.end)) return null;
@@ -771,7 +777,18 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
         })
         .filter((m): m is NonNullable<typeof m> => m !== null);
 
-      if (loggedMoves.length > 0) {
+      // Also diff assignee — a clash fixed from the Timeline top red bar by
+      // giving the task to someone else changes assigneeId with no date move,
+      // so it must be caught here too or it silently never reaches history.
+      const loggedReassigns = visibleReloaded
+        .map((t) => {
+          const b = beforeById.get(t.id);
+          if (!b || b.assigneeId === t.assigneeId) return null;
+          return { taskName: t.name, fromAssignee: b.assignee || "Unassigned", toAssignee: t.assignee || "Unassigned" };
+        })
+        .filter((m): m is NonNullable<typeof m> => m !== null);
+
+      if (loggedMoves.length > 0 || loggedReassigns.length > 0) {
         const maxPush = Math.max(
           0,
           ...loggedMoves.map((m) =>
@@ -780,12 +797,15 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
             )
           )
         );
+        const reassignSummary = loggedReassigns.length > 0
+          ? loggedReassigns.map((r) => `Reassigned "${r.taskName}" to ${r.toAssignee}`).join("; ")
+          : undefined;
         const cs: ChangeSet = {
           id: makeChangeSetId(),
           createdAt: new Date().toISOString(),
-          anchorTaskId: loggedMoves[0].taskId,
+          anchorTaskId: loggedMoves[0]?.taskId || "",
           anchorTaskName: draftLabel,
-          mode: loggedMoves.length > 1 ? "full" : "none",
+          mode: loggedMoves.length > 1 ? "full" : loggedMoves.length === 1 ? "none" : "none",
           delayWorkingDays: maxPush,
           moves: loggedMoves,
           warningsAtConfirm:
@@ -793,6 +813,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
               ? [`${hardConflicts} person${hardConflicts > 1 ? "s" : ""} now booked twice`]
               : [],
           reverted: false,
+          summary: reassignSummary,
         };
         changeHistory.add(cs);
         setChangeSets(changeHistory.list());

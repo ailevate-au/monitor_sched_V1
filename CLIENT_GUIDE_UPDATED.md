@@ -12,7 +12,7 @@ FlowIQ is a web-based construction monitoring platform that combines:
 
 - Portfolio visibility (projects, tasks, risks)
 - Shared scheduling (Gantt + dependency cascade)
-- Resource allocation and **overlap-based conflict detection**
+- Resource allocation and **overlap-based clash detection**
 - Financial tracking and project expenses
 - Weather risk integration (BOM forecast)
 - Report export (PDF and Excel)
@@ -26,11 +26,11 @@ Core outcome: issues are flagged before they become expensive.
 This demo build is optimized for a clear client walkthrough:
 
 - **Owner-first.** The company Owner signs in and lands on **Problems** — one feed of everything wrong across all projects, each with 2–3 suggested fixes. Pick one, confirm, done.
-- **Problems are caught five ways:** double-booking, running late, tight handover, weather risk, and **no one assigned**.
-- **Two ways problems appear:** a new batch of work landing (**⚡ Bring in new work**), or **a PM changing their own schedule** — e.g. marking a job *Delayed*, which cascades and can clash into a project that PM can't see. The Owner catches it.
+- **Problems are caught five ways:** clash, running late, tight handover, weather risk, and **no one assigned**.
+- **Two ways problems appear:** a new batch of work landing (**⚡ Bring in new work**), or **a PM changing their own schedule** — e.g. marking a task *Delayed*, which cascades and can clash into a project that PM can't see. The Owner catches it.
 - **Per-state weather.** Forecasts are per state (not Sydney-only); a storm only flags jobs in the affected state. Timeline rows show each project's state and a weather chip.
 - **PM scoping.** A PM only sees the projects they manage; the Owner/Admin see the whole portfolio.
-- **Conflict alert rule:** a manpower conflict is raised only when the **same person is assigned to tasks with overlapping dates**.
+- **Clash alert rule:** a manpower clash is raised only when the **same person is assigned to tasks with overlapping dates**.
 - **AI Recommendation (Demo)** — mock ranking of replacements by trade, state, and load (real AI layer planned for next phase).
 
 ---
@@ -38,13 +38,13 @@ This demo build is optimized for a clear client walkthrough:
 ## 3) Main Navigation
 
 ### Overview
-- `Overview` — four numbers: Projects Running · On Track % · Total Issues · **Unassigned Jobs**
+- `Overview` — four numbers: Projects Running · On Track % · Total Issues · **Unassigned Tasks**
 - `Projects` — counts: Total · Active · Total Issues
 - **`Problems`** ← the Owner's landing page: every issue + suggested fixes
 - `Weather` — per-state forecast with a location selector
 
 ### Scheduling
-- **`Timeline`** ← drag-to-reschedule, dependency cascade, per-state weather chips, PM job-status controls
+- **`Timeline`** ← drag-to-reschedule, dependency cascade, per-state weather chips, PM task-status controls
 
 ### Resources
 - `Resources`
@@ -64,10 +64,10 @@ This demo build is optimized for a clear client walkthrough:
 
 Four roles (one-click login buttons on the sign-in screen):
 
-- **Owner / Director** — sees every project and every problem; lands on **Problems**. Full access.
-- **Admin** — day-to-day setup across all projects.
-- **Project Manager** — **sees only the projects they manage.** Can change job status (incl. *Delayed*, which cascades). A PM's change can break a project they can't see — the Owner catches it in Problems.
-- **Field Worker** — mobile-first `My Work` screen; update progress and report delays; cannot edit the full programme.
+- **Owner / Director** — sees every project and every problem; lands on **Problems**. Full access (incl. money).
+- **Project Coordinator** — sees and manages **every project** (like the Owner), **assigns projects to PMs**, and **creates/manages Admin + PM accounts**. No money access; leaves system config to Admin.
+- **Admin** — day-to-day setup across all projects (scheduling, expenses, master data).
+- **Project Manager** — **sees only the projects they manage.** Can change task status (incl. *Delayed*, which cascades). A PM's change can break a project they can't see — the Owner catches it in Problems.
 
 ---
 
@@ -77,29 +77,29 @@ Four roles (one-click login buttons on the sign-in screen):
 
 - Views: **Team Allocation**, **By Project**, **By Resource**, **Change History** *(Kanban removed)*
 - Each project row shows its **state + weather chip**; an **"Issues on this schedule"** strip and a **status legend** explain what's flagged
-- Each job has **PM status controls** (In progress / Complete / **Delayed +N**); a delay cascades dependents and reports how many new issues it created
+- Each task has **PM status controls** (In progress / Complete / **Delayed +N**); a delay cascades dependents and reports how many new issues it created
 - **Saving never blocks.** If a change creates a clash you can still **Save anyway** — then **Undo last change** reverts the whole save (and any knock-on clashes) back to the previous schedule in one click
 - Drag task bars to reschedule; resize to change duration
-- **Draft-first workflow:** drag, resize, and add/edit tasks stay in **draft** until you click **Save programme**
-- Draft conflict check runs client-side (same manpower + overlapping dates) — save is blocked until conflicts are resolved
-- Conflict tasks show in **red** in the draft preview
+- **Draft-first workflow:** drag, resize, and add/edit tasks stay in **draft** until you click **Save schedule**
+- Draft clash check runs client-side (same manpower + overlapping dates) — save is blocked unless you choose **Save anyway**
+- Clashing tasks show in **red** in the draft preview
 - Essential filters: search + project (more filters available on demand)
 - Weather risk days highlighted on the timeline when BOM flags rain/storm
 
-## Conflicts
+## Problems (Clashes)
 
-- **Manpower Conflicts** — same person assigned to overlapping tasks
-- Each conflict shows:
+- **Clash** — same person assigned to overlapping tasks
+- Each Problem card shows:
   - Which tasks overlap and their date ranges
   - Current load percentage
   - **AI Recommendation (Demo)** — top suggested replacement with reason tags
   - Full list of available replacements (same state first)
-- One-click **Assign** to apply a replacement
+- One-click **Choose → Confirm** to apply a fix
 
 ## Overview
 
 - Portfolio KPIs and at-risk watchlist
-- PM alert stream from field workers
+- PM alert stream from project updates
 - Quick jump to other modules
 
 ## Projects
@@ -129,24 +129,24 @@ Four roles (one-click login buttons on the sign-in screen):
 ## Settings
 
 - Cost categories, states, sectors, trades, companies
-- Programme settings (auto-cascade dependents)
+- Schedule settings (auto-cascade dependents)
 
 ---
 
-## 6) Conflict Logic (Demo Rule)
+## 6) Clash Logic (Demo Rule)
 
-A **hard conflict** is raised when:
+A **clash** is raised when:
 
 1. A task has an assigned manpower (not unassigned)
 2. That same manpower is assigned to another active task
 3. The two task date ranges **overlap**
 
-Non-overlapping multi-assignment does **not** trigger a conflict in this phase.
+Non-overlapping multi-assignment does **not** trigger a clash in this phase.
 
-A separate **"No one assigned"** issue is raised for any job on an active project that has
+A separate **"No one assigned"** issue is raised for any task on an active project that has
 nobody on it — the Problems hub suggests the best free same-trade person to assign.
 
-After any schedule or assignment change, conflicts are recalculated automatically.
+After any schedule or assignment change, clashes are recalculated automatically.
 
 ---
 
@@ -155,8 +155,8 @@ After any schedule or assignment change, conflicts are recalculated automaticall
 1. Open app → lands on **Timeline**
 2. Drag a task or add a new one → changes appear as **draft** (dashed bar)
 3. Review draft banner — fix any manpower overlap before saving
-4. Click **Save programme** → changes commit to live schedule
-5. If server still flags conflicts → open **Conflicts** → apply AI recommendation
+4. Click **Save schedule** → changes commit to live schedule
+5. If server still flags clashes → open **Problems** → apply AI recommendation
 6. Return to Gantt → verify clean schedule
 
 ---
