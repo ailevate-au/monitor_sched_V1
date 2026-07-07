@@ -157,9 +157,9 @@ export const DEFAULT_PROJECTS = [
   {
     id: "p7", name: "Adelaide Oval Precinct", type: "Commercial office",
     location: "Adelaide SA", contractor: "Hansen Yuncken", state: "SA",
-    originalContractSum: 55.0, finalContractSum: 58.0, plannedCost: 62.0, actualCost: 69.5,
+    originalContractSum: 55.0, finalContractSum: 58.0, plannedCost: 62.0, actualCost: 55.3,
     ldRatePerDay: 58000, pcStartDate: "2024-02-01", pcEndDate: "2025-06-30",
-    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
+    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: false,
     budgetLines: [
       { id: "bl-p7-0", label: "Labour", category: "Labour", amount: 16_000_000 },
       { id: "bl-p7-1", label: "Materials", category: "Materials", amount: 27_000_000 },
@@ -167,10 +167,10 @@ export const DEFAULT_PROJECTS = [
       { id: "bl-p7-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 5_000_000 },
     ],
     actualLines: [
-      { id: "al-p7-0", label: "Labour", category: "Labour", amount: 18_300_000 },
-      { id: "al-p7-1", label: "Materials", category: "Materials", amount: 30_500_000 },
-      { id: "al-p7-2", label: "Subcontractors", category: "Subcontractors", amount: 15_400_000 },
-      { id: "al-p7-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 5_300_000 },
+      { id: "al-p7-0", label: "Labour", category: "Labour", amount: 14_600_000 },
+      { id: "al-p7-1", label: "Materials", category: "Materials", amount: 24_300_000 },
+      { id: "al-p7-2", label: "Subcontractors", category: "Subcontractors", amount: 12_200_000 },
+      { id: "al-p7-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 4_200_000 },
     ],
     revenueReceived: 58_000_000,
   },
