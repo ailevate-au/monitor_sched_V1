@@ -1652,6 +1652,22 @@ async function startServer() {
     res.json(claim);
   });
 
+  // DELETE /api/v1/claims/:id: remove/reject a claim still pending certification
+  app.delete("/api/v1/claims/:id", (req, res) => {
+    const db = dbInstance;
+    const { id } = req.params;
+
+    const claim = db.claims.find(c => c.id === id);
+    if (!claim) return res.status(404).json({ error: "Expense not found" });
+    if (claim.status !== "pending") {
+      return res.status(400).json({ error: "Only pending claims can be removed — this one is already certified/released" });
+    }
+
+    db.claims = db.claims.filter(c => c.id !== id);
+    db.save();
+    res.json({ ok: true });
+  });
+
   // GET /api/v1/conflicts/:id/candidates
   app.get("/api/v1/conflicts/:id/candidates", (req, res) => {
     const db = dbInstance;

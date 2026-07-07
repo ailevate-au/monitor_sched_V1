@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { ProgressClaim, CostCategory } from "../types";
-import { KpiCard, Card, Btn } from "./Dashboard";
+import { KpiCard, Card, Btn, StatusBadge } from "./Dashboard";
 import { LabelWithInfo } from "./InfoTip";
 
 const C = {
@@ -58,8 +58,14 @@ export default function ScreenClaims() {
   const [filterSearch, setFilterSearch] = useState("");
   const [filterProject, setFilterProject] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const [certifyingClaim, setCertifyingClaim] = useState<ProgressClaim | null>(null);
+  const [certifiedVal, setCertifiedVal] = useState("");
+  const [certifying, setCertifying] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const exportClaimsReport = (format: "PDF" | "Excel") => {
     const type = encodeURIComponent("Project-Expense-Summary");
@@ -321,6 +327,66 @@ export default function ScreenClaims() {
       });
   };
 
+  const getProjectRetentionPct = (projectId: string) => {
+    const proj = projects.find((p) => p.id === projectId);
+    return proj?.retentionPercent ?? 5.0;
+  };
+
+  const openCertifyModal = (claim: ProgressClaim) => {
+    setCertifyingClaim(claim);
+    setCertifiedVal((claim.claimedVal / 1_000_000).toString());
+  };
+
+  const handleCertifyClaim = () => {
+    if (!certifyingClaim) return;
+    const val = parseFloat(certifiedVal);
+    if (!Number.isFinite(val) || val <= 0) {
+      alert("Please enter a valid certified amount.");
+      return;
+    }
+    setCertifying(true);
+    fetch(`/api/v1/claims/${certifyingClaim.id}/certify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ certifiedAmountVal: val }),
+    })
+      .then((res) => res.json())
+      .then((updated) => {
+        setClaims((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+        setSelectedExpense(null);
+        setCertifyingClaim(null);
+        setCertifying(false);
+      })
+      .catch((err) => {
+        console.error("Error certifying claim:", err);
+        setCertifying(false);
+      });
+  };
+
+  const handleRemoveClaim = (claim: ProgressClaim) => {
+    if (!window.confirm(`Remove expense ${claim.claimNumber}? This can't be undone.`)) return;
+    setRemoving(true);
+    fetch(`/api/v1/claims/${claim.id}`, { method: "DELETE" })
+      .then((res) => {
+        if (!res.ok) return res.json().then((e) => { throw new Error(e.error || "Failed to remove"); });
+        return res.json();
+      })
+      .then(() => {
+        setClaims((prev) => prev.filter((c) => c.id !== claim.id));
+        setSelectedExpense(null);
+        setRemoving(false);
+      })
+      .catch((err) => {
+        console.error("Error removing claim:", err);
+        alert(err.message || "Failed to remove expense.");
+        setRemoving(false);
+      });
+  };
+
+  const certRetentionPreview = certifyingClaim
+    ? (parseFloat(certifiedVal) || 0) * (getProjectRetentionPct(certifyingClaim.projectId) / 100) * 1000
+    : 0;
+
   const categoryFilterOptions = useMemo(() => {
     const names = new Set<string>();
     claims.forEach((c) => {
@@ -335,11 +401,12 @@ export default function ScreenClaims() {
     return claims.filter((c) => {
       if (filterProject !== "all" && c.projectId !== filterProject) return false;
       if (filterCategory !== "all" && (c.costCategoryName || "") !== filterCategory) return false;
+      if (filterStatus !== "all" && c.status !== filterStatus) return false;
       if (!q) return true;
       const haystack = `${c.claimNumber} ${c.project} ${c.period} ${c.costCategoryName || ""} ${c.description || ""} ${c.claimedAmount} ${c.certifiedAmount}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [claims, filterSearch, filterProject, filterCategory]);
+  }, [claims, filterSearch, filterProject, filterCategory, filterStatus]);
 
   const totalPages = Math.max(1, Math.ceil(filteredClaims.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
@@ -351,7 +418,7 @@ export default function ScreenClaims() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterSearch, filterProject, filterCategory, pageSize]);
+  }, [filterSearch, filterProject, filterCategory, filterStatus, pageSize]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -360,12 +427,14 @@ export default function ScreenClaims() {
   const hasActiveFilters =
     filterSearch.trim() !== "" ||
     filterProject !== "all" ||
-    filterCategory !== "all";
+    filterCategory !== "all" ||
+    filterStatus !== "all";
 
   const clearFilters = () => {
     setFilterSearch("");
     setFilterProject("all");
     setFilterCategory("all");
+    setFilterStatus("all");
   };
 
   if (loading && claims.length === 0) {
@@ -429,6 +498,16 @@ export default function ScreenClaims() {
             <option key={name} value={name}>{name}</option>
           ))}
         </select>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          style={{ ...filterInputStyle, minWidth: 130 }}
+        >
+          <option value="all">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="certified">Certified</option>
+          <option value="released">Released</option>
+        </select>
         {hasActiveFilters && (
           <button type="button" onClick={clearFilters} style={{ ...filterInputStyle, background: C.bgSecond, cursor: "pointer", color: C.gray }}>
             Clear filters
@@ -462,7 +541,7 @@ export default function ScreenClaims() {
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                 <thead>
                   <tr style={{ background: "#F8FAFC" }}>
-                    {["Expense No.","Project","Category","Description","Period","Amount"].map(h => (
+                    {["Expense No.","Project","Category","Description","Period","Amount","Status"].map(h => (
                       <th key={h} style={{ textAlign:"left", padding:"10px 12px", borderBottom:`0.5px solid ${C.grayLight}`, fontSize:11, color:C.gray, fontWeight:500, whiteSpace:"nowrap" }}>{h}</th>
                     ))}
                   </tr>
@@ -478,6 +557,7 @@ export default function ScreenClaims() {
                       </td>
                       <td style={{ padding:"10px 12px", borderBottom:`0.5px solid ${C.grayLight}`, color:C.gray }}>{c.period}</td>
                       <td style={{ padding:"10px 12px", borderBottom:`0.5px solid ${C.grayLight}`, fontWeight:600 }}>{c.claimedAmount}</td>
+                      <td style={{ padding:"10px 12px", borderBottom:`0.5px solid ${C.grayLight}` }}><StatusBadge status={c.status} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -772,9 +852,15 @@ export default function ScreenClaims() {
             {!isEditingExpense ? (
               <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", rowGap: 8, columnGap: 10, fontSize: 12 }}>
                 <div style={{ color: C.gray }}>Expense No.</div><div style={{ fontFamily:"monospace" }}>{selectedExpense.claimNumber}</div>
+                <div style={{ color: C.gray }}>Status</div><div><StatusBadge status={selectedExpense.status} /></div>
                 <div style={{ color: C.gray }}>Project</div><div>{selectedExpense.project}</div>
                 <div style={{ color: C.gray }}>Category</div><div>{selectedExpense.costCategoryName || "—"}</div>
                 <div style={{ color: C.gray }}>Amount</div><div style={{ fontWeight: 600 }}>{selectedExpense.claimedAmount}</div>
+                {selectedExpense.status !== "pending" && (
+                  <>
+                    <div style={{ color: C.gray }}>Certified</div><div style={{ fontWeight: 600 }}>{selectedExpense.certifiedAmount || "—"}</div>
+                  </>
+                )}
                 <div style={{ color: C.gray }}>Period</div><div>{selectedExpense.period}</div>
                 <div style={{ color: C.gray }}>Description</div><div>{selectedExpense.description || "—"}</div>
                 <div style={{ color: C.gray }}>Task Links</div><div>{selectedExpense.taskIds || "—"}</div>
@@ -815,7 +901,7 @@ export default function ScreenClaims() {
                 </div>
               </div>
             )}
-            <div style={{ marginTop: 14, display:"flex", justifyContent:"flex-end" }}>
+            <div style={{ marginTop: 14, display:"flex", justifyContent:"flex-end", gap: 8, flexWrap: "wrap" }}>
               {isEditingExpense ? (
                 <>
                   <Btn onClick={() => setIsEditingExpense(false)}>Cancel</Btn>
@@ -824,9 +910,46 @@ export default function ScreenClaims() {
               ) : (
                 <>
                   <Btn onClick={() => setSelectedExpense(null)}>Close</Btn>
-                  <Btn primary onClick={() => setIsEditingExpense(true)}>Edit</Btn>
+                  {selectedExpense.status === "pending" && (
+                    <>
+                      <Btn onClick={() => handleRemoveClaim(selectedExpense)}>{removing ? "Removing..." : "Remove"}</Btn>
+                      <Btn onClick={() => setIsEditingExpense(true)}>Edit</Btn>
+                      <Btn primary onClick={() => openCertifyModal(selectedExpense)}>Approve / Certify</Btn>
+                    </>
+                  )}
                 </>
               )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {certifyingClaim && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(15,31,61,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:999, padding: 16 }}>
+          <Card style={{ width: "min(340px, 100%)", padding: 20 }}>
+            <div style={{ fontSize:14, fontWeight:600, color:C.text, marginBottom:12 }}>Approve / Certify {certifyingClaim.claimNumber}</div>
+            <div style={{ fontSize:11, color:C.gray, marginBottom:10 }}>Claimed: <strong>{certifyingClaim.claimedAmount}</strong></div>
+            {certifyingClaim.description && (
+              <div style={{ fontSize:11, color:C.text, marginBottom:10, padding:10, background:"#F8FAFC", borderRadius:6, lineHeight:1.45 }}>
+                {certifyingClaim.description}
+              </div>
+            )}
+            <div style={{ marginBottom:14 }}>
+              <label style={{ fontSize:11, color:C.gray, display:"block", marginBottom:4 }}>Certified Value (A$ Millions)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={certifiedVal}
+                onChange={(e) => setCertifiedVal(e.target.value)}
+                style={{ width:"100%", fontSize:12, padding:"5px 8px", borderRadius:6, border:`0.5px solid ${C.grayLight}` }}
+              />
+              <div style={{ fontSize:10, color:C.gray, marginTop:4 }}>
+                * {getProjectRetentionPct(certifyingClaim.projectId)}% retention (A${certRetentionPreview.toFixed(0)}K) will be held.
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <Btn primary onClick={handleCertifyClaim}>{certifying ? "Approving..." : "Approve"}</Btn>
+              <Btn onClick={() => setCertifyingClaim(null)}>Cancel</Btn>
             </div>
           </Card>
         </div>

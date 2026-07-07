@@ -153,12 +153,12 @@ export default function FlowIQApp() {
         .catch(() => {});
     }
 
-    // Sync project expenses badge count
+    // Sync project expenses badge count — only claims still awaiting certification
     fetch("/api/v1/claims")
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setExpensesCount(data.length);
+          setExpensesCount(data.filter((c: { status: string }) => c.status === "pending").length);
         }
       })
       .catch(() => {});
