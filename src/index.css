@@ -10,3 +10,29 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Buttons are styled inline throughout the app but don't inherit the page
+   font — pull Inter through so button text matches everything else. */
+button {
+  font: inherit;
+}
+
+/* Visible keyboard-focus ring on every interactive element. Only shows for
+   keyboard users (:focus-visible), so mouse clicks stay clean. */
+:focus-visible {
+  outline: 2px solid #1A5FA8;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Respect users who ask for less motion — calm the spinners/transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
