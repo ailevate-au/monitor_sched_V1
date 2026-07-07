@@ -1,29 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
 import { AlertTriangle, Zap, CloudRain, Check, AlertCircle, Sun, CheckCircle2 } from "lucide-react";
-
-const C = {
-  navy:       "#0F1F3D",
-  blue:       "#1A5FA8",
-  blueMid:    "#3A8ADE",
-  blueLight:  "#E6F0FB",
-  green:      "#1D9E75",
-  greenBg:    "#ECFDF5",
-  greenDark:  "#2D6A0A",
-  amber:      "#B87316",
-  amberBg:    "#FEF3C7",
-  red:        "#E04A4A",
-  redDark:    "#9B2C2C",
-  redBg:      "#FEF2F2",
-  purple:     "#7F77DD",
-  gray:       "#64748B",
-  grayLight:  "#E2E8F0",
-  text:       "#1E293B",
-  textMuted:  "#64748B",
-  bg:         "#F4F7FC",
-  bgSecond:   "#EEF2F8",
-  white:      "#FFFFFF",
-};
+import { C } from "../lib/theme";
 
 export const StatusBadge = ({ status }: { status: string }) => {
   const map: { [key: string]: { bg: string; color: string; label: string; icon: React.ReactNode } } = {
