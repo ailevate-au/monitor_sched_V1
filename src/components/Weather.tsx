@@ -3,6 +3,8 @@ import { Card, KpiCard, StatusBadge, Btn } from "./Dashboard";
 import { Sun, AlertTriangle } from "lucide-react";
 import { WeatherGlyph } from "../lib/weatherIcon";
 
+import { toastSuccess } from "../lib/toast";
+
 const C = {
   blue:       "#1A5FA8",
   blueMid:    "#3A8ADE",
@@ -147,7 +149,7 @@ export default function ScreenWeather() {
       .then(() => {
         setRescheduleTask(null);
         loadWeatherData(stateSel);
-        alert(`Done. ${rescheduleTask.id} moved ${offset} day${offset !== 1 ? "s" : ""} later and the lost time is claimed.`);
+        toastSuccess(`Done. ${rescheduleTask.id} moved ${offset} day${offset !== 1 ? "s" : ""} later and the lost time is claimed.`);
       })
       .catch(err => console.error("Error applying weather compensation:", err));
   };

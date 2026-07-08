@@ -12,6 +12,7 @@ import ScreenMasterData from "./components/MasterData";
 import ScreenPermissions from "./components/Permissions";
 import ScreenUsers from "./components/Users";
 import Login from "./components/Login";
+import Toaster from "./components/ui/Toaster";
 import { useAuth } from "./lib/auth";
 import {
   Home,
@@ -354,6 +355,9 @@ export default function FlowIQApp() {
           {screenMap[screen] || <div>Screen not found</div>}
         </div>
       </div>
+
+      {/* App-wide toast notifications */}
+      <Toaster />
     </div>
   );
 }

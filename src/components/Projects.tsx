@@ -12,6 +12,8 @@ import { fmtMoney, toDollars } from "../lib/money";
 
 const iconRow = { display: "inline-flex", alignItems: "center", gap: 6 } as const;
 
+import { toastError } from "../lib/toast";
+
 const C = {
   navy:       "#0F1F3D",
   blue:       "#1A5FA8",
@@ -176,7 +178,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
 
   const handleAddProject = () => {
     if (!name.trim() || !contractor.trim()) {
-      alert("Please specify project name and main contractor.");
+      toastError("Please specify project name and main contractor.");
       return;
     }
     const cleanLines = budgetLines
@@ -232,7 +234,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
     if (!costTargetProj) return;
     const amt = parseFloat(costAmount);
     if (!amt || amt <= 0) {
-      alert("Enter a cost amount greater than 0.");
+      toastError("Enter a cost amount greater than 0.");
       return;
     }
     setSavingCost(true);

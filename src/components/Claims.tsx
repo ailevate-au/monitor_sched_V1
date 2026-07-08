@@ -3,6 +3,8 @@ import { ProgressClaim, CostCategory } from "../types";
 import { KpiCard, Card, Btn, StatusBadge } from "./Dashboard";
 import { LabelWithInfo } from "./InfoTip";
 
+import { toastError } from "../lib/toast";
+
 const C = {
   blue:       "#1A5FA8",
   blueMid:    "#3A8ADE",
@@ -260,16 +262,16 @@ export default function ScreenClaims() {
 
   const handleCreateClaim = () => {
     if (!projectId) {
-      alert("Please select a project.");
+      toastError("Please select a project.");
       return;
     }
     if (!costCategoryId) {
-      alert("Please select a cost category.");
+      toastError("Please select a cost category.");
       return;
     }
     const val = parseFloat(claimAmount);
     if (!claimAmount.trim() || Number.isNaN(val) || val <= 0) {
-      alert("Please enter a valid expense amount.");
+      toastError("Please enter a valid expense amount.");
       return;
     }
     fetch("/api/v1/claims", {
@@ -296,11 +298,11 @@ export default function ScreenClaims() {
     if (!selectedExpense) return;
     const amountNum = parseFloat(editAmount);
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
-      alert("Please enter a valid expense amount.");
+      toastError("Please enter a valid expense amount.");
       return;
     }
     if (!editCategoryId) {
-      alert("Please select a cost category.");
+      toastError("Please select a cost category.");
       return;
     }
 
@@ -341,7 +343,7 @@ export default function ScreenClaims() {
     if (!certifyingClaim) return;
     const val = parseFloat(certifiedVal);
     if (!Number.isFinite(val) || val <= 0) {
-      alert("Please enter a valid certified amount.");
+      toastError("Please enter a valid certified amount.");
       return;
     }
     setCertifying(true);
@@ -378,7 +380,7 @@ export default function ScreenClaims() {
       })
       .catch((err) => {
         console.error("Error removing claim:", err);
-        alert(err.message || "Failed to remove expense.");
+        toastError(err.message || "Failed to remove expense.");
         setRemoving(false);
       });
   };

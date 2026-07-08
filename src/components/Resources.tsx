@@ -5,6 +5,8 @@ import { Search, AlertTriangle, FileText } from "lucide-react";
 import { useMasters } from "../hooks/useMasters";
 import { AppNavigate } from "../types/masters";
 
+import { toastError } from "../lib/toast";
+
 const C = {
   navy:       "#0F1F3D",
   blue:       "#1A5FA8",
@@ -175,7 +177,7 @@ export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
 
   const handleAddResource = () => {
     if (!newName.trim()) {
-      alert("Please enter a professional name.");
+      toastError("Please enter a professional name.");
       return;
     }
 

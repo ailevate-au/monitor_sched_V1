@@ -23,6 +23,8 @@ import { KpiCard } from "./Dashboard";
 import { AppNavigate } from "../types/masters";
 import { changeHistory, makeChangeSetId } from "../lib/changeHistory";
 
+import { toastError } from "../lib/toast";
+
 const C = {
   navy: "#0F1F3D",
   blue: "#1A5FA8",
@@ -167,7 +169,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
         setSubmitting(false);
         setPending(null);
         if (!res.success) {
-          alert(res.error || "Could not resolve this problem.");
+          toastError(res.error || "Could not resolve this problem.");
           return;
         }
         logResolutionToHistory(problem, action, beforeById);
@@ -181,7 +183,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
           setTimeout(load, 2800);
         }
       })
-      .catch(() => { setSubmitting(false); setPending(null); alert("Network error while resolving."); });
+      .catch(() => { setSubmitting(false); setPending(null); toastError("Network error while resolving."); });
   };
 
   // For a PM, split problems three ways by which project(s) each one touches

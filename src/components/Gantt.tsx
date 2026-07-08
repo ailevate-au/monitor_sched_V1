@@ -62,6 +62,8 @@ function writeUndoSnapshot(snap: UndoSnapshot | null): void {
   }
 }
 
+import { toastError } from "../lib/toast";
+
 const C = {
   navy:       "#0F1F3D",
   blue:       "#1A5FA8",
@@ -1530,7 +1532,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
     })
       .then(r => r.json())
       .then(res => {
-        if (!res.success) { alert(res.error || "Could not update the task."); return; }
+        if (!res.success) { toastError(res.error || "Could not update the task."); return; }
         if (pmStatus === "delayed") {
           setPmCascadeNote({ newIssues: res.newIssues ?? 0, taskName: taskDisplayName(task) });
           // Log the delay + its cascade to Change History (visible to the owner too).
@@ -1585,7 +1587,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
         }
         loadAllData();
       })
-      .catch(() => alert("Network error while updating the task."));
+      .catch(() => toastError("Network error while updating the task."));
   };
 
   // Open Create Dialog
@@ -1611,7 +1613,7 @@ export default function ScreenGantt({ onNav, initialStatus, initialTaskIds, init
   const handleSaveForm = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName) {
-      alert("Please provide a task name");
+      toastError("Please provide a task name");
       return;
     }
 

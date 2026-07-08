@@ -4,6 +4,8 @@ import { Btn, Card } from "./Dashboard";
 import { fetchUsers, createUser, updateUser, deleteUser, CreateUserInput } from "../lib/users";
 import { Plus, Pencil, Trash2, Users as UsersIcon } from "lucide-react";
 
+import { toastError } from "../lib/toast";
+
 const C = {
   navy: "#0F1F3D", blue: "#1A5FA8", blueLight: "#E6F0FB",
   green: "#1D9E75", greenBg: "#ECFDF5", greenDark: "#2D6A0A",
@@ -103,7 +105,7 @@ export default function ScreenUsers() {
       await deleteUser(u.id);
       load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not delete user.");
+      toastError(err instanceof Error ? err.message : "Could not delete user.");
     }
   };
 
