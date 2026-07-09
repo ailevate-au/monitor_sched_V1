@@ -610,7 +610,7 @@ export default function ScreenFinancial() {
             <ChartCard title="Cost Breakdown by Project" description="Total actual spend per project, split by cost type — Labour, Materials, Subcontractors, Plant. Bar height is the project's total spend; each segment is that category's amount. Hover a segment for the exact figure." height={320}>
               <CategoryStackedBar data={categoryStacked} categories={CATEGORY_ORDER} colors={CATEGORY_COLORS} />
             </ChartCard>
-            <ChartCard title="Monthly Spend" description="Actual spend per calendar month across all projects. Each segment within a month is one project; a taller month means higher total spend." height={300}>
+            <ChartCard title="Spend Over Time" description="Actual spend per calendar month across all projects. Each segment within a month is one project; a taller month means higher total spend." height={300}>
               <SpendOverTimeArea rows={spendOverTime.rows} seriesNames={spendOverTime.seriesNames} colors={COLOR_PALETTE} />
             </ChartCard>
           </>

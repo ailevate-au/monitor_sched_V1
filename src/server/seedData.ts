@@ -29,6 +29,11 @@ export const DEFAULT_COST_CATEGORIES = [
 // Labour is a seeded cost category line (budget + actual) like Materials —
 // it is no longer derived from the schedule, so completed projects (which
 // have no live tasks) still carry a real labour figure.
+// revenueReceived == finalContractSum (in dollars) for every project: the job
+// is treated as fully billed, so the portfolio "Total Profit" KPI equals
+// Total Contract − Total Costs (a self-consistent, positive headline for the
+// demo). Per-project profit (contract − actual cost) still shows the over- vs
+// under-budget story (p1/p4/p6/p8/p10 in the red, the rest in the black).
 export const DEFAULT_PROJECTS = [
   {
     id: "p1", name: "Parramatta Square — Tower C", type: "Mixed-use development",
@@ -48,7 +53,7 @@ export const DEFAULT_PROJECTS = [
       { id: "al-p1-2", label: "Subcontractors", category: "Subcontractors", amount: 18_900_000 },
       { id: "al-p1-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 8_000_000 },
     ],
-    revenueReceived: 40_000_000,
+    revenueReceived: 68_000_000,
   },
   {
     id: "p2", name: "Victoria Harbour — Stage 2", type: "High-density residential",
@@ -68,7 +73,7 @@ export const DEFAULT_PROJECTS = [
       { id: "al-p2-2", label: "Subcontractors", category: "Subcontractors", amount: 11_500_000 },
       { id: "al-p2-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 4_000_000 },
     ],
-    revenueReceived: 22_000_000,
+    revenueReceived: 54_000_000,
   },
   {
     id: "p3", name: "Southbank Residences — T1", type: "High-density residential",
@@ -88,7 +93,7 @@ export const DEFAULT_PROJECTS = [
       { id: "al-p3-2", label: "Subcontractors", category: "Subcontractors", amount: 2_200_000 },
       { id: "al-p3-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 700_000 },
     ],
-    revenueReceived: 5_000_000,
+    revenueReceived: 41_000_000,
   },
 
   // ─── COMPLETED PROJECTS (p4–p10) — closed-out jobs for the Finance /
@@ -152,14 +157,14 @@ export const DEFAULT_PROJECTS = [
       { id: "al-p6-2", label: "Subcontractors", category: "Subcontractors", amount: 12_400_000 },
       { id: "al-p6-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 3_300_000 },
     ],
-    revenueReceived: 42_000_000,
+    revenueReceived: 44_000_000,
   },
   {
     id: "p7", name: "Adelaide Oval Precinct", type: "Commercial office",
     location: "Adelaide SA", contractor: "Hansen Yuncken", state: "SA",
-    originalContractSum: 55.0, finalContractSum: 58.0, plannedCost: 62.0, actualCost: 69.5,
+    originalContractSum: 55.0, finalContractSum: 58.0, plannedCost: 62.0, actualCost: 55.3,
     ldRatePerDay: 58000, pcStartDate: "2024-02-01", pcEndDate: "2025-06-30",
-    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
+    retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: false,
     budgetLines: [
       { id: "bl-p7-0", label: "Labour", category: "Labour", amount: 16_000_000 },
       { id: "bl-p7-1", label: "Materials", category: "Materials", amount: 27_000_000 },
@@ -167,10 +172,10 @@ export const DEFAULT_PROJECTS = [
       { id: "bl-p7-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 5_000_000 },
     ],
     actualLines: [
-      { id: "al-p7-0", label: "Labour", category: "Labour", amount: 18_300_000 },
-      { id: "al-p7-1", label: "Materials", category: "Materials", amount: 30_500_000 },
-      { id: "al-p7-2", label: "Subcontractors", category: "Subcontractors", amount: 15_400_000 },
-      { id: "al-p7-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 5_300_000 },
+      { id: "al-p7-0", label: "Labour", category: "Labour", amount: 14_600_000 },
+      { id: "al-p7-1", label: "Materials", category: "Materials", amount: 24_300_000 },
+      { id: "al-p7-2", label: "Subcontractors", category: "Subcontractors", amount: 12_200_000 },
+      { id: "al-p7-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 4_200_000 },
     ],
     revenueReceived: 58_000_000,
   },
@@ -192,7 +197,7 @@ export const DEFAULT_PROJECTS = [
       { id: "al-p8-2", label: "Subcontractors", category: "Subcontractors", amount: 6_200_000 },
       { id: "al-p8-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 1_700_000 },
     ],
-    revenueReceived: 21_500_000,
+    revenueReceived: 22_000_000,
   },
   {
     id: "p9", name: "Newcastle Foreshore", type: "Mixed-use development",
@@ -232,7 +237,7 @@ export const DEFAULT_PROJECTS = [
       { id: "al-p10-2", label: "Subcontractors", category: "Subcontractors", amount: 8_100_000 },
       { id: "al-p10-3", label: "Plant & Equipment", category: "Plant & Equipment", amount: 3_000_000 },
     ],
-    revenueReceived: 29_000_000,
+    revenueReceived: 30_000_000,
   },
 ];
 
