@@ -156,6 +156,81 @@ export function RegionTreemap({ data, baseColor }: { data: Array<{ name: string;
 }
 
 /**
+ * Schematic choropleth of Australia. States are laid out as geographically-
+ * positioned tiles (not a precise coastline) and shaded by project count —
+ * darker = more, grey = none. Dependency-free (plain inline SVG); hover a
+ * state for its name + count. `data` is per-state counts keyed by abbreviation
+ * (e.g. { name: "NSW", size: 3 }).
+ */
+const AU_STATES: Array<{ id: string; name: string; x: number; y: number; w: number; h: number }> = [
+  { id: "WA",  name: "Western Australia",            x: 8,   y: 60,  w: 118, h: 160 },
+  { id: "NT",  name: "Northern Territory",           x: 126, y: 40,  w: 68,  h: 92  },
+  { id: "SA",  name: "South Australia",              x: 126, y: 132, w: 68,  h: 88  },
+  { id: "QLD", name: "Queensland",                   x: 194, y: 40,  w: 118, h: 110 },
+  { id: "NSW", name: "New South Wales",              x: 194, y: 150, w: 118, h: 52  },
+  { id: "VIC", name: "Victoria",                     x: 194, y: 202, w: 90,  h: 40  },
+  { id: "TAS", name: "Tasmania",                     x: 236, y: 258, w: 44,  h: 28  },
+  { id: "ACT", name: "Australian Capital Territory", x: 298, y: 176, w: 14,  h: 14  },
+];
+
+export function AustraliaMap({
+  title, description, data, baseColor,
+}: { title: string; description?: string; data: Array<{ name: string; size: number }>; baseColor: string }) {
+  const byState: Record<string, number> = {};
+  for (const d of data) byState[d.name] = (byState[d.name] || 0) + d.size;
+  const max = Math.max(1, ...Object.values(byState));
+
+  return (
+    <Card style={{ padding: 16 }}>
+      <SectionHeader title={title} />
+      {description && <div style={{ fontSize: 11, color: "#64748B", marginTop: -6, marginBottom: 10 }}>{description}</div>}
+      <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+        <svg viewBox="0 0 320 300" width="100%" style={{ maxWidth: 380, height: "auto" }} role="img" aria-label="Projects by Australian state">
+          {AU_STATES.map((s) => {
+            const count = byState[s.id] || 0;
+            const filled = count > 0;
+            const op = filled ? Math.min(1, 0.28 + 0.72 * (count / max)) : 1;
+            const onDark = filled && op > 0.55;
+            const small = s.w < 30;
+            return (
+              <g key={s.id}>
+                <title>{`${s.name}: ${count} project${count === 1 ? "" : "s"}`}</title>
+                <rect
+                  x={s.x} y={s.y} width={s.w} height={s.h} rx={5}
+                  fill={filled ? baseColor : "#EEF2F8"} fillOpacity={op}
+                  stroke="#fff" strokeWidth={2}
+                />
+                <text
+                  x={s.x + s.w / 2} y={s.y + s.h / 2 - (s.h > 24 ? 5 : 0)}
+                  textAnchor="middle" dominantBaseline="central"
+                  fontSize={small ? 8 : 11} fontWeight={700}
+                  fill={onDark ? "#fff" : "#334155"}
+                >
+                  {s.id}
+                </text>
+                {s.h > 24 && (
+                  <text
+                    x={s.x + s.w / 2} y={s.y + s.h / 2 + 11}
+                    textAnchor="middle" dominantBaseline="central"
+                    fontSize={10} fontWeight={600}
+                    fill={onDark ? "#fff" : "#64748B"}
+                  >
+                    {count}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div style={{ fontSize: 10.5, color: "#64748B", marginTop: 8, textAlign: "center" }}>
+        Darker = more projects · grey = none
+      </div>
+    </Card>
+  );
+}
+
+/**
  * Recharts' default category-axis tick wraps long text onto a second line
  * based on the RAW label's measured width, regardless of a tickFormatter's
  * shortened output — so a truncated "Southbank Resid…" still wrapped. A
