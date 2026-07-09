@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
 import { AlertTriangle, Zap, CloudRain, Check, AlertCircle, Sun, CheckCircle2 } from "lucide-react";
 import { C } from "../lib/theme";
+import { toDollars } from "../lib/money";
+import { CountPie, GroupedDollarBar, PieCard, ChartCard } from "./finance/financeCharts";
 
 export const StatusBadge = ({ status }: { status: string }) => {
   const map: { [key: string]: { bg: string; color: string; label: string; icon: React.ReactNode } } = {
@@ -103,6 +105,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
   const [allProjects, setAllProjects] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [projectsOpen, setProjectsOpen] = useState(true);
+  const [completedOpen, setCompletedOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [problems, setProblems] = useState<any[]>([]);
 
@@ -148,6 +151,21 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
   const toggleProject = (id: string) =>
     setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  // Project status split for the Overview donut + "Total Projects" KPI. A project
+  // is "Late" if it's not completed and has at least one problem task (clash,
+  // overdue, weather, or fragile); "Running" if not completed and problem-free.
+  const ongoingProjects = projects.filter(p => p.status !== "COMPLETED");
+  const completedProjects = projects.filter(p => p.status === "COMPLETED");
+  const projectHasProblem = (pid: string) => tasks.some((t: any) => t.projectId === pid && PROBLEM_TASK_STATUSES.has(t.status));
+  const lateProjects = ongoingProjects.filter(p => projectHasProblem(p.id));
+  const runningProjects = ongoingProjects.filter(p => !projectHasProblem(p.id));
+  const statusPieData = [
+    { name: "Running", value: runningProjects.length },
+    { name: "Late", value: lateProjects.length },
+    { name: "Completed", value: completedProjects.length },
+  ];
+  const budgetData = projects.map(p => ({ name: p.name, contract: toDollars(p.plannedCost), actual: toDollars(p.actualCost) }));
+
   return (
     <div>
       {/* STATUS BANNER — one glance: are we ok or not? */}
@@ -176,7 +194,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
 
       {/* FOUR SIMPLE NUMBERS — stretch full width */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 16 }}>
-        <KpiCard label="Projects Running" value={`${activeCount}`} sub="Live right now" />
+        <KpiCard label="Total Projects" value={`${projects.length}`} sub={`${runningProjects.length} running`} />
         <KpiCard label="On Track" value={`${onTrackPct}%`} valueColor={C.green} sub="Tasks going to plan" />
         <KpiCard
           label="Total Issues"
@@ -194,6 +212,28 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
           onClick={() => onNav("problems")}
           actionLabel="Open Problems"
         />
+      </div>
+
+      {/* OVERVIEW CHARTS — project status split + budget snapshot, with a jump to Finance */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <PieCard title="Projects by status" description="How many projects are running, late (have a problem), or completed.">
+          <CountPie data={statusPieData} colors={[C.green, C.amber, C.blueMid]} />
+        </PieCard>
+        <ChartCard
+          title="Budget vs Actual"
+          description="Planned budget against actual cost to date, per project."
+          right={
+            <button
+              type="button"
+              onClick={() => onNav("financial")}
+              style={{ fontSize: 11, fontWeight: 600, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0, display: "inline-flex", alignItems: "center", gap: 3 }}
+            >
+              Open Finance →
+            </button>
+          }
+        >
+          <GroupedDollarBar data={budgetData} seriesA="Budget" seriesB="Actual" colorA={C.blueMid} colorB={C.amber} />
+        </ChartCard>
       </div>
 
       {/* YOUR PROJECTS — collapsible card; each project expands to its jobs */}
@@ -270,6 +310,32 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
           </div>
         )}
       </Card>
+
+      {/* COMPLETED PROJECTS — separate, collapsed by default so live work stays primary */}
+      {completedProjects.length > 0 && (
+        <Card style={{ padding: 0 }}>
+          <button
+            type="button"
+            onClick={() => setCompletedOpen(o => !o)}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: "16px 18px" }}
+          >
+            <span style={{ fontSize: 13, color: C.gray, transform: completedOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.navy }}>Completed <span style={{ color: C.gray, fontWeight: 600 }}>· {completedProjects.length}</span></span>
+          </button>
+          {completedOpen && (
+            <div style={{ padding: "0 18px 14px" }}>
+              {completedProjects.map(p => (
+                <div key={p.id} style={{ borderTop: `0.5px solid ${C.grayLight}`, display: "flex", alignItems: "center", gap: 10, padding: "11px 4px" }}>
+                  <CheckCircle2 size={15} color={C.green} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                  <span style={{ fontSize: 11.5, color: C.gray, flexShrink: 0 }}>{p.location}</span>
+                  <StatusBadge status="completed" />
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* WEATHER — one line */}
       <Card style={{ display: "flex", alignItems: "center", gap: 12 }}>
