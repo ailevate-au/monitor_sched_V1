@@ -56,7 +56,7 @@ function projectHasAlert(p: Project) {
 
 const PAGES = [
   { id: "overview", label: "Overview" },
-  { id: "budgetcost", label: "Budget vs Cost" },
+  { id: "budgetcost", label: "Budget vs Actual" },
   { id: "expenses", label: "Cost Breakdown" },
   { id: "compare", label: "Compare" },
 ];
@@ -575,14 +575,14 @@ export default function ScreenFinancial() {
           </>
         )}
 
-        {/* Budget vs Cost */}
+        {/* Budget vs Actual */}
         {page === "budgetcost" && filteredProjects.length > 0 && (
           <>
             <div style={chartGrid}>
-              <ChartCard title="Budget vs Cost by Project Type" description="Contract value vs actual cost to date, grouped by sector.">
+              <ChartCard title="Budget vs Actual by Project Type" description="Contract value vs actual cost to date, grouped by sector.">
                 <GroupedDollarBar data={byType} seriesA="Contract sum" seriesB="Actual cost" colorA={C.blueMid} colorB={C.amber} />
               </ChartCard>
-              <ChartCard title="Budget vs Cost by Region" description="Contract value vs actual cost to date, grouped by state.">
+              <ChartCard title="Budget vs Actual by Region" description="Contract value vs actual cost to date, grouped by state.">
                 <GroupedDollarBar data={byRegion} seriesA="Contract sum" seriesB="Actual cost" colorA={C.blueMid} colorB={C.amber} />
               </ChartCard>
             </div>
@@ -590,7 +590,7 @@ export default function ScreenFinancial() {
             <ChartCard title="Profit Margin (projected)" description="Projected profit on each project as a percentage of its contract value; a negative value indicates a projected loss." height={280}>
               <PercentColumn data={marginData} color={C.green} />
             </ChartCard>
-            <ChartCard title="Budget vs Cost by Contractor" description="Contract value (line) vs actual cost (bars) for each head contractor." height={320}>
+            <ChartCard title="Budget vs Actual by Contractor" description="Contract value (line) vs actual cost (bars) for each head contractor." height={320}>
               <ContractorComposed data={byContractor} barColor={C.amber} lineColor={C.blue} />
             </ChartCard>
           </>
@@ -610,7 +610,7 @@ export default function ScreenFinancial() {
             <ChartCard title="Cost Breakdown by Project" description="Total actual spend per project, split by cost type — Labour, Materials, Subcontractors, Plant. Bar height is the project's total spend; each segment is that category's amount. Hover a segment for the exact figure." height={320}>
               <CategoryStackedBar data={categoryStacked} categories={CATEGORY_ORDER} colors={CATEGORY_COLORS} />
             </ChartCard>
-            <ChartCard title="Monthly Spend" description="Actual spend per calendar month across all projects. Each segment within a month is one project; a taller month means higher total spend." height={300}>
+            <ChartCard title="Spend Over Time" description="Actual spend per calendar month across all projects. Each segment within a month is one project; a taller month means higher total spend." height={300}>
               <SpendOverTimeArea rows={spendOverTime.rows} seriesNames={spendOverTime.seriesNames} colors={COLOR_PALETTE} />
             </ChartCard>
           </>
