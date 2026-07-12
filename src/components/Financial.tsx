@@ -11,10 +11,11 @@ import {
   expensesShareByProject, categoryStackedByProject, ymOf, monthLabel,
 } from "./finance/financeData";
 import {
-  ChartCard, PieCard, CountPie, DollarPie, RegionTreemap, HorizontalBar,
+  ChartCard, PieCard, CountPie, DollarPie, HorizontalBar,
   GroupedDollarBar, PercentColumn, ContractorComposed, SpendOverTimeArea,
   CategoryStackedBar,
 } from "./finance/financeCharts";
+import { AusMap } from "./finance/AusMap";
 import { ChevronDown } from "lucide-react";
 
 const C = {
@@ -561,9 +562,9 @@ export default function ScreenFinancial() {
               <PieCard title="Project Type" description="Share of projects by sector (e.g. residential vs commercial).">
                 <CountPie data={typeData} colors={COLOR_PALETTE} />
               </PieCard>
-              <ChartCard title="Project Location" description="Number of projects in each state; a larger box means more projects there.">
-                <RegionTreemap data={regionData} baseColor={C.blue} />
-              </ChartCard>
+              <PieCard title="Project Location" description="Number of projects in each state; a darker state means more projects there.">
+                <AusMap data={regionData} baseColor={C.blue} />
+              </PieCard>
               <ChartCard title="Project Duration (weeks)" description="Duration of each project in weeks, start to finish, with the longest at the top.">
                 <HorizontalBar data={durationData} dataKey="weeks" color={C.blueMid} />
               </ChartCard>

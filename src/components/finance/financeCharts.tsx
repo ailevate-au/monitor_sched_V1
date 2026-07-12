@@ -1,7 +1,7 @@
 import React from "react";
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend,
-  Treemap, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
   ComposedChart, Line,
 } from "recharts";
 import { Card, SectionHeader } from "../Dashboard";
@@ -143,15 +143,6 @@ export function DollarPie({ data, colors }: { data: Array<{ name: string; value:
       <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => `${fmtMoney(v)} (${Math.round(pct(v, total))}%)`} />
       <Legend layout="vertical" verticalAlign="middle" align="right" formatter={pctLegendFormatter(data)} wrapperStyle={{ fontSize: 11, paddingLeft: 20 }} />
     </PieChart>
-  );
-}
-
-/** Treemap — project count by region. Sequential single hue, area = magnitude. */
-export function RegionTreemap({ data, baseColor }: { data: Array<{ name: string; size: number }>; baseColor: string }) {
-  return (
-    <Treemap data={data} dataKey="size" nameKey="name" stroke="#fff" fill={baseColor} isAnimationActive={false}>
-      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => [v, "Projects"]} />
-    </Treemap>
   );
 }
 

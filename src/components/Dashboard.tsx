@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
 import { AlertTriangle, Zap, CloudRain, Check, AlertCircle, Sun, CheckCircle2 } from "lucide-react";
 import { C } from "../lib/theme";
+import { ChartCard, PieCard, CountPie, GroupedDollarBar } from "./finance/financeCharts";
+import { toDollars } from "../lib/money";
 
 export const StatusBadge = ({ status }: { status: string }) => {
   const map: { [key: string]: { bg: string; color: string; label: string; icon: React.ReactNode } } = {
@@ -103,6 +105,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
   const [allProjects, setAllProjects] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [projectsOpen, setProjectsOpen] = useState(true);
+  const [completedOpen, setCompletedOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [problems, setProblems] = useState<any[]>([]);
 
@@ -145,6 +148,29 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
   const unassignedNum = isPM
     ? scopedTasks.filter((t: any) => !t.assigneeId && t.status !== "completed" && activeIds.has(t.projectId)).length
     : (stats.unassignedCount ?? 0);
+
+  // Status breakdown for the donut — all from the scoped list so a PM only
+  // sees their own portfolio. "Late" = a running project with an overdue task;
+  // it's carved out of Running so the slices never double-count a project.
+  const completedProjects = projects.filter((p: any) => p.status === "COMPLETED");
+  const planningProjects = projects.filter((p: any) => p.status === "PLANNING");
+  const overdueProjectIds = new Set(scopedTasks.filter((t: any) => t.status === "overdue").map((t: any) => t.projectId));
+  const lateProjects = activeProjects.filter((p: any) => overdueProjectIds.has(p.id));
+  const statusRows = [
+    { name: "Running", value: activeProjects.length - lateProjects.length, color: C.blue },
+    { name: "Late", value: lateProjects.length, color: C.red },
+    { name: "Completed", value: completedProjects.length, color: C.green },
+    { name: "Planning", value: planningProjects.length, color: C.gray },
+  ].filter(r => r.value > 0); // a zero slice would still print "— 0%" in the legend
+
+  // Contract vs actual for running projects — fields are stored in A$M,
+  // toDollars() keeps the axis reading "A$58.0M" rather than "A$58".
+  const budgetRows = activeProjects.map((p: any) => ({
+    name: p.name,
+    contract: toDollars(p.finalContractSum),
+    actual: toDollars(p.actualCost),
+  }));
+
   const toggleProject = (id: string) =>
     setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -176,7 +202,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
 
       {/* FOUR SIMPLE NUMBERS — stretch full width */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 16 }}>
-        <KpiCard label="Projects Running" value={`${activeCount}`} sub="Live right now" />
+        <KpiCard label="Total Projects" value={`${projects.length}`} sub={`${activeCount} running · ${completedProjects.length} completed`} />
         <KpiCard label="On Track" value={`${onTrackPct}%`} valueColor={C.green} sub="Tasks going to plan" />
         <KpiCard
           label="Total Issues"
@@ -194,6 +220,21 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
           onClick={() => onNav("problems")}
           actionLabel="Open Problems"
         />
+      </div>
+
+      {/* PORTFOLIO AT A GLANCE — status donut + running-project budget chart */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 12, marginBottom: 14 }}>
+        <PieCard title="Project Status" description="Every project by where it stands. Late means a running project with an overdue task.">
+          <CountPie data={statusRows.map(({ name, value }) => ({ name, value }))} colors={statusRows.map(r => r.color)} />
+        </PieCard>
+        <ChartCard
+          title="Budget vs Actual (running projects)"
+          description="Contract sum against actual cost to date for each running project."
+          right={<Btn small onClick={() => onNav("financial")}>Open Finance →</Btn>}
+          height={260}
+        >
+          <GroupedDollarBar data={budgetRows} seriesA="Contract sum" seriesB="Actual cost" colorA={C.blueMid} colorB={C.amber} />
+        </ChartCard>
       </div>
 
       {/* YOUR PROJECTS — collapsible card; each project expands to its jobs */}
@@ -263,6 +304,27 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
             })}
             {activeProjects.length === 0 && (
               <div style={{ fontSize: 12, color: C.gray, padding: "8px 4px" }}>No running projects.</div>
+            )}
+            {completedProjects.length > 0 && (
+              <div style={{ borderTop: `0.5px solid ${C.grayLight}` }}>
+                <button
+                  type="button"
+                  onClick={() => setCompletedOpen(o => !o)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 4px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+                >
+                  <span style={{ fontSize: 11, color: C.gray, width: 12, transform: completedOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: C.gray }}>Completed <span style={{ fontWeight: 600 }}>· {completedProjects.length}</span></span>
+                </button>
+                {completedOpen && completedProjects.map((p: any) => (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 4px", borderTop: `0.5px solid ${C.grayLight}` }}>
+                    <span style={{ width: 12, flexShrink: 0 }} />
+                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: C.gray, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: C.textMuted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                    <span style={{ fontSize: 11.5, color: C.gray, flexShrink: 0 }}>{p.location}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: C.gray, width: 42, textAlign: "right", flexShrink: 0 }}>100%</span>
+                  </div>
+                ))}
+              </div>
             )}
             <button type="button" onClick={() => onNav("projects")} style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
               See all projects →
