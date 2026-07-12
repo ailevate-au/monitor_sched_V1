@@ -345,8 +345,20 @@ export class Datastore {
     }));
   }
 
+  // Persists are serialized on a promise chain: routes still call save() fire-
+  // and-forget (no latency change), but two saves can no longer interleave
+  // their deleteMany/upsert transactions, and failures are logged, not lost.
+  private persistChain: Promise<void> = Promise.resolve();
+
   save() {
-    this.persistToPrisma().catch(err => console.error("Prisma persist error:", err));
+    this.persistChain = this.persistChain
+      .then(() => this.persistToPrisma())
+      .catch(err => console.error("Prisma persist error:", err));
+  }
+
+  /** Wait until every queued persist has finished (tests, graceful shutdown). */
+  async flush() {
+    await this.persistChain;
   }
 
   private async persistToPrisma() {

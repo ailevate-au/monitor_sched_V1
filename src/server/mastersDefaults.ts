@@ -1,4 +1,4 @@
-import { MasterItem, MastersBundle } from "../types/masters";
+import { MastersBundle } from "../types/masters";
 
 export const DEFAULT_MASTERS: MastersBundle = {
   states: [

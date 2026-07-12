@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Project, Resource, CostLine } from "../types";
-import { KpiCard, StatusBadge, Btn, Card } from "./Dashboard";
+import { Project, Resource } from "../types";
+import { KpiCard, StatusBadge, Btn, Card } from "./ui/primitives";
 import { useMasters } from "../hooks/useMasters";
 import { AppNavigate } from "../types/masters";
 import { LabelWithInfo } from "./InfoTip";
@@ -9,29 +9,11 @@ import { visibleProjects as scopeProjects } from "../lib/auth";
 import { Zap, RotateCcw, Calendar, DollarSign, Download, Plus, Trash2, CheckCircle2, RefreshCcw } from "lucide-react";
 import { changeHistory } from "../lib/changeHistory";
 import { fmtMoney, toDollars } from "../lib/money";
+import { C } from "../lib/theme";
+import { api } from "../lib/api";
 
 const iconRow = { display: "inline-flex", alignItems: "center", gap: 6 } as const;
 
-const C = {
-  navy:       "#0F1F3D",
-  blue:       "#1A5FA8",
-  blueMid:    "#3A8ADE",
-  blueLight:  "#E6F0FB",
-  green:      "#1D9E75",
-  greenBg:    "#ECFDF5",
-  greenDark:  "#2D6A0A",
-  amber:      "#B87316",
-  amberBg:    "#FEF3C7",
-  red:        "#E04A4A",
-  redDark:    "#9B2C2C",
-  redBg:      "#FEF2F2",
-  purple:     "#7F77DD",
-  gray:       "#64748B",
-  grayLight:  "#E2E8F0",
-  text:       "#1E293B",
-  bgSecond:   "#EEF2F8",
-  white:      "#FFFFFF",
-};
 
 const ProgressBar = ({ pct, color }: { pct: number; color?: string }) => (
   <div style={{ marginTop:8 }}>
@@ -114,8 +96,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   const [isSavingRates, setIsSavingRates] = useState(false);
 
   const loadIssues = () => {
-    fetch("/api/v1/problems")
-      .then(res => res.json())
+    api.get("/problems")
       .then(data => {
         const map: Record<string, Set<string>> = {};
         for (const p of data.problems || []) {
@@ -134,8 +115,8 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   const loadProjectsAndResources = () => {
     setLoading(true);
     Promise.all([
-      fetch("/api/v1/projects").then(res => res.json()),
-      fetch("/api/v1/resources").then(res => res.json())
+      api.get("/projects"),
+      api.get("/resources")
     ])
       .then(([projectsData, resourcesData]) => {
         setProjects(projectsData);
@@ -158,8 +139,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   // Reset clears it. Both refresh the live issue badges.
   const runDemo = (path: "simulate" | "reset") => {
     setDemoBusy(true);
-    fetch(`/api/v1/demo/${path}`, { method: "POST" })
-      .then(res => res.json())
+    api.post(`/demo/${path}`)
       .then(() => {
         setDemoBusy(false);
         // A clean reset rebuilds the seed, so any pending Timeline "Undo last
@@ -182,10 +162,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
     const cleanLines = budgetLines
       .filter(l => (parseFloat(l.amount) || 0) > 0)
       .map(l => ({ label: l.label.trim() || l.category, category: l.category, amount: parseFloat(l.amount) || 0 }));
-    fetch("/api/v1/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    api.post("/projects", {
         name,
         type,
         location,
@@ -199,8 +176,6 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
         budgetLines: cleanLines,
         revenueReceived,
       })
-    })
-      .then(res => res.json())
       .then(() => {
         setName("");
         setContractor("");
@@ -236,12 +211,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
       return;
     }
     setSavingCost(true);
-    fetch(`/api/v1/projects/${costTargetProj.id}/cost-lines`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: costLabel || costCategory, category: costCategory, amount: amt }),
-    })
-      .then(res => res.json())
+    api.post(`/projects/${costTargetProj.id}/cost-lines`, { label: costLabel || costCategory, category: costCategory, amount: amt })
       .then(() => {
         setSavingCost(false);
         setShowAddCostModal(false);
@@ -255,12 +225,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
     const nextStatus = proj.status === "COMPLETED" ? "ACTIVE" : "COMPLETED";
     const verb = nextStatus === "COMPLETED" ? "Finish" : "Reopen";
     if (!window.confirm(`${verb} "${proj.name}"?`)) return;
-    fetch(`/api/v1/projects/${proj.id}/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
-    })
-      .then(res => res.json())
+    api.post(`/projects/${proj.id}/status`, { status: nextStatus })
       .then(() => loadProjectsAndResources())
       .catch(err => console.error("Error updating project status:", err));
   };
@@ -287,12 +252,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
     if (!selectedProj) return;
     setIsSavingRates(true);
 
-    fetch(`/api/v1/projects/${selectedProj.id}/rates`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resourceRates: projectRates })
-    })
-      .then(res => res.json())
+    api.post(`/projects/${selectedProj.id}/rates`, { resourceRates: projectRates })
       .then(() => {
         setIsSavingRates(false);
         setShowRatesModal(false);
@@ -307,12 +267,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
   const runImport = (body: object, label: string) => {
     setImporting(true);
     setImportMsg(null);
-    fetch("/api/v1/projects/import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-      .then(res => res.json())
+    api.post("/projects/import", body)
       .then(res => {
         setImporting(false);
         if (res.success) {
@@ -374,7 +329,7 @@ export default function ScreenProjects({ onNav }: { onNav?: AppNavigate }) {
     const overrideCount = resources.filter(r => r.projectRateOverrides && r.projectRateOverrides[p.id] !== undefined).length;
 
     return (
-      <div key={p.id} onClick={() => onNav("gantt")} style={{
+      <div key={p.id} onClick={() => onNav?.("gantt")} style={{
         border:`0.5px solid ${hasConflicts ? "#FECACA" : C.grayLight}`,
         borderRadius:12, padding:"14px 16px", marginBottom:10,
         background:C.white, cursor:"pointer",

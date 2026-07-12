@@ -177,31 +177,6 @@ export interface ConflictHubResponse {
   fragileTasks: FragileTaskSummary[];
 }
 
-/** Accept legacy array responses and the enriched hub payload. */
-export function parseConflictHubResponse(data: unknown): ConflictHubResponse {
-  if (Array.isArray(data)) {
-    return {
-      conflicts: data,
-      metrics: {
-        hardConflicts: data.length,
-        fragileBufferSlots: 0,
-        resolvedThisFortnight: 0,
-      },
-      fragileTasks: [],
-    };
-  }
-  const payload = data as Partial<ConflictHubResponse>;
-  return {
-    conflicts: payload.conflicts ?? [],
-    metrics: payload.metrics ?? {
-      hardConflicts: payload.conflicts?.length ?? 0,
-      fragileBufferSlots: 0,
-      resolvedThisFortnight: 0,
-    },
-    fragileTasks: payload.fragileTasks ?? [],
-  };
-}
-
 export interface CostCategory {
   id: string;
   name: string;

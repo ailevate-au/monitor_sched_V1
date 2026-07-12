@@ -9,6 +9,8 @@
  * Owner is implicitly full-access and is not part of the editable matrix.
  */
 
+import { api } from "./api";
+
 export type PermRole = "Coordinator" | "Admin" | "PM";
 export type PermType = "always_on" | "owner_only" | "configurable";
 
@@ -27,12 +29,10 @@ export interface PermissionsPayload {
   matrix: PermMatrix;
 }
 
-const BASE = "/api/v1/permissions";
-
 export async function fetchPermissions(): Promise<PermissionsPayload> {
-  const res = await fetch(BASE);
-  if (!res.ok) throw new Error("Could not load permissions.");
-  return (await res.json()) as PermissionsPayload;
+  const data = await api.get<PermissionsPayload>("/permissions");
+  if (!data?.features || !data?.matrix) throw new Error("Could not load permissions.");
+  return data;
 }
 
 /** Persist a single role's toggles. Returns the refreshed full matrix. */
@@ -40,21 +40,15 @@ export async function saveRolePermissions(
   role: PermRole,
   permissions: Record<string, boolean>
 ): Promise<PermMatrix> {
-  const res = await fetch(`${BASE}/${role}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ permissions }),
-  });
-  if (!res.ok) throw new Error(`Could not save ${role} permissions.`);
-  const data = await res.json();
-  if (!data?.success) throw new Error(`Could not save ${role} permissions.`);
-  return data.matrix as PermMatrix;
+  const data = await api.put<{ success?: boolean; matrix?: PermMatrix }>(`/permissions/${role}`, { permissions });
+  if (!data?.success || !data.matrix) throw new Error(`Could not save ${role} permissions.`);
+  return data.matrix;
 }
 
 export async function resetPermissions(): Promise<PermissionsPayload> {
-  const res = await fetch(`${BASE}/reset`, { method: "POST" });
-  if (!res.ok) throw new Error("Could not reset permissions.");
-  return (await res.json()) as PermissionsPayload;
+  const data = await api.post<PermissionsPayload>("/permissions/reset");
+  if (!data?.features || !data?.matrix) throw new Error("Could not reset permissions.");
+  return data;
 }
 
 export interface CellState {

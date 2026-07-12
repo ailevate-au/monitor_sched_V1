@@ -4,7 +4,6 @@ import {
   calculateTaskCost,
   calculateTaskEarnedValue,
   formatAud,
-  formatCostDelta,
   sumProjectScheduledCost,
 } from "../server/taskCost";
 

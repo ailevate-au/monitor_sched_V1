@@ -1,12 +1,6 @@
 import React, { useState } from "react";
+import { C } from "../lib/theme";
 
-const C = {
-  blue: "#1A5FA8",
-  gray: "#64748B",
-  grayLight: "#E2E8F0",
-  text: "#1E293B",
-  white: "#FFFFFF",
-};
 
 export function InfoTip({ title, body }: { title: string; body: string }) {
   const [open, setOpen] = useState(false);

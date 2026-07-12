@@ -11,27 +11,8 @@ import {
   resetPermissions,
   saveRolePermissions,
 } from "../lib/permissions";
+import { C } from "../lib/theme";
 
-const C = {
-  navy: "#0F1F3D",
-  blue: "#1A5FA8",
-  blueMid: "#3A8ADE",
-  blueLight: "#E6F0FB",
-  green: "#1D9E75",
-  greenBg: "#ECFDF5",
-  greenDark: "#2D6A0A",
-  amber: "#B87316",
-  amberBg: "#FEF3C7",
-  red: "#E04A4A",
-  redDark: "#9B2C2C",
-  redBg: "#FEF2F2",
-  gray: "#64748B",
-  grayLight: "#E2E8F0",
-  text: "#1E293B",
-  textMuted: "#475569",
-  white: "#FFFFFF",
-  bgSecond: "#EEF2F8",
-};
 
 const COL_WIDTH = 110;
 

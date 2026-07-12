@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 import { AppNavigate, MasterTabId } from "./types/masters";
 import { parseProblemsResponse } from "./types";
+import { C } from "./lib/theme";
+import { api } from "./lib/api";
 
 function initialsFromName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -38,25 +40,6 @@ function initialsFromName(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const C = {
-  navy:       "#0F1F3D",
-  blue:       "#1A5FA8",
-  blueMid:    "#3A8ADE",
-  blueLight:  "#E6F0FB",
-  green:      "#1D9E75",
-  greenBg:    "#ECFDF5",
-  greenDark:  "#2D6A0A",
-  amber:      "#B87316",
-  amberBg:    "#FEF3C7",
-  red:        "#E04A4A",
-  redDark:    "#9B2C2C",
-  redBg:      "#FEF2F2",
-  gray:       "#64748B",
-  grayLight:  "#E2E8F0",
-  text:       "#1E293B",
-  bg:         "#F4F7FC",
-  white:      "#FFFFFF",
-};
 
 const SCREEN_TO_PATH: Record<string, string> = {
   dashboard: "/",
@@ -127,8 +110,8 @@ export default function FlowIQApp() {
     // the Problems page shows them — not the whole portfolio.
     if (user?.role === "PM" && user?.email) {
       Promise.all([
-        fetch("/api/v1/problems").then(r => r.json()),
-        fetch("/api/v1/projects").then(r => r.json()),
+        api.get("/problems"),
+        api.get("/projects"),
       ])
         .then(([pData, rows]) => {
           const { problems } = parseProblemsResponse(pData);
@@ -144,8 +127,7 @@ export default function FlowIQApp() {
         })
         .catch(() => {});
     } else {
-      fetch("/api/v1/problems")
-        .then(res => res.json())
+      api.get("/problems")
         .then(data => {
           const { summary } = parseProblemsResponse(data);
           setConflictsCount(summary.total);
@@ -154,8 +136,7 @@ export default function FlowIQApp() {
     }
 
     // Sync project expenses badge count — only claims still awaiting certification
-    fetch("/api/v1/claims")
-      .then(res => res.json())
+    api.get("/claims")
       .then(data => {
         if (Array.isArray(data)) {
           setExpensesCount(data.filter((c: { status: string }) => c.status === "pending").length);
@@ -165,10 +146,12 @@ export default function FlowIQApp() {
   };
 
   useEffect(() => {
+    // Don't poll before login — with real token checks every call would 401.
+    if (!isAuthenticated) return;
     fetchLiveBadges();
     const interval = setInterval(fetchLiveBadges, 8000);
     return () => clearInterval(interval);
-  }, [user?.role, user?.email]);
+  }, [isAuthenticated, user?.role, user?.email]);
 
   // Every fresh sign-in lands on Overview, for every user. The app component
   // stays mounted across logout → login, so without this the previous session's
