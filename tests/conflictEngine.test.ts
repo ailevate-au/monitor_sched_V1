@@ -23,7 +23,7 @@ describe("conflict engine", () => {
   it("detects a double-booked resource and clears it when the overlap is removed", () => {
     // Same move the demo Simulate makes: pull Ben's basement formwork onto his
     // Level-4 pour week.
-    setTask("TSK-P2-03", { assigneeId: "r1", start: "2026-06-03", end: "2026-06-09", durationDays: 5, percent_complete: 0, status: "scheduled" });
+    setTask("TSK-P2-03", { assigneeId: "r1", start: "2026-07-03", end: "2026-07-09", durationDays: 5, percent_complete: 0, status: "scheduled" });
     runConflictDetection();
 
     expect(dbInstance.conflicts.some(c => c.resourceId === "r1")).toBe(true);
@@ -58,7 +58,7 @@ describe("conflict engine", () => {
 
   it("flags tight handovers only when the setting is on and the gap is under the threshold", () => {
     // The demo's tight handover: fitout pulled hard against the steel frame.
-    setTask("TSK-P1-04", { start: "2026-06-29", end: "2026-07-17", durationDays: 14 });
+    setTask("TSK-P1-04", { start: "2026-07-29", end: "2026-08-16", durationDays: 14 });
     runConflictDetection();
     expect(dbInstance.fragileTasks.length).toBeGreaterThan(0);
 

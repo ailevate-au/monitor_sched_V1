@@ -39,7 +39,7 @@ export const DEFAULT_PROJECTS = [
     id: "p1", name: "Parramatta Square — Tower C", type: "Mixed-use development",
     location: "Parramatta NSW", contractor: "Lendlease", state: "NSW",
     originalContractSum: 58.0, finalContractSum: 68.0, plannedCost: 70.0, actualCost: 73.5,
-    ldRatePerDay: 68000, pcStartDate: "2026-03-01", pcEndDate: "2026-09-30",
+    ldRatePerDay: 68000, pcStartDate: "2026-03-31", pcEndDate: "2026-10-30",
     retentionPercent: 5.0, status: "ACTIVE", progress: 41, weatherRisk: true, overBudget: true,
     budgetLines: [
       { id: "bl-p1-0", label: "Labour", category: "Labour", amount: 12_000_000 },
@@ -59,7 +59,7 @@ export const DEFAULT_PROJECTS = [
     id: "p2", name: "Victoria Harbour — Stage 2", type: "High-density residential",
     location: "Docklands VIC", contractor: "CPB Contractors", state: "VIC",
     originalContractSum: 36.0, finalContractSum: 54.0, plannedCost: 46.0, actualCost: 44.8,
-    ldRatePerDay: 54000, pcStartDate: "2026-02-15", pcEndDate: "2026-11-30",
+    ldRatePerDay: 54000, pcStartDate: "2026-03-17", pcEndDate: "2026-12-30",
     retentionPercent: 5.0, status: "ACTIVE", progress: 28, weatherRisk: false, overBudget: false,
     budgetLines: [
       { id: "bl-p2-0", label: "Labour", category: "Labour", amount: 10_000_000 },
@@ -79,7 +79,7 @@ export const DEFAULT_PROJECTS = [
     id: "p3", name: "Southbank Residences — T1", type: "High-density residential",
     location: "South Brisbane QLD", contractor: "John Holland", state: "QLD",
     originalContractSum: 41.0, finalContractSum: 41.0, plannedCost: 11.2, actualCost: 10.3,
-    ldRatePerDay: 41000, pcStartDate: "2026-05-01", pcEndDate: "2026-12-20",
+    ldRatePerDay: 41000, pcStartDate: "2026-05-31", pcEndDate: "2027-01-19",
     retentionPercent: 5.0, status: "ACTIVE", progress: 18, weatherRisk: false, overBudget: false,
     budgetLines: [
       { id: "bl-p3-0", label: "Labour", category: "Labour", amount: 3_000_000 },
@@ -103,7 +103,7 @@ export const DEFAULT_PROJECTS = [
     id: "p4", name: "Bondi Junction Tower", type: "Commercial office",
     location: "Bondi Junction NSW", contractor: "Multiplex", state: "NSW",
     originalContractSum: 32.0, finalContractSum: 34.0, plannedCost: 36.0, actualCost: 39.6,
-    ldRatePerDay: 34000, pcStartDate: "2024-11-01", pcEndDate: "2025-10-15",
+    ldRatePerDay: 34000, pcStartDate: "2025-07-04", pcEndDate: "2026-06-17",
     retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
     budgetLines: [
       { id: "bl-p4-0", label: "Labour", category: "Labour", amount: 9_000_000 },
@@ -123,7 +123,7 @@ export const DEFAULT_PROJECTS = [
     id: "p5", name: "Chatswood Central", type: "Mixed-use development",
     location: "Chatswood NSW", contractor: "Built", state: "NSW",
     originalContractSum: 25.0, finalContractSum: 25.0, plannedCost: 27.0, actualCost: 24.7,
-    ldRatePerDay: 25000, pcStartDate: "2024-06-01", pcEndDate: "2025-04-30",
+    ldRatePerDay: 25000, pcStartDate: "2025-02-01", pcEndDate: "2025-12-31",
     retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: false,
     budgetLines: [
       { id: "bl-p5-0", label: "Labour", category: "Labour", amount: 7_000_000 },
@@ -143,7 +143,7 @@ export const DEFAULT_PROJECTS = [
     id: "p6", name: "Geelong Waterfront", type: "High-density residential",
     location: "Geelong VIC", contractor: "Probuild", state: "VIC",
     originalContractSum: 40.0, finalContractSum: 44.0, plannedCost: 46.0, actualCost: 52.6,
-    ldRatePerDay: 44000, pcStartDate: "2024-08-15", pcEndDate: "2025-09-01",
+    ldRatePerDay: 44000, pcStartDate: "2025-04-17", pcEndDate: "2026-05-04",
     retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
     budgetLines: [
       { id: "bl-p6-0", label: "Labour", category: "Labour", amount: 12_000_000 },
@@ -163,7 +163,7 @@ export const DEFAULT_PROJECTS = [
     id: "p7", name: "Adelaide Oval Precinct", type: "Commercial office",
     location: "Adelaide SA", contractor: "Hansen Yuncken", state: "SA",
     originalContractSum: 55.0, finalContractSum: 58.0, plannedCost: 62.0, actualCost: 55.3,
-    ldRatePerDay: 58000, pcStartDate: "2024-02-01", pcEndDate: "2025-06-30",
+    ldRatePerDay: 58000, pcStartDate: "2024-10-03", pcEndDate: "2026-03-02",
     retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: false,
     budgetLines: [
       { id: "bl-p7-0", label: "Labour", category: "Labour", amount: 16_000_000 },
@@ -183,7 +183,7 @@ export const DEFAULT_PROJECTS = [
     id: "p8", name: "Fremantle Wharf", type: "Industrial",
     location: "Fremantle WA", contractor: "BGC Construction", state: "WA",
     originalContractSum: 22.0, finalContractSum: 22.0, plannedCost: 24.0, actualCost: 28.2,
-    ldRatePerDay: 22000, pcStartDate: "2024-09-01", pcEndDate: "2025-05-15",
+    ldRatePerDay: 22000, pcStartDate: "2025-05-04", pcEndDate: "2026-01-15",
     retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
     budgetLines: [
       { id: "bl-p8-0", label: "Labour", category: "Labour", amount: 6_000_000 },
@@ -203,7 +203,7 @@ export const DEFAULT_PROJECTS = [
     id: "p9", name: "Newcastle Foreshore", type: "Mixed-use development",
     location: "Newcastle NSW", contractor: "Richard Crookes", state: "NSW",
     originalContractSum: 18.0, finalContractSum: 19.0, plannedCost: 20.0, actualCost: 19.1,
-    ldRatePerDay: 19000, pcStartDate: "2024-12-01", pcEndDate: "2025-07-20",
+    ldRatePerDay: 19000, pcStartDate: "2025-08-03", pcEndDate: "2026-03-22",
     retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: false,
     budgetLines: [
       { id: "bl-p9-0", label: "Labour", category: "Labour", amount: 5_000_000 },
@@ -223,7 +223,7 @@ export const DEFAULT_PROJECTS = [
     id: "p10", name: "Cairns Marina", type: "High-density residential",
     location: "Cairns QLD", contractor: "Hutchinson Builders", state: "QLD",
     originalContractSum: 29.0, finalContractSum: 30.0, plannedCost: 32.0, actualCost: 37.3,
-    ldRatePerDay: 30000, pcStartDate: "2024-10-15", pcEndDate: "2025-08-10",
+    ldRatePerDay: 30000, pcStartDate: "2025-06-17", pcEndDate: "2026-04-12",
     retentionPercent: 5.0, status: "COMPLETED", progress: 100, weatherRisk: false, overBudget: true,
     budgetLines: [
       { id: "bl-p10-0", label: "Labour", category: "Labour", amount: 8_000_000 },
@@ -327,41 +327,41 @@ export const DEFAULT_TASKS = [
 
   // ─── PARRAMATTA SQUARE — TOWER C (p1, NSW) ──────────────────────────────
   // Ben: single formwork pour early June — the anchor for the Ben double-booking.
-  { id: "TSK-P1-01", projectId: "p1", name: "Formwork Pour — Level 4",            assigneeId: "r1",  tradeRequired: "Formwork Foreman",     start: "2026-06-01", end: "2026-06-05", deadline: "2026-06-05", durationDays: 5,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P1-01", projectId: "p1", name: "Formwork Pour — Level 4",            assigneeId: "r1",  tradeRequired: "Formwork Foreman",     start: "2026-07-01", end: "2026-07-05", deadline: "2026-07-05", durationDays: 5,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
   // James: structural steel after Ben's pour — comfortable gap (not a tight handover).
-  { id: "TSK-P1-02", projectId: "p1", name: "Structural Steel Frame — Level 4",   assigneeId: "r2",  tradeRequired: "Structural Foreman",   start: "2026-06-15", end: "2026-06-26", deadline: "2026-06-26", durationDays: 10, dependencies: "TSK-P1-01", status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P1-02", projectId: "p1", name: "Structural Steel Frame — Level 4",   assigneeId: "r2",  tradeRequired: "Structural Foreman",   start: "2026-07-15", end: "2026-07-26", deadline: "2026-07-26", durationDays: 10, dependencies: "TSK-P1-01", status: "scheduled",  percent_complete: 0  },
   // Sam: QS cost report (clean NSW job — simulate pulls this into the storm window).
-  { id: "TSK-P1-03", projectId: "p1", name: "Cost Report & Variation Assessment", assigneeId: "r7",  tradeRequired: "Quantity Surveyor",    start: "2026-06-10", end: "2026-06-19", deadline: "2026-06-19", durationDays: 8,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P1-03", projectId: "p1", name: "Cost Report & Variation Assessment", assigneeId: "r7",  tradeRequired: "Quantity Surveyor",    start: "2026-07-10", end: "2026-07-19", deadline: "2026-07-19", durationDays: 8,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
   // Chris: fitout after the steel frame — big gap (simulate pulls it up for the tight handover).
-  { id: "TSK-P1-04", projectId: "p1", name: "Internal Fitout — Level 1 to 3",     assigneeId: "r6",  tradeRequired: "Interior Foreman",     start: "2026-07-13", end: "2026-07-31", deadline: "2026-07-31", durationDays: 15, dependencies: "TSK-P1-02", status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P1-04", projectId: "p1", name: "Internal Fitout — Level 1 to 3",     assigneeId: "r6",  tradeRequired: "Interior Foreman",     start: "2026-08-12", end: "2026-08-30", deadline: "2026-08-30", durationDays: 15, dependencies: "TSK-P1-02", status: "scheduled",  percent_complete: 0  },
   // Wayne: concrete pour completed in late May — keeps him FREE in June so he is
   // the recommended same-state replacement when Ben's double-booking is simulated.
-  { id: "TSK-P1-05", projectId: "p1", name: "Concrete Pour — Basement B3",        assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-05-20", end: "2026-05-26", deadline: "2026-05-26", durationDays: 5,  dependencies: "-",        status: "completed",  percent_complete: 100 },
+  { id: "TSK-P1-05", projectId: "p1", name: "Concrete Pour — Basement B3",        assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-06-19", end: "2026-06-25", deadline: "2026-06-25", durationDays: 5,  dependencies: "-",        status: "completed",  percent_complete: 100 },
 
   // ─── VICTORIA HARBOUR — STAGE 2 (p2, VIC) ───────────────────────────────
   // Matt: excavation done (also the "late job" simulate flips to overdue).
-  { id: "TSK-P2-01", projectId: "p2", name: "Excavation Works — Zone B",          assigneeId: "r3",  tradeRequired: "Site Manager",         start: "2026-05-12", end: "2026-05-28", deadline: "2026-05-28", durationDays: 13, dependencies: "-",        status: "completed",  percent_complete: 100 },
+  { id: "TSK-P2-01", projectId: "p2", name: "Excavation Works — Zone B",          assigneeId: "r3",  tradeRequired: "Site Manager",         start: "2026-06-11", end: "2026-06-27", deadline: "2026-06-27", durationDays: 13, dependencies: "-",        status: "completed",  percent_complete: 100 },
   // Tom: north-sector piling — the PM delays THIS; +5 days slides it into his p3 piling.
-  { id: "TSK-P2-02", projectId: "p2", name: "Piling Works — North Sector",        assigneeId: "r4",  tradeRequired: "Piling Subcontractor", start: "2026-06-02", end: "2026-06-20", deadline: "2026-06-20", durationDays: 15, dependencies: "TSK-P2-01", status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P2-02", projectId: "p2", name: "Piling Works — North Sector",        assigneeId: "r4",  tradeRequired: "Piling Subcontractor", start: "2026-07-02", end: "2026-07-20", deadline: "2026-07-20", durationDays: 15, dependencies: "TSK-P2-01", status: "scheduled",  percent_complete: 0  },
   // Wayne (clean): basement formwork. Demo simulate reassigns this to Ben → clash.
-  { id: "TSK-P2-03", projectId: "p2", name: "Formwork — Basement Level B1",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-06-01", end: "2026-06-09", deadline: "2026-06-09", durationDays: 7,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P2-03", projectId: "p2", name: "Formwork — Basement Level B1",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-07-01", end: "2026-07-09", deadline: "2026-07-09", durationDays: 7,  dependencies: "-",        status: "scheduled",  percent_complete: 0  },
   // Wayne: ground-floor slab after the piling — comfortable gap now, but delaying the
   // piling squeezes this to a thin buffer → the single tight handover of the delay scene.
-  { id: "TSK-P2-04", projectId: "p2", name: "Concrete Slab — Ground Floor",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-06-30", end: "2026-07-10", deadline: "2026-07-10", durationDays: 9,  dependencies: "TSK-P2-02", status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P2-04", projectId: "p2", name: "Concrete Slab — Ground Floor",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-07-30", end: "2026-08-09", deadline: "2026-08-09", durationDays: 9,  dependencies: "TSK-P2-02", status: "scheduled",  percent_complete: 0  },
   // Yuni: programme coordination, p2 only.
-  { id: "TSK-P2-05", projectId: "p2", name: "Programme Reporting — June",         assigneeId: "r10", tradeRequired: "Project Coordinator",  start: "2026-06-03", end: "2026-06-26", deadline: "2026-06-26", durationDays: 18, dependencies: "-",        status: "inprogress", percent_complete: 10 },
+  { id: "TSK-P2-05", projectId: "p2", name: "Programme Reporting — June",         assigneeId: "r10", tradeRequired: "Project Coordinator",  start: "2026-07-03", end: "2026-07-26", deadline: "2026-07-26", durationDays: 18, dependencies: "-",        status: "inprogress", percent_complete: 10 },
 
   // ─── SOUTHBANK RESIDENCES — T1 (p3, QLD) ────────────────────────────────
   // Tom: main-core piling — Jun 23, just after his p2 piling so a 5-day p2 delay overlaps it.
-  { id: "TSK-P3-01", projectId: "p3", name: "Piling — Main Core",                 assigneeId: "r4",  tradeRequired: "Piling Subcontractor", start: "2026-06-23", end: "2026-07-13", deadline: "2026-07-13", durationDays: 15, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P3-01", projectId: "p3", name: "Piling — Main Core",                 assigneeId: "r4",  tradeRequired: "Piling Subcontractor", start: "2026-07-23", end: "2026-08-12", deadline: "2026-08-12", durationDays: 15, dependencies: "-",        status: "scheduled",  percent_complete: 0  },
   // Anika: services rough-in, p3 only.
-  { id: "TSK-P3-02", projectId: "p3", name: "Services Rough-in — Ground Level",   assigneeId: "r5",  tradeRequired: "Services Coordinator", start: "2026-06-05", end: "2026-06-22", deadline: "2026-06-22", durationDays: 14, dependencies: "-",        status: "inprogress", percent_complete: 20 },
+  { id: "TSK-P3-02", projectId: "p3", name: "Services Rough-in — Ground Level",   assigneeId: "r5",  tradeRequired: "Services Coordinator", start: "2026-07-05", end: "2026-07-22", deadline: "2026-07-22", durationDays: 14, dependencies: "-",        status: "inprogress", percent_complete: 20 },
   // Anika: hydraulic services after rough-in — comfortable gap.
-  { id: "TSK-P3-03", projectId: "p3", name: "Hydraulic Services — Level 1 & 2",  assigneeId: "r5",  tradeRequired: "Services Coordinator", start: "2026-07-01", end: "2026-07-14", deadline: "2026-07-14", durationDays: 10, dependencies: "TSK-P3-02", status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P3-03", projectId: "p3", name: "Hydraulic Services — Level 1 & 2",  assigneeId: "r5",  tradeRequired: "Services Coordinator", start: "2026-07-31", end: "2026-08-13", deadline: "2026-08-13", durationDays: 10, dependencies: "TSK-P3-02", status: "scheduled",  percent_complete: 0  },
   // Wayne: podium pour after the main-core piling — Jul 20, well clear of his other jobs.
-  { id: "TSK-P3-04", projectId: "p3", name: "Concrete Pour — Podium Level",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-07-20", end: "2026-07-30", deadline: "2026-07-30", durationDays: 9,  dependencies: "TSK-P3-01", status: "scheduled",  percent_complete: 0  },
+  { id: "TSK-P3-04", projectId: "p3", name: "Concrete Pour — Podium Level",       assigneeId: "r9",  tradeRequired: "Formwork Foreman",     start: "2026-08-19", end: "2026-08-29", deadline: "2026-08-29", durationDays: 9,  dependencies: "TSK-P3-01", status: "scheduled",  percent_complete: 0  },
   // Rachel: HSE induction completed late May.
-  { id: "TSK-P3-05", projectId: "p3", name: "HSE Induction — New Trades",         assigneeId: "r8",  tradeRequired: "HSE Officer",          start: "2026-05-29", end: "2026-06-02", deadline: "2026-06-02", durationDays: 3,  dependencies: "-",        status: "completed",  percent_complete: 100},
+  { id: "TSK-P3-05", projectId: "p3", name: "HSE Induction — New Trades",         assigneeId: "r8",  tradeRequired: "HSE Officer",          start: "2026-06-28", end: "2026-07-02", deadline: "2026-07-02", durationDays: 3,  dependencies: "-",        status: "completed",  percent_complete: 100},
 ];
 
 export const DEFAULT_CLAIMS = [

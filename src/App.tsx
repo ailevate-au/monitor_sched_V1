@@ -13,6 +13,8 @@ import ScreenPermissions from "./components/Permissions";
 import ScreenUsers from "./components/Users";
 import Login from "./components/Login";
 import { useAuth } from "./lib/auth";
+import { fetchPermissions } from "./lib/permissions";
+import type { PermMatrix, PermRole } from "./lib/permissions";
 import {
   Home,
   Folder,
@@ -71,6 +73,24 @@ function getScreenFromPath(pathname: string) {
   return PATH_TO_SCREEN[pathname] || "dashboard";
 }
 
+// Access-matrix feature key per screen — identical to the screen id except
+// "problems" (the Problems hub), which the matrix still tracks under its
+// original "conflicts" key.
+const SCREEN_TO_FEATURE: Record<string, string> = {
+  dashboard: "dashboard",
+  projects: "projects",
+  weather: "weather",
+  gantt: "gantt",
+  resources: "resources",
+  problems: "conflicts",
+  financial: "financial",
+  claims: "claims",
+  reports: "reports",
+  masterdata: "masterdata",
+  permissions: "permissions",
+  users: "users",
+};
+
 export default function FlowIQApp() {
   const { user, isAuthenticated, logout } = useAuth();
   const [screen, setScreen] = useState(() => {
@@ -102,6 +122,28 @@ export default function FlowIQApp() {
   };
   const [conflictsCount, setConflictsCount] = useState(0);
   const [expensesCount, setExpensesCount] = useState(0);
+
+  // Role-permission matrix (Access page). Owner is implicitly full-access and
+  // never needs it; every other role's sidebar + page access is gated by it.
+  const [permMatrix, setPermMatrix] = useState<PermMatrix | null>(null);
+  useEffect(() => {
+    if (!isAuthenticated || user?.role === "Owner") {
+      setPermMatrix(null);
+      return;
+    }
+    fetchPermissions()
+      .then(data => setPermMatrix(data.matrix))
+      .catch(() => {});
+  }, [isAuthenticated, user?.role]);
+
+  const canAccess = (screenId: string): boolean => {
+    if (user?.role === "Owner") return true;
+    // Matrix hasn't loaded yet (just after login) — fail open briefly rather
+    // than flashing "Access restricted" on the landing page.
+    if (!permMatrix) return true;
+    const featureKey = SCREEN_TO_FEATURE[screenId] ?? screenId;
+    return !!permMatrix[user?.role as PermRole]?.[featureKey];
+  };
 
   const fetchLiveBadges = () => {
     // Sync the Problems badge with the live open-problem count.
@@ -189,15 +231,9 @@ export default function FlowIQApp() {
     { id:"claims",    label:"Progress Claims",    icon:<ReceiptText size={ICON_SIZE} />,  group:"Finance",    badge: expensesCount, badgeColor: C.amber, title: "Client payment claims to review and certify" },
     { id:"reports",   label:"Reports",            icon:<FileText size={ICON_SIZE} />,     group:"Finance"     },
     { id:"masterdata", label:"Settings",          icon:<Settings size={ICON_SIZE} />,     group:"Administration" },
-    // Owner + Coordinator: create/manage Admin, PM and Coordinator accounts
-    ...(user?.role === "Owner" || user?.role === "Coordinator"
-      ? [{ id:"users", label:"Users", icon:<Users size={ICON_SIZE} />, group:"Administration" }]
-      : []),
-    // Owner-only: configure the role permission matrix (Access)
-    ...(user?.role === "Owner"
-      ? [{ id:"permissions", label:"Access", icon:<ShieldCheck size={ICON_SIZE} />, group:"Administration" }]
-      : []),
-  ];
+    { id:"users", label:"Users", icon:<Users size={ICON_SIZE} />, group:"Administration" },
+    { id:"permissions", label:"Access", icon:<ShieldCheck size={ICON_SIZE} />, group:"Administration" },
+  ].filter(n => canAccess(n.id));
 
   const groups = ["Overview", "Scheduling", "Finance", "Administration"];
 
@@ -227,7 +263,7 @@ export default function FlowIQApp() {
     claims: "Progress Claims",
     reports: "Reports",
     masterdata: "Settings",
-    permissions: "Access — Role Permissions",
+    permissions: "Access",
     users: "Users",
   };
 
@@ -334,7 +370,15 @@ export default function FlowIQApp() {
 
         {/* Scrollable Context Panel */}
         <div style={{ flex:1, overflowY:"auto", padding:20 }}>
-          {screenMap[screen] || <div>Screen not found</div>}
+          {!canAccess(screen) ? (
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, padding:"60px 20px", color:C.gray, textAlign:"center" }}>
+              <ShieldCheck size={28} />
+              <div style={{ fontSize:14, fontWeight:600, color:C.text }}>Access restricted</div>
+              <div style={{ fontSize:12.5 }}>You don't have permission to view this page.</div>
+            </div>
+          ) : (
+            screenMap[screen] || <div>Screen not found</div>
+          )}
         </div>
       </div>
     </div>

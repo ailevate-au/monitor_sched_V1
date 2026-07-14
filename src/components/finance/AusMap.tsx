@@ -41,7 +41,7 @@ export function AusMap({ data, baseColor = "#1A5FA8" }: { data: Array<{ name: st
 
   return (
     <div style={{ position: "relative" }}>
-      <svg width={340} height={300} viewBox={AUS_VIEWBOX} role="img" aria-label="Number of projects in each Australian state">
+      <svg width={300} height={265} viewBox={AUS_VIEWBOX} role="img" aria-label="Number of projects in each Australian state">
         {AUS_STATES.map(s => {
           const count = counts.get(s.id) ?? 0;
           const opacity = 0.25 + 0.75 * (count / max);

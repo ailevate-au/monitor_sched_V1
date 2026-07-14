@@ -18,7 +18,7 @@ const UTIL_WINDOW_WORKING_DAYS = 20;
 // The demo is pinned to a fixed "now" so the scenario is stable no matter what
 // the real calendar date is. Everything (weather, dashboard, late detection)
 // aligns to 2 Jun 2026.
-const SCENARIO_TODAY = "2026-06-02";
+const SCENARIO_TODAY = "2026-07-02";
 function scenarioNow(): Date {
   const d = new Date(SCENARIO_TODAY);
   d.setHours(0, 0, 0, 0);
