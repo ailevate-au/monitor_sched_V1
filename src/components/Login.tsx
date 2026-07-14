@@ -1,21 +1,8 @@
 import React, { useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import { C } from "../lib/theme";
 
-const C = {
-  navy: "#0F1F3D",
-  blue: "#1A5FA8",
-  blueMid: "#3A8ADE",
-  blueLight: "#E6F0FB",
-  red: "#E04A4A",
-  redDark: "#9B2C2C",
-  redBg: "#FEF2F2",
-  gray: "#64748B",
-  grayLight: "#E2E8F0",
-  text: "#1E293B",
-  textMuted: "#475569",
-  white: "#FFFFFF",
-};
 
 export default function Login() {
   const { login, loading, error, clearError } = useAuth();

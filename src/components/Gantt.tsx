@@ -33,6 +33,7 @@ import ChangeHistoryTab from "./ChangeHistoryTab";
 import { Timer, Users, FolderKanban, HardHat, History, RotateCcw, AlertTriangle, CloudRain, Check, Inbox, Plus, Pencil, Clock, Play, RefreshCw, Filter } from "lucide-react";
 import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
 import { WeatherGlyph } from "../lib/weatherIcon";
+import { C } from "../lib/theme";
 
 // One-level undo snapshot of committed tasks, persisted so the "Undo last change"
 // button survives leaving the Timeline and coming back (and a page refresh).
@@ -62,27 +63,6 @@ function writeUndoSnapshot(snap: UndoSnapshot | null): void {
   }
 }
 
-const C = {
-  navy:       "#0F1F3D",
-  blue:       "#1A5FA8",
-  blueMid:    "#3A8ADE",
-  blueLight:  "#E6F0FB",
-  green:      "#1D9E75",
-  greenBg:    "#ECFDF5",
-  greenDark:  "#2D6A0A",
-  amber:      "#B87316",
-  amberBg:    "#FEF3C7",
-  red:        "#E04A4A",
-  redDark:    "#9B2C2C",
-  redBg:      "#FEF2F2",
-  purple:     "#7F77DD",
-  gray:       "#64748B",
-  grayLight:  "#E2E8F0",
-  text:       "#1E293B",
-  textMuted:  "#475569",
-  bgSecond:   "#EEF2F8",
-  white:      "#FFFFFF",
-};
 
 function getTaskBarColor(task: Task): string {
   if (task.status === "completed" || (task.percent_complete ?? 0) >= 100) return C.green;

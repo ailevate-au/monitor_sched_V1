@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { MastersBundle } from "../types/masters";
+import { api } from "../lib/api";
 
 export function useMasters(activeOnly = true) {
   const [masters, setMasters] = useState<MastersBundle | null>(null);
@@ -10,11 +11,7 @@ export function useMasters(activeOnly = true) {
     setLoading(true);
     setError(null);
     const qs = activeOnly ? "?activeOnly=true" : "";
-    fetch(`/api/v1/masters${qs}`)
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to load masters");
-        return res.json();
-      })
+    api.get<MastersBundle>(`/masters${qs}`)
       .then(data => {
         setMasters(data);
         setLoading(false);
@@ -37,8 +34,7 @@ export function useProjects() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/v1/projects")
-      .then(res => res.json())
+    api.get("/projects")
       .then(data => {
         setProjects(Array.isArray(data) ? data : []);
         setLoading(false);

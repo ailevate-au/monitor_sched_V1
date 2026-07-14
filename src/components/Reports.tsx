@@ -1,20 +1,10 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Card, SectionHeader, Btn } from "./Dashboard";
+import { Card, SectionHeader, Btn } from "./ui/primitives";
 import { BarChart3, DollarSign, ClipboardList, FileText, ShieldCheck, Download } from "lucide-react";
+import { C } from "../lib/theme";
+import { api } from "../lib/api";
+import { getStoredToken } from "../lib/auth";
 
-const C = {
-  blue:       "#1A5FA8",
-  blueMid:    "#3A8ADE",
-  green:      "#1D9E75",
-  amber:      "#B87316",
-  purple:     "#7F77DD",
-  gray:       "#64748B",
-  grayLight:  "#E2E8F0",
-  text:       "#1E293B",
-  bgSecond:   "#EEF2F8",
-  white:      "#FFFFFF",
-  blueLight:  "#E6F0FB",
-};
 
 type ReportCategory = "all" | "schedule" | "finance" | "resources" | "safety" | "weather";
 
@@ -87,12 +77,14 @@ export default function ScreenReports() {
     if (!selectedProjectId) return;
     const encodedType = encodeURIComponent(type.replace(/\s+/g, "-"));
     const rangeParams = `${dateFrom ? `&fromDate=${dateFrom}` : ""}${dateTo ? `&toDate=${dateTo}` : ""}`;
-    window.open(`/api/v1/reports/export?type=${encodedType}&format=${format}&projectId=${encodeURIComponent(selectedProjectId)}${rangeParams}`, "_blank");
+    // window.open can't carry the Authorization header, so the token rides as
+    // a query param — requireAuth accepts ?access_token= for exactly this case.
+    const tokenParam = `&access_token=${encodeURIComponent(getStoredToken() ?? "")}`;
+    window.open(`/api/v1/reports/export?type=${encodedType}&format=${format}&projectId=${encodeURIComponent(selectedProjectId)}${rangeParams}${tokenParam}`, "_blank");
   };
 
   useEffect(() => {
-    fetch("/api/v1/projects")
-      .then((res) => res.json())
+    api.get("/projects")
       .then((rows) => {
         const list = Array.isArray(rows) ? rows.map((p: any) => ({ id: p.id, name: p.name })) : [];
         setProjects(list);
@@ -102,21 +94,18 @@ export default function ScreenReports() {
       })
       .catch(() => {});
 
-    fetch("/api/v1/claims")
-      .then((res) => res.json())
+    api.get("/claims")
       .then((rows) => setClaims(Array.isArray(rows) ? rows : []))
       .catch(() => {});
 
-    fetch("/api/v1/tasks")
-      .then((res) => res.json())
+    api.get("/tasks")
       .then((rows) => setTasks(Array.isArray(rows) ? rows : []))
       .catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!selectedProjectId) return;
-    fetch(`/api/v1/financial/projects/${selectedProjectId}`)
-      .then((res) => res.json())
+    api.get(`/financial/projects/${selectedProjectId}`)
       .then((data) => setFinancialSummary(data))
       .catch(() => setFinancialSummary(null));
   }, [selectedProjectId]);

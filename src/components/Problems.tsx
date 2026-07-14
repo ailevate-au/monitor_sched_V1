@@ -19,27 +19,12 @@ import {
   ProblemsResponse,
   parseProblemsResponse,
 } from "../types";
-import { KpiCard } from "./Dashboard";
+import { KpiCard } from "./ui/primitives";
 import { AppNavigate } from "../types/masters";
 import { changeHistory, makeChangeSetId } from "../lib/changeHistory";
+import { C } from "../lib/theme";
+import { api } from "../lib/api";
 
-const C = {
-  navy: "#0F1F3D",
-  blue: "#1A5FA8",
-  blueLight: "#E6F0FB",
-  green: "#1D9E75",
-  greenBg: "#ECFDF5",
-  greenDark: "#2D6A0A",
-  amber: "#B87316",
-  amberBg: "#FEF3C7",
-  red: "#E04A4A",
-  redDark: "#9B2C2C",
-  redBg: "#FEF2F2",
-  gray: "#64748B",
-  grayLight: "#E2E8F0",
-  text: "#1E293B",
-  white: "#FFFFFF",
-};
 
 const EMPTY: ProblemsResponse = {
   problems: [],
@@ -73,17 +58,13 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
   const toggleCollapsed = (id: string) =>
     setCollapsed(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
 
   const load = () => {
     setLoading(true);
-    fetch("/api/v1/problems")
-      .then(r => {
-        if (!r.ok) throw new Error("Could not load problems");
-        return r.json();
-      })
+    api.get("/problems")
       .then(d => { setData(parseProblemsResponse(d)); setLoading(false); setError(null); })
       .catch(e => { setError(e.message || "Failed to load problems"); setLoading(false); });
   };
@@ -94,8 +75,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
   // that touch a project they don't own. Build the set of names they DO own.
   useEffect(() => {
     if (!isPM || !user?.email) { setMyProjectNames(null); return; }
-    fetch("/api/v1/projects")
-      .then(r => r.json())
+    api.get("/projects")
       .then((rows: any[]) => {
         if (!Array.isArray(rows)) return;
         setMyProjectNames(new Set(rows.filter(p => p.managerEmail === user.email).map(p => p.name)));
@@ -111,8 +91,7 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
     action: ProblemAction,
     beforeById: Map<string, { start: string; end: string }>
   ) => {
-    fetch("/api/v1/dashboard/tasks")
-      .then(r => r.json())
+    api.get("/dashboard/tasks")
       .then((after: any[]) => {
         const list = Array.isArray(after) ? after : [];
         const moves = list
@@ -149,18 +128,12 @@ export default function ScreenProblems({ onNav }: { onNav?: AppNavigate }) {
     const { problem, action } = pending;
 
     // Snapshot task dates before the fix so we can log exactly what moved.
-    fetch("/api/v1/dashboard/tasks")
-      .then(r => r.json())
+    api.get("/dashboard/tasks")
       .then((before: any[]) => {
         const beforeById = new Map(
           (Array.isArray(before) ? before : []).map((t: any) => [t.id, { start: t.start, end: t.end }])
         );
-        return fetch(`/api/v1/problems/${problem.id}/resolve`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ actionId: action.id }),
-        })
-          .then(r => r.json())
+        return api.post(`/problems/${problem.id}/resolve`, { actionId: action.id })
           .then(res => ({ res, beforeById }));
       })
       .then(({ res, beforeById }) => {

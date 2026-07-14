@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { UNAUTHORIZED_EVENT } from "./api";
 
 /**
  * Front-end auth layer for FlowIQ.
@@ -177,6 +178,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setError(null);
   }, []);
+
+  // A 401 from any API call (stale or forged token) drops the session so the
+  // user lands back on the login screen instead of a half-dead app.
+  useEffect(() => {
+    window.addEventListener(UNAUTHORIZED_EVENT, logout);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, logout);
+  }, [logout]);
 
   const clearError = useCallback(() => setError(null), []);
 

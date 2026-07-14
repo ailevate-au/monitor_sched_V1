@@ -10,6 +10,7 @@
       "DOM.Iterable"
     ],
     "skipLibCheck": true,
+    "strict": true,
     "moduleResolution": "bundler",
     "isolatedModules": true,
     "moduleDetection": "force",
@@ -23,6 +24,6 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src", "server.ts", "vite.config.ts"],
+  "include": ["src", "server", "tests", "vite.config.ts", "vitest.config.ts"],
   "exclude": ["node_modules", "dist", "build"]
 }

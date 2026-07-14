@@ -7,22 +7,9 @@ import {
   MASTER_TAB_META,
 } from "../types/masters";
 import { DollarSign, Map, Building2, Hammer, Building } from "lucide-react";
+import { C } from "../lib/theme";
+import { api } from "../lib/api";
 
-const C = {
-  navy: "#0F1F3D",
-  blue: "#1A5FA8",
-  blueLight: "#E6F0FB",
-  green: "#1D9E75",
-  greenBg: "#ECFDF5",
-  greenDark: "#2D6A0A",
-  amber: "#B87316",
-  red: "#E04A4A",
-  redBg: "#FEF2F2",
-  gray: "#64748B",
-  grayLight: "#E2E8F0",
-  text: "#1E293B",
-  white: "#FFFFFF",
-};
 
 type TabCounts = Record<MasterTabId, { active: number; total: number }>;
 
@@ -44,8 +31,7 @@ function CostCategoriesPanel({ onRegistryChange }: { onRegistryChange?: () => vo
 
   const loadCategories = useCallback(() => {
     setLoading(true);
-    fetch("/api/v1/cost_categories")
-      .then(res => res.json())
+    api.get("/cost_categories")
       .then(data => {
         setCategories(data);
         setLoading(false);
@@ -60,12 +46,7 @@ function CostCategoriesPanel({ onRegistryChange }: { onRegistryChange?: () => vo
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    fetch("/api/v1/cost_categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() }),
-    })
-      .then(res => res.json())
+    api.post("/cost_categories", { name: newName.trim() })
       .then(data => {
         setCategories(data);
         setNewName("");
@@ -77,12 +58,7 @@ function CostCategoriesPanel({ onRegistryChange }: { onRegistryChange?: () => vo
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingName.trim()) return;
-    fetch("/api/v1/cost_categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: editingId, name: editingName.trim() }),
-    })
-      .then(res => res.json())
+    api.post("/cost_categories", { id: editingId, name: editingName.trim() })
       .then(data => {
         setCategories(data);
         setEditingId(null);
@@ -98,8 +74,7 @@ function CostCategoriesPanel({ onRegistryChange }: { onRegistryChange?: () => vo
   };
 
   const handleToggle = (id: string) => {
-    fetch(`/api/v1/cost_categories/${id}/toggle`, { method: "POST" })
-      .then(res => res.json())
+    api.post(`/cost_categories/${id}/toggle`)
       .then(data => {
         setCategories(data);
         onRegistryChange?.();
@@ -369,8 +344,7 @@ function MasterListPanel({ type, onRegistryChange }: { type: MasterType; onRegis
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`/api/v1/masters/${type}`)
-      .then(res => res.json())
+    api.get(`/masters/${type}`)
       .then(data => {
         setItems(data);
         setLoading(false);
@@ -384,14 +358,9 @@ function MasterListPanel({ type, onRegistryChange }: { type: MasterType; onRegis
 
   const saveItem = (body: Record<string, string | undefined>) => {
     setErrorMsg(null);
-    return fetch(`/api/v1/masters/${type}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-      .then(res => res.json().then(data => ({ ok: res.ok, data })))
-      .then(({ ok, data }) => {
-        if (!ok) throw new Error(data.error || "Save failed");
+    return api.post(`/masters/${type}`, body)
+      .then(data => {
+        if (data?.error) throw new Error(data.error || "Save failed");
         setItems(data);
         onRegistryChange?.();
       })
@@ -431,10 +400,9 @@ function MasterListPanel({ type, onRegistryChange }: { type: MasterType; onRegis
   };
 
   const handleToggle = (id: string) => {
-    fetch(`/api/v1/masters/${type}/${id}/toggle`, { method: "POST" })
-      .then(res => res.json().then(data => ({ ok: res.ok, data })))
-      .then(({ ok, data }) => {
-        if (!ok) throw new Error(data.error);
+    api.post(`/masters/${type}/${id}/toggle`)
+      .then(data => {
+        if (data?.error) throw new Error(data.error);
         setItems(data);
         onRegistryChange?.();
       })
@@ -572,8 +540,8 @@ export default function ScreenMasterData({ initialTab = "cost_categories" }: { i
 
   const loadTabCounts = useCallback(() => {
     Promise.all([
-      fetch("/api/v1/masters").then(res => res.json()),
-      fetch("/api/v1/cost_categories").then(res => res.json()),
+      api.get("/masters"),
+      api.get("/cost_categories"),
     ])
       .then(([masters, categories]) => {
         setTabCounts({

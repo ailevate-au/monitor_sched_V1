@@ -1,99 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useAuth, visibleProjects as scopeProjects } from "../lib/auth";
-import { AlertTriangle, Zap, CloudRain, Check, AlertCircle, Sun, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CloudRain, Sun, CheckCircle2 } from "lucide-react";
 import { C } from "../lib/theme";
-
-export const StatusBadge = ({ status }: { status: string }) => {
-  const map: { [key: string]: { bg: string; color: string; label: string; icon: React.ReactNode } } = {
-    conflict:   { bg: C.redBg,    color: C.redDark,  label: "Clash",        icon: <AlertTriangle size={11} /> },
-    fragile:    { bg: C.amberBg,  color: C.amber,    label: "Tight handover", icon: <Zap size={11} /> },
-    weather:    { bg: "#EFF6FF",  color: "#1D4ED8",  label: "Weather Risk", icon: <CloudRain size={11} /> },
-    overdue:    { bg: C.redBg,    color: C.redDark,  label: "Overdue",      icon: <AlertCircle size={11} /> },
-    inprogress: { bg: C.blueLight,color: C.blue,     label: "In Progress",  icon: null },
-    completed:  { bg: C.greenBg,  color: C.greenDark,label: "Completed",    icon: <Check size={11} /> },
-    scheduled:  { bg: C.bgSecond, color: C.gray,     label: "Scheduled",    icon: null },
-    active:     { bg: C.blueLight,color: C.blue,     label: "Active",       icon: null },
-    practical:  { bg: "#F0EEFF",  color: "#4A3DB0",  label: "Practical Completion", icon: null },
-    pending:    { bg: C.amberBg,  color: C.amber,    label: "Pending Cert.",icon: null },
-    certified:  { bg: C.greenBg,  color: C.greenDark,label: "Certified",    icon: <Check size={11} /> },
-    released:   { bg: "#F0EEFF",  color: "#4A3DB0",  label: "Retention Released", icon: null },
-    ok:         { bg: C.greenBg,  color: C.greenDark,label: "On Schedule",  icon: null },
-  };
-  const s = map[status] || map.scheduled;
-  return (
-    <span style={{
-      display:"inline-flex", alignItems:"center", gap:4,
-      fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:8,
-      background:s.bg, color:s.color, whiteSpace:"nowrap",
-    }}>
-      {s.icon}
-      {s.label}
-    </span>
-  );
-};
-
-export const KpiCard = ({ label, value, sub, trend, valueColor, onClick, actionLabel }: { label: string; value: string; sub?: string; trend?: string; valueColor?: string; onClick?: () => void; actionLabel?: string }) => {
-  const [hover, setHover] = useState(false);
-  const clickable = !!onClick;
-  return (
-    <div
-      onClick={onClick}
-      role={clickable ? "button" : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick!(); } } : undefined}
-      onMouseEnter={() => clickable && setHover(true)}
-      onMouseLeave={() => clickable && setHover(false)}
-      title={clickable ? (actionLabel || "Open in the Timeline") : undefined}
-      style={{
-        background:C.white,
-        border:`0.5px solid ${clickable && hover ? C.blue : C.grayLight}`,
-        borderRadius:12,
-        padding:"16px 18px",
-        boxShadow: clickable && hover ? "0 2px 10px rgba(26,95,168,0.16)" : "0 1px 3px rgba(0,0,0,0.02)",
-        cursor: clickable ? "pointer" : "default",
-        transition:"border-color .15s, box-shadow .15s",
-      }}
-    >
-      <div style={{ fontSize:11, color:C.gray, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</div>
-      <div style={{ fontSize:23, fontWeight:600, color:valueColor||C.text, lineHeight:1.1 }}>{value}</div>
-      {sub   && <div style={{ fontSize:11, color:C.textMuted, marginTop:5 }}>{sub}</div>}
-      {trend && <div style={{ fontSize:11, marginTop:5, fontWeight:600, color:trend.startsWith("+") || trend.includes("over") ? C.red : C.green }}>{trend}</div>}
-      {clickable && (
-        <div style={{ fontSize:11, marginTop:8, fontWeight:600, color:C.blue, display:"flex", alignItems:"center", gap:4 }}>
-          {actionLabel || "View in Timeline"} <span style={{ transform: hover ? "translateX(2px)" : "none", transition:"transform .15s" }}>→</span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export const Card = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
-  <div style={{ background:C.white, border:`0.5px solid ${C.grayLight}`, borderRadius:12, padding:18, marginBottom:14, ...style }}>
-    {children}
-  </div>
-);
-
-export const SectionHeader = ({ title, right }: { title: string; right?: React.ReactNode }) => (
-  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12, width: "100%" }}>
-    <span style={{ fontSize:13, fontWeight:600, color:C.navy }}>{title}</span>
-    {right}
-  </div>
-);
-
-export const Btn = ({ children, primary, small, danger, onClick, style, disabled, title }: { children: React.ReactNode; primary?: boolean; small?: boolean; danger?: boolean; onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void; style?: React.CSSProperties; disabled?: boolean; title?: string }) => (
-  <button onClick={onClick} disabled={disabled} title={title} style={{
-    display:"inline-flex", alignItems:"center", gap:5,
-    padding: small ? "4px 10px" : "6px 12px",
-    borderRadius:8, border:`0.5px solid ${primary ? C.blue : danger ? C.red : C.grayLight}`,
-    background: primary ? C.blue : danger ? C.red : C.white,
-    color: primary||danger ? C.white : C.text,
-    fontSize:12, fontWeight:500, cursor: disabled ? "not-allowed" : "pointer", fontFamily:"inherit",
-    opacity: disabled ? 0.6 : 1,
-    ...style,
-  }}>
-    {children}
-  </button>
-);
+import { StatusBadge, KpiCard, Card, Btn } from "./ui/primitives";
+import { ChartCard, PieCard, CountPie, GroupedDollarBar } from "./finance/financeCharts";
+import { toDollars } from "../lib/money";
+import { api } from "../lib/api";
 
 const PROBLEM_TASK_STATUSES = new Set(["conflict", "overdue", "weather", "fragile"]);
 
@@ -103,15 +15,16 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
   const [allProjects, setAllProjects] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [projectsOpen, setProjectsOpen] = useState(true);
+  const [completedOpen, setCompletedOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [problems, setProblems] = useState<any[]>([]);
 
   useEffect(() => {
     const load = () => {
-      fetch("/api/v1/dashboard").then(r => r.json()).then(setStats).catch(() => {});
-      fetch("/api/v1/projects").then(r => r.json()).then(d => { if (Array.isArray(d)) setAllProjects(d); }).catch(() => {});
-      fetch("/api/v1/tasks").then(r => r.json()).then(d => { if (Array.isArray(d)) setTasks(d); }).catch(() => {});
-      fetch("/api/v1/problems").then(r => r.json()).then(d => { if (Array.isArray(d?.problems)) setProblems(d.problems); }).catch(() => {});
+      api.get("/dashboard").then(setStats).catch(() => {});
+      api.get("/projects").then(d => { if (Array.isArray(d)) setAllProjects(d); }).catch(() => {});
+      api.get("/tasks").then(d => { if (Array.isArray(d)) setTasks(d); }).catch(() => {});
+      api.get("/problems").then(d => { if (Array.isArray(d?.problems)) setProblems(d.problems); }).catch(() => {});
     };
     load();
     const t = setInterval(load, 8000);
@@ -145,8 +58,32 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
   const unassignedNum = isPM
     ? scopedTasks.filter((t: any) => !t.assigneeId && t.status !== "completed" && activeIds.has(t.projectId)).length
     : (stats.unassignedCount ?? 0);
+
+  const completedProjects = projects.filter((p: any) => p.status === "COMPLETED");
+
+  // Health donut covers RUNNING projects only — completed projects would
+  // drown the live signal once there are many of them. Each running project
+  // lands in exactly one bucket, worst issue wins: Clash > Late > On track.
+  const clashProjectIds = new Set(scopedTasks.filter((t: any) => t.status === "conflict").map((t: any) => t.projectId));
+  const overdueProjectIds = new Set(scopedTasks.filter((t: any) => t.status === "overdue").map((t: any) => t.projectId));
+  const clashCount = activeProjects.filter((p: any) => clashProjectIds.has(p.id)).length;
+  const lateCount = activeProjects.filter((p: any) => !clashProjectIds.has(p.id) && overdueProjectIds.has(p.id)).length;
+  const statusRows = [
+    { name: "On track", value: activeProjects.length - clashCount - lateCount, color: C.green },
+    { name: "Late", value: lateCount, color: C.amber },
+    { name: "Clash", value: clashCount, color: C.red },
+  ].filter(r => r.value > 0); // a zero slice would still print "— 0%" in the legend
+
+  // Contract vs actual for running projects — fields are stored in A$M,
+  // toDollars() keeps the axis reading "A$58.0M" rather than "A$58".
+  const budgetRows = activeProjects.map((p: any) => ({
+    name: p.name,
+    contract: toDollars(p.finalContractSum),
+    actual: toDollars(p.actualCost),
+  }));
+
   const toggleProject = (id: string) =>
-    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   return (
     <div>
@@ -176,7 +113,7 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
 
       {/* FOUR SIMPLE NUMBERS — stretch full width */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 16 }}>
-        <KpiCard label="Projects Running" value={`${activeCount}`} sub="Live right now" />
+        <KpiCard label="Total Projects" value={`${projects.length}`} sub={`${activeCount} running · ${completedProjects.length} completed`} />
         <KpiCard label="On Track" value={`${onTrackPct}%`} valueColor={C.green} sub="Tasks going to plan" />
         <KpiCard
           label="Total Issues"
@@ -194,6 +131,21 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
           onClick={() => onNav("problems")}
           actionLabel="Open Problems"
         />
+      </div>
+
+      {/* PORTFOLIO AT A GLANCE — status donut + running-project budget chart */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 12, marginBottom: 14 }}>
+        <PieCard title="Running Projects Health" description="Each running project by its worst issue — a clash means someone is double-booked; late means an overdue task.">
+          <CountPie data={statusRows.map(({ name, value }) => ({ name, value }))} colors={statusRows.map(r => r.color)} />
+        </PieCard>
+        <ChartCard
+          title="Budget vs Actual (running projects)"
+          description="Contract sum against actual cost to date for each running project."
+          right={<Btn small onClick={() => onNav("financial")}>Open Finance →</Btn>}
+          height={260}
+        >
+          <GroupedDollarBar data={budgetRows} seriesA="Contract sum" seriesB="Actual cost" colorA={C.blueMid} colorB={C.amber} />
+        </ChartCard>
       </div>
 
       {/* YOUR PROJECTS — collapsible card; each project expands to its jobs */}
@@ -263,6 +215,27 @@ export default function ScreenDashboard({ onNav }: { onNav: (sc: string) => void
             })}
             {activeProjects.length === 0 && (
               <div style={{ fontSize: 12, color: C.gray, padding: "8px 4px" }}>No running projects.</div>
+            )}
+            {completedProjects.length > 0 && (
+              <div style={{ borderTop: `0.5px solid ${C.grayLight}` }}>
+                <button
+                  type="button"
+                  onClick={() => setCompletedOpen(o => !o)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 4px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+                >
+                  <span style={{ fontSize: 11, color: C.gray, width: 12, transform: completedOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: C.gray }}>Completed <span style={{ fontWeight: 600 }}>· {completedProjects.length}</span></span>
+                </button>
+                {completedOpen && completedProjects.map((p: any) => (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 4px", borderTop: `0.5px solid ${C.grayLight}` }}>
+                    <span style={{ width: 12, flexShrink: 0 }} />
+                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: C.gray, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: C.textMuted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                    <span style={{ fontSize: 11.5, color: C.gray, flexShrink: 0 }}>{p.location}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: C.gray, width: 42, textAlign: "right", flexShrink: 0 }}>100%</span>
+                  </div>
+                ))}
+              </div>
             )}
             <button type="button" onClick={() => onNav("projects")} style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
               See all projects →

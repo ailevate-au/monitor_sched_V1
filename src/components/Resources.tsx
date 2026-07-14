@@ -1,29 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Resource, Project } from "../types";
-import { KpiCard, Card, Btn } from "./Dashboard";
+import { KpiCard, Card, Btn } from "./ui/primitives";
 import { Search, AlertTriangle, FileText } from "lucide-react";
 import { useMasters } from "../hooks/useMasters";
 import { AppNavigate } from "../types/masters";
+import { C } from "../lib/theme";
+import { api } from "../lib/api";
 
-const C = {
-  navy:       "#0F1F3D",
-  blue:       "#1A5FA8",
-  blueMid:    "#3A8ADE",
-  blueLight:  "#E6F0FB",
-  green:      "#1D9E75",
-  greenBg:    "#ECFDF5",
-  greenDark:  "#2D6A0A",
-  amber:      "#B87316",
-  amberBg:    "#FEF3C7",
-  red:        "#E04A4A",
-  redDark:    "#9B2C2C",
-  redBg:      "#FEF2F2",
-  gray:       "#64748B",
-  grayLight:  "#E2E8F0",
-  text:       "#1E293B",
-  bgSecond:   "#EEF2F8",
-  white:      "#FFFFFF",
-};
 
 const UtilBar = ({ util }: { util: number }) => {
   const pct = Math.min(util, 100);
@@ -41,7 +24,7 @@ const UtilBar = ({ util }: { util: number }) => {
   );
 };
 
-export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
+export default function ScreenResources(_props: { onNav?: AppNavigate }) {
   const { masters } = useMasters(true);
   const companyOptions = useMemo(
     () => (masters?.companies || []).map(c => c.label),
@@ -53,7 +36,7 @@ export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
   );
 
   const [resources, setResources] = useState<Resource[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [_projects, setProjects] = useState<Project[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [tradeFilter, setTradeFilter] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -94,8 +77,8 @@ export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
   const loadAllData = () => {
     setLoading(true);
     Promise.all([
-      fetch("/api/v1/resources").then(res => res.json()),
-      fetch("/api/v1/projects").then(res => res.json())
+      api.get("/resources"),
+      api.get("/projects")
     ])
       .then(([resourcesData, projectsData]) => {
         setResources(resourcesData);
@@ -150,18 +133,13 @@ export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
       ? editCompanyCustom.trim() || "Custom Hire"
       : editCompanySelect;
 
-    fetch(`/api/v1/resources/${id}/update`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    api.post(`/resources/${id}/update`, {
         email: editEmail,
         company: targetCompany,
         rate: editRate,
         overtimeRateVal: editOvertime,
         dailyAllowanceVal: editAllowance
       })
-    })
-      .then(res => res.json())
       .then(() => {
         setIsSaving(false);
         setExpandedResId(null);
@@ -183,10 +161,7 @@ export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
       ? newCompanyCustom.trim() || "Custom Hire"
       : newCompanySelect;
 
-    fetch("/api/v1/resources", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    api.post("/resources", {
         name: newName,
         trade: newTrade,
         state: newState,
@@ -199,8 +174,6 @@ export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
         bio: newBio.trim() || undefined,
         skills: newSkillsText.trim() || undefined,
       })
-    })
-      .then(res => res.json())
       .then(() => {
         setNewName("");
         setNewEmail("");
@@ -266,12 +239,7 @@ export default function ScreenResources({ onNav }: { onNav?: AppNavigate }) {
     }
 
     setImportError("");
-    fetch("/api/v1/resources/bulk", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ list: parsedList })
-    })
-      .then(res => res.json())
+    api.post("/resources/bulk", { list: parsedList })
       .then(data => {
         if (data.success) {
           setShowImportModal(false);
@@ -376,8 +344,8 @@ Amanda Green,HSE Officer,65,Direct Hire,amanda.green@builderportal.com.au,WA,95,
         ) : (
           filtered.map(r => {
             let badgeText = "Balanced";
-            let badgeBg = C.greenBg;
-            let badgeColor = C.greenDark;
+            let badgeBg: string = C.greenBg;
+            let badgeColor: string = C.greenDark;
 
             if (r.util > 100) {
               badgeText = "Overbooked";

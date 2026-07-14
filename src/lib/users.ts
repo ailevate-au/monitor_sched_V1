@@ -1,11 +1,16 @@
 import { AppUserAccount } from "../types";
+import { api } from "./api";
 
-const BASE = "/api/v1/users";
+interface MutationResponse {
+  success?: boolean;
+  error?: string;
+  user?: AppUserAccount;
+}
 
 export async function fetchUsers(): Promise<AppUserAccount[]> {
-  const res = await fetch(BASE);
-  if (!res.ok) throw new Error("Could not load users.");
-  return (await res.json()) as AppUserAccount[];
+  const data = await api.get<AppUserAccount[]>("/users");
+  if (!Array.isArray(data)) throw new Error("Could not load users.");
+  return data;
 }
 
 export interface CreateUserInput {
@@ -20,14 +25,9 @@ export interface CreateUserInput {
 }
 
 export async function createUser(input: CreateUserInput): Promise<AppUserAccount> {
-  const res = await fetch(BASE, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  const data = await res.json();
-  if (!res.ok || !data?.success) throw new Error(data?.error || "Could not create user.");
-  return data.user as AppUserAccount;
+  const data = await api.post<MutationResponse>("/users", input);
+  if (!data?.success || !data.user) throw new Error(data?.error || "Could not create user.");
+  return data.user;
 }
 
 export interface UpdateUserInput {
@@ -39,18 +39,12 @@ export interface UpdateUserInput {
 }
 
 export async function updateUser(id: string, input: UpdateUserInput): Promise<AppUserAccount> {
-  const res = await fetch(`${BASE}/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  const data = await res.json();
-  if (!res.ok || !data?.success) throw new Error(data?.error || "Could not update user.");
-  return data.user as AppUserAccount;
+  const data = await api.put<MutationResponse>(`/users/${id}`, input);
+  if (!data?.success || !data.user) throw new Error(data?.error || "Could not update user.");
+  return data.user;
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/${id}`, { method: "DELETE" });
-  const data = await res.json();
-  if (!res.ok || !data?.success) throw new Error(data?.error || "Could not delete user.");
+  const data = await api.del<MutationResponse>(`/users/${id}`);
+  if (!data?.success) throw new Error(data?.error || "Could not delete user.");
 }

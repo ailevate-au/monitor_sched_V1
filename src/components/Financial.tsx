@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Project, ProgressClaim } from "../types";
-import { KpiCard, Card, StatusBadge, Btn } from "./Dashboard";
+import { KpiCard, Card, StatusBadge, Btn } from "./ui/primitives";
 import { RefreshCw } from "lucide-react";
 import { fmtMoney, toDollars } from "../lib/money";
 import {
@@ -11,31 +11,15 @@ import {
   expensesShareByProject, categoryStackedByProject, ymOf, monthLabel,
 } from "./finance/financeData";
 import {
-  ChartCard, PieCard, CountPie, DollarPie, RegionTreemap, HorizontalBar,
+  ChartCard, PieCard, CountPie, DollarPie, HorizontalBar,
   GroupedDollarBar, PercentColumn, ContractorComposed, SpendOverTimeArea,
   CategoryStackedBar,
 } from "./finance/financeCharts";
+import { AusMap } from "./finance/AusMap";
 import { ChevronDown } from "lucide-react";
+import { C } from "../lib/theme";
+import { api } from "../lib/api";
 
-const C = {
-  blue:       "#1A5FA8",
-  blueMid:    "#3A8ADE",
-  blueLight:  "#E6F0FB",
-  green:      "#1D9E75",
-  greenBg:    "#ECFDF5",
-  greenDark:  "#2D6A0A",
-  amber:      "#B87316",
-  amberBg:    "#FEF3C7",
-  red:        "#E04A4A",
-  redDark:    "#9B2C2C",
-  redBg:      "#FEF2F2",
-  gray:       "#64748B",
-  grayLight:  "#E2E8F0",
-  text:       "#1E293B",
-  bgSecond:   "#EEF2F8",
-  white:      "#FFFFFF",
-  navy:       "#0F1F3D",
-};
 
 // Fixed categorical order — never cycled/re-derived from filter state, so a
 // category or project keeps the same color across every chart on the page.
@@ -95,8 +79,8 @@ export default function ScreenFinancial() {
   const loadFinancialData = useCallback(() => {
     setLoading(true);
     Promise.all([
-      fetch("/api/v1/projects").then((res) => res.json()),
-      fetch("/api/v1/claims").then((res) => res.json()),
+      api.get("/projects"),
+      api.get("/claims"),
     ])
       .then(([projs, claimsData]) => {
         const projectList = Array.isArray(projs) ? projs : [];
@@ -104,8 +88,7 @@ export default function ScreenFinancial() {
         setClaims(Array.isArray(claimsData) ? claimsData : []);
         return Promise.all(
           projectList.map((p: Project) =>
-            fetch(`/api/v1/financial/projects/${p.id}`)
-              .then((res) => res.json())
+            api.get(`/financial/projects/${p.id}`)
               .then((detail) => ({ id: p.id, detail }))
           )
         );
@@ -134,8 +117,7 @@ export default function ScreenFinancial() {
     setSelectedProject(p);
     setProjectDetail(null);
     setDetailLoading(true);
-    fetch(`/api/v1/financial/projects/${p.id}`)
-      .then((res) => res.json())
+    api.get(`/financial/projects/${p.id}`)
       .then((data) => {
         setProjectDetail(data);
         setDetailLoading(false);
@@ -188,7 +170,7 @@ export default function ScreenFinancial() {
   const toggleProjectVisible = (id: string) =>
     setHiddenProjectIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
 
@@ -225,12 +207,7 @@ export default function ScreenFinancial() {
   const handleCertifyClaim = () => {
     if (!certifyingClaim) return;
     const certNum = parseFloat(certifiedVal) || 1.0;
-    fetch(`/api/v1/claims/${certifyingClaim.id}/certify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ certifiedAmountVal: certNum }),
-    })
-      .then((res) => res.json())
+    api.post(`/claims/${certifyingClaim.id}/certify`, { certifiedAmountVal: certNum })
       .then(() => {
         setCertifyingClaim(null);
         setCertifiedVal("");
@@ -561,9 +538,9 @@ export default function ScreenFinancial() {
               <PieCard title="Project Type" description="Share of projects by sector (e.g. residential vs commercial).">
                 <CountPie data={typeData} colors={COLOR_PALETTE} />
               </PieCard>
-              <ChartCard title="Project Location" description="Number of projects in each state; a larger box means more projects there.">
-                <RegionTreemap data={regionData} baseColor={C.blue} />
-              </ChartCard>
+              <PieCard title="Project Location" description="Number of projects in each state; a darker state means more projects there.">
+                <AusMap data={regionData} baseColor={C.blue} />
+              </PieCard>
               <ChartCard title="Project Duration (weeks)" description="Duration of each project in weeks, start to finish, with the longest at the top.">
                 <HorizontalBar data={durationData} dataKey="weeks" color={C.blueMid} />
               </ChartCard>

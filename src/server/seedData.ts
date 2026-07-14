@@ -400,3 +400,29 @@ export const DEFAULT_ALERTS = [
 export function getDefaultMasters(): MastersBundle {
   return cloneDefaultMasters();
 }
+
+/**
+ * Rebuild the full task list from the seed — the clean baseline "Reset to
+ * clean" restores and tests seed from. Normalizes optional seed fields the
+ * runtime Task shape requires.
+ */
+export function buildBaselineTasks() {
+  return DEFAULT_TASKS.map((s: any) => ({
+    id: s.id,
+    projectId: s.projectId,
+    name: s.name,
+    assigneeId: s.assigneeId,
+    tradeRequired: s.tradeRequired,
+    start: s.start,
+    end: s.end,
+    deadline: s.deadline ?? s.end,
+    durationDays: s.durationDays,
+    dependencies: s.dependencies,
+    status: s.status,
+    lag_days: 0,
+    dependency_type: "FS" as const,
+    cost_override: null,
+    cost_override_type: null,
+    percent_complete: s.percent_complete ?? (s.status === "completed" ? 100 : 0),
+  }));
+}

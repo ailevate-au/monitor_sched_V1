@@ -26,6 +26,13 @@ Construction project control for Australian Tier 1–2 builders — scheduling, 
 
    Default URL: **http://localhost:3001**
 
+## Checks & tests
+
+```bash
+npm run lint   # TypeScript strict (tsc --noEmit) + ESLint
+npm test       # Vitest: conflict engine, problems engine, API auth round-trip
+```
+
 ## Production build
 
 ```bash
@@ -33,7 +40,14 @@ npm run build
 npm start
 ```
 
-Set `PORT` in `.env` if you need a port other than 3001.
+Set `PORT` in `.env` if you need a port other than 3001. Optional `AUTH_SECRET` sets the HMAC key used to sign session tokens (defaults to a demo secret; tokens survive restarts either way).
+
+## Code layout
+
+- `src/` — React app (components, `lib/` client helpers, `theme.ts` palette via `src/lib/theme.ts`)
+- `src/server/` — domain layer: in-memory Datastore + Prisma persistence, conflict engine, seed data, weather, task cost
+- `server/` — Express layer: `index.ts` boot (vite-dev/static), `app.ts` testable `createApp()`, `routes/` one file per domain, `services/` (problems engine, permissions matrix, report export), `middleware/` (auth, zod validation, error handler)
+- `tests/` — Vitest suites (no Prisma; seeded in-memory)
 
 ## Deploy with Docker + Traefik
 

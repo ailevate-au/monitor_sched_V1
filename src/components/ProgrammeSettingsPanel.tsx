@@ -2,19 +2,9 @@ import React, { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { useProgrammeSettings } from "../hooks/useProgrammeSettings";
 import { LabelWithInfo } from "./InfoTip";
+import { C } from "../lib/theme";
+import { api } from "../lib/api";
 
-const C = {
-  navy: "#0F1F3D",
-  blue: "#1A5FA8",
-  green: "#1D9E75",
-  greenBg: "#ECFDF5",
-  greenDark: "#2D6A0A",
-  amber: "#B87316",
-  amberBg: "#FEF3C7",
-  gray: "#64748B",
-  grayLight: "#E2E8F0",
-  white: "#FFFFFF",
-};
 
 /**
  * Programme scheduling preferences. Edits are STAGED locally and only committed
@@ -43,8 +33,7 @@ export default function ProgrammeSettingsPanel() {
   const [justSaved, setJustSaved] = useState(false);
 
   useEffect(() => {
-    fetch("/api/v1/settings")
-      .then((r) => r.json())
+    api.get("/settings")
       .then((s) => {
         const next = {
           autoCascade: autoCascadeDependents,
@@ -75,14 +64,10 @@ export default function ProgrammeSettingsPanel() {
     setSaving(true);
     // Auto-cascade is a browser preference (localStorage); the rest is server-side.
     setAutoCascadeDependents(autoCascade);
-    fetch("/api/v1/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    api.put("/settings", {
         tightHandover: { enabled: tightEnabled, thresholdDays: tightThreshold },
         deadlineWarnings: { enabled: deadlineEnabled },
-      }),
-    })
+      })
       .catch(() => {})
       .finally(() => {
         setSaved({ autoCascade, tightEnabled, tightThreshold, deadlineEnabled });

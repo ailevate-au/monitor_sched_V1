@@ -1,17 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { AppUserAccount, Project } from "../types";
-import { Btn, Card } from "./Dashboard";
+import { Btn, Card } from "./ui/primitives";
 import { fetchUsers, createUser, updateUser, deleteUser, CreateUserInput } from "../lib/users";
 import { Plus, Pencil, Trash2, Users as UsersIcon } from "lucide-react";
+import { C } from "../lib/theme";
+import { api } from "../lib/api";
 
-const C = {
-  navy: "#0F1F3D", blue: "#1A5FA8", blueLight: "#E6F0FB",
-  green: "#1D9E75", greenBg: "#ECFDF5", greenDark: "#2D6A0A",
-  amber: "#B87316", amberBg: "#FEF3C7",
-  red: "#E04A4A", redDark: "#9B2C2C", redBg: "#FEF2F2",
-  gray: "#64748B", grayLight: "#E2E8F0", text: "#1E293B",
-  bgSecond: "#EEF2F8", white: "#FFFFFF",
-};
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   Owner: { bg: "#F0EEFF", color: "#4A3DB0" },
@@ -47,7 +41,7 @@ export default function ScreenUsers() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([fetchUsers(), fetch("/api/v1/projects").then(r => r.json())])
+    Promise.all([fetchUsers(), api.get("/projects")])
       .then(([u, p]) => { setUsers(u); setProjects(Array.isArray(p) ? p : []); setLoading(false); })
       .catch(() => setLoading(false));
   };

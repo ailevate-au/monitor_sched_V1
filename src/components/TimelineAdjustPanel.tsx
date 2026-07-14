@@ -7,26 +7,8 @@ import {
   CascadeMode,
   TaskMove,
 } from "../lib/timelineAdjust";
+import { C } from "../lib/theme";
 
-const C = {
-  navy: "#0F1F3D",
-  blue: "#1A5FA8",
-  blueMid: "#3A8ADE",
-  blueLight: "#E6F0FB",
-  green: "#1D9E75",
-  greenDark: "#2D6A0A",
-  amber: "#B87316",
-  amberBg: "#FEF3C7",
-  red: "#E04A4A",
-  redDark: "#9B2C2C",
-  redBg: "#FEF2F2",
-  purple: "#7F77DD",
-  gray: "#64748B",
-  grayLight: "#E2E8F0",
-  text: "#1E293B",
-  textMuted: "#475569",
-  white: "#FFFFFF",
-};
 
 const MODE_INFO: { id: CascadeMode; label: string; help: string }[] = [
   { id: "full", label: "Move all following tasks", help: "Push every following task in this project by the same delay." },

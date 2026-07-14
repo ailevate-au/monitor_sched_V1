@@ -1,26 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Card, KpiCard, StatusBadge, Btn } from "./Dashboard";
+import { Card, KpiCard, StatusBadge, Btn } from "./ui/primitives";
 import { Sun, AlertTriangle } from "lucide-react";
 import { WeatherGlyph } from "../lib/weatherIcon";
+import { C } from "../lib/theme";
+import { api } from "../lib/api";
 
-const C = {
-  blue:       "#1A5FA8",
-  blueMid:    "#3A8ADE",
-  blueLight:  "#E6F0FB",
-  green:      "#1D9E75",
-  greenBg:    "#ECFDF5",
-  greenDark:  "#2D6A0A",
-  amber:      "#B87316",
-  amberBg:    "#FEF3C7",
-  red:        "#E04A4A",
-  redDark:    "#9B2C2C",
-  redBg:      "#FEF2F2",
-  gray:       "#64748B",
-  grayLight:  "#E2E8F0",
-  text:       "#1E293B",
-  bgSecond:   "#EEF2F8",
-  white:      "#FFFFFF",
-};
 
 interface ForecastDay {
   date: string;
@@ -70,8 +54,7 @@ export default function ScreenWeather() {
 
   // Discover which states actually have projects, so the selector is relevant.
   useEffect(() => {
-    fetch("/api/v1/projects")
-      .then(res => res.json())
+    api.get("/projects")
       .then((rows: any[]) => {
         if (!Array.isArray(rows)) return;
         const states = Array.from(new Set(rows.map(p => p.state).filter(Boolean)));
@@ -83,8 +66,7 @@ export default function ScreenWeather() {
   const loadWeatherData = (state: string) => {
     setLoading(true);
     // Per-state forecast — a WA job isn't judged by Sydney's weather.
-    fetch(`/api/v1/weather/forecast?state=${encodeURIComponent(state)}`)
-      .then(res => res.json())
+    api.get(`/weather/forecast?state=${encodeURIComponent(state)}`)
       .then((days: any[]) => {
         if (Array.isArray(days)) {
           setForecast(days);
@@ -101,8 +83,7 @@ export default function ScreenWeather() {
       .catch(err => console.error("Error loading weather forecast:", err));
 
     // Fetch affected tasks matching status weather (portfolio-wide)
-    fetch("/api/v1/dashboard/tasks?status=weather")
-      .then(res => res.json())
+    api.get("/dashboard/tasks?status=weather")
       .then(data => {
         if (Array.isArray(data)) {
           setAffectedTasks(data.map(t => ({
@@ -134,16 +115,11 @@ export default function ScreenWeather() {
     const shiftedEnd = addDays(rescheduleTask.end, offset);
 
     // Apply the weather offset directly to the live task schedule.
-    fetch(`/api/v1/tasks/${rescheduleTask.id}/update`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    api.post(`/tasks/${rescheduleTask.id}/update`, {
         start: shiftedStart,
         end: shiftedEnd,
         cascade: true
       })
-    })
-      .then(res => res.json())
       .then(() => {
         setRescheduleTask(null);
         loadWeatherData(stateSel);

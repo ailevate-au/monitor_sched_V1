@@ -1,10 +1,10 @@
 import React from "react";
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend,
-  Treemap, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
   ComposedChart, Line,
 } from "recharts";
-import { Card, SectionHeader } from "../Dashboard";
+import { Card, SectionHeader } from "../ui/primitives";
 import { fmtMoney } from "../../lib/money";
 
 const GRID = "#E2E8F0";
@@ -125,7 +125,7 @@ export function CountPie({ data, colors }: { data: Array<{ name: string; value: 
           <Cell key={i} fill={colors[i % colors.length]} stroke="#fff" strokeWidth={2} />
         ))}
       </Pie>
-      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number, n: string) => [`${v} (${Math.round(pct(v, total))}%)`, n]} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v, n) => [`${Number(v)} (${Math.round(pct(Number(v), total))}%)`, String(n)]} />
       <Legend layout="vertical" verticalAlign="middle" align="right" formatter={pctLegendFormatter(data)} wrapperStyle={{ fontSize: 11, paddingLeft: 20 }} />
     </PieChart>
   );
@@ -140,18 +140,9 @@ export function DollarPie({ data, colors }: { data: Array<{ name: string; value:
           <Cell key={i} fill={colors[i % colors.length]} stroke="#fff" strokeWidth={2} />
         ))}
       </Pie>
-      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => `${fmtMoney(v)} (${Math.round(pct(v, total))}%)`} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v) => `${fmtMoney(Number(v))} (${Math.round(pct(Number(v), total))}%)`} />
       <Legend layout="vertical" verticalAlign="middle" align="right" formatter={pctLegendFormatter(data)} wrapperStyle={{ fontSize: 11, paddingLeft: 20 }} />
     </PieChart>
-  );
-}
-
-/** Treemap — project count by region. Sequential single hue, area = magnitude. */
-export function RegionTreemap({ data, baseColor }: { data: Array<{ name: string; size: number }>; baseColor: string }) {
-  return (
-    <Treemap data={data} dataKey="size" nameKey="name" stroke="#fff" fill={baseColor} isAnimationActive={false}>
-      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => [v, "Projects"]} />
-    </Treemap>
   );
 }
 
@@ -181,7 +172,7 @@ export function HorizontalBar({
       <Tooltip
         wrapperStyle={TOOLTIP_WRAPPER}
         contentStyle={TOOLTIP_CONTENT}
-        formatter={(v: number) => (unit === "dollars" ? fmtMoney(v) : v)}
+        formatter={(v) => (unit === "dollars" ? fmtMoney(Number(v)) : Number(v))}
         labelFormatter={(label, payload) => {
           const row = payload?.[0]?.payload as { start?: string; end?: string } | undefined;
           return row?.start && row?.end ? `${label} (${row.start} → ${row.end})` : label;
@@ -201,7 +192,7 @@ export function GroupedDollarBar({
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="name" tick={AXIS_FONT} interval={0} tickFormatter={(v) => truncateLabel(v)} />
       <YAxis tick={AXIS_FONT} tickFormatter={dollarTick} />
-      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => fmtMoney(v)} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v) => fmtMoney(Number(v))} />
       <Legend wrapperStyle={{ fontSize: 11 }} />
       <Bar dataKey="contract" name={seriesA} fill={colorA} radius={[4, 4, 0, 0]} maxBarSize={36} />
       <Bar dataKey="actual" name={seriesB} fill={colorB} radius={[4, 4, 0, 0]} maxBarSize={36} />
@@ -216,7 +207,7 @@ export function PercentColumn({ data, color }: { data: Array<{ name: string; mar
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="name" tick={AXIS_FONT} interval={0} tickFormatter={(v) => truncateLabel(v)} />
       <YAxis tick={AXIS_FONT} tickFormatter={(v) => `${v}%`} />
-      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => `${v}%`} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v) => `${Number(v)}%`} />
       <Bar dataKey="marginPct" name="Projected margin" fill={color} radius={[4, 4, 0, 0]} maxBarSize={44} />
     </BarChart>
   );
@@ -231,7 +222,7 @@ export function ContractorComposed({
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="name" tick={AXIS_FONT} interval={0} tickFormatter={(v) => truncateLabel(v)} />
       <YAxis tick={AXIS_FONT} tickFormatter={dollarTick} />
-      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => fmtMoney(v)} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v) => fmtMoney(Number(v))} />
       <Legend wrapperStyle={{ fontSize: 11 }} />
       <Bar dataKey="actual" name="Actual cost" fill={barColor} radius={[4, 4, 0, 0]} maxBarSize={36} />
       <Line type="monotone" dataKey="contract" name="Contract sum" stroke={lineColor} strokeWidth={2} dot={{ r: 4 }} />
@@ -256,7 +247,7 @@ export function SpendOverTimeArea({
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="label" tick={AXIS_FONT} />
       <YAxis tick={AXIS_FONT} tickFormatter={dollarTick} />
-      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => fmtMoney(v)} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v) => fmtMoney(Number(v))} />
       {seriesNames.map((name, i) => (
         <Bar key={name} dataKey={name} name={name} stackId="spend" fill={colors[i % colors.length]} isAnimationActive={false} />
       ))}
@@ -274,7 +265,7 @@ export function CategoryStackedBar({
       <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
       <XAxis dataKey="name" tick={AXIS_FONT} interval={0} tickFormatter={(v) => truncateLabel(v)} />
       <YAxis tick={AXIS_FONT} tickFormatter={dollarTick} />
-      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v: number) => fmtMoney(v)} />
+      <Tooltip wrapperStyle={TOOLTIP_WRAPPER} contentStyle={TOOLTIP_CONTENT} formatter={(v) => fmtMoney(Number(v))} />
       {categories.map((cat, i) => (
         <Bar key={cat} dataKey={cat} name={cat} stackId="cat" fill={colors[i % colors.length]} maxBarSize={44} />
       ))}

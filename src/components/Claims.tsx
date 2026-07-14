@@ -1,26 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { ProgressClaim, CostCategory } from "../types";
-import { KpiCard, Card, Btn, StatusBadge } from "./Dashboard";
+import { KpiCard, Card, Btn, StatusBadge } from "./ui/primitives";
 import { LabelWithInfo } from "./InfoTip";
+import { C } from "../lib/theme";
+import { api } from "../lib/api";
 
-const C = {
-  blue:       "#1A5FA8",
-  blueMid:    "#3A8ADE",
-  blueLight:  "#E6F0FB",
-  green:      "#1D9E75",
-  greenBg:    "#ECFDF5",
-  greenDark:  "#2D6A0A",
-  amber:      "#B87316",
-  amberBg:    "#FEF3C7",
-  red:        "#E04A4A",
-  redDark:    "#9B2C2C",
-  redBg:      "#FEF2F2",
-  gray:       "#64748B",
-  grayLight:  "#E2E8F0",
-  text:       "#1E293B",
-  bgSecond:   "#EEF2F8",
-  white:      "#FFFFFF",
-};
 
 export default function ScreenClaims() {
   const isDev = import.meta.env.DEV;
@@ -85,9 +69,9 @@ export default function ScreenClaims() {
   const loadClaims = () => {
     setLoading(true);
     Promise.all([
-      fetch("/api/v1/claims").then(res => res.json()),
-      fetch("/api/v1/projects").then(res => res.json()),
-      fetch("/api/v1/cost_categories").then(res => res.json()),
+      api.get("/claims"),
+      api.get("/projects"),
+      api.get("/cost_categories"),
     ])
       .then(([claimsData, projectsData, categoriesData]) => {
         setClaims(claimsData);
@@ -140,8 +124,7 @@ export default function ScreenClaims() {
     setSelectedTaskIds([]);
     setSelectedAssigneeIds([]);
     setClaimAmountTouched(false);
-    fetch("/api/v1/dashboard/tasks")
-      .then((res) => res.json())
+    api.get("/dashboard/tasks")
       .then((data) => {
         const list = Array.isArray(data) ? data : [];
         setProjectTasks(list.filter((t: { projectId: string }) => t.projectId === projectId));
@@ -272,10 +255,7 @@ export default function ScreenClaims() {
       alert("Please enter a valid expense amount.");
       return;
     }
-    fetch("/api/v1/claims", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    api.post("/claims", {
         projectId,
         claimedAmountVal: val,
         dueDate: "2026-06-30",
@@ -283,8 +263,6 @@ export default function ScreenClaims() {
         taskIds: isLabourCategory ? selectedTaskIds.join(",") : "",
         description: claimDescription.trim().slice(0, 200),
       })
-    })
-      .then(res => res.json())
       .then(() => {
         setShowNewModal(false);
         loadClaims();
@@ -305,16 +283,11 @@ export default function ScreenClaims() {
     }
 
     setSavingEdit(true);
-    fetch(`/api/v1/claims/${selectedExpense.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    api.put(`/claims/${selectedExpense.id}`, {
         claimedAmountVal: amountNum,
         costCategoryId: editCategoryId,
         description: editDescription,
-      }),
-    })
-      .then((res) => res.json())
+      })
       .then((updated) => {
         setClaims((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
         setSelectedExpense(updated);
@@ -345,12 +318,7 @@ export default function ScreenClaims() {
       return;
     }
     setCertifying(true);
-    fetch(`/api/v1/claims/${certifyingClaim.id}/certify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ certifiedAmountVal: val }),
-    })
-      .then((res) => res.json())
+    api.post(`/claims/${certifyingClaim.id}/certify`, { certifiedAmountVal: val })
       .then((updated) => {
         setClaims((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
         setSelectedExpense(null);
@@ -366,10 +334,9 @@ export default function ScreenClaims() {
   const handleRemoveClaim = (claim: ProgressClaim) => {
     if (!window.confirm(`Remove expense ${claim.claimNumber}? This can't be undone.`)) return;
     setRemoving(true);
-    fetch(`/api/v1/claims/${claim.id}`, { method: "DELETE" })
+    api.del(`/claims/${claim.id}`)
       .then((res) => {
-        if (!res.ok) return res.json().then((e) => { throw new Error(e.error || "Failed to remove"); });
-        return res.json();
+        if (res?.error) throw new Error(res.error || "Failed to remove");
       })
       .then(() => {
         setClaims((prev) => prev.filter((c) => c.id !== claim.id));
