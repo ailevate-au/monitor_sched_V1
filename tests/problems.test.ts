@@ -23,10 +23,10 @@ describe("problems engine", () => {
 
   it("after the demo scenario it reports every category, severity-ordered", () => {
     // Replicate POST /api/v1/demo/simulate's mutations.
-    setTask("TSK-P2-03", { assigneeId: "r1", start: "2026-06-03", end: "2026-06-09", durationDays: 5, percent_complete: 0, status: "scheduled" });
-    setTask("TSK-P3-01", { assigneeId: "r4", start: "2026-06-01", end: "2026-06-19", durationDays: 15, percent_complete: 0, status: "scheduled" });
+    setTask("TSK-P2-03", { assigneeId: "r1", start: "2026-07-03", end: "2026-07-09", durationDays: 5, percent_complete: 0, status: "scheduled" });
+    setTask("TSK-P3-01", { assigneeId: "r4", start: "2026-07-01", end: "2026-07-19", durationDays: 15, percent_complete: 0, status: "scheduled" });
     setTask("TSK-P2-01", { percent_complete: 85, status: "overdue" });
-    setTask("TSK-P1-04", { start: "2026-06-29", end: "2026-07-17", durationDays: 14 });
+    setTask("TSK-P1-04", { start: "2026-07-29", end: "2026-08-16", durationDays: 14 });
     setStormScenario(true);
     setTask("TSK-P1-03", { start: "2026-06-03", end: "2026-06-09", durationDays: 5 });
     setTask("TSK-P3-02", { assigneeId: null });

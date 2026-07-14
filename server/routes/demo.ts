@@ -20,13 +20,13 @@ const setTask = (id: string, patch: Record<string, any>) => {
 demoRouter.post("/demo/simulate", (_req, res) => {
   const db = dbInstance;
   // 1) Ben double-booked — basement formwork reassigned onto his Level-4 pour week
-  setTask("TSK-P2-03", { assigneeId: "r1", start: "2026-06-03", end: "2026-06-09", durationDays: 5, percent_complete: 0, status: "scheduled" });
+  setTask("TSK-P2-03", { assigneeId: "r1", start: "2026-07-03", end: "2026-07-09", durationDays: 5, percent_complete: 0, status: "scheduled" });
   // 2) Tom double-booked — main-core piling pulled back to clash with his north piling
-  setTask("TSK-P3-01", { assigneeId: "r4", start: "2026-06-01", end: "2026-06-19", durationDays: 15, percent_complete: 0, status: "scheduled" });
+  setTask("TSK-P3-01", { assigneeId: "r4", start: "2026-07-01", end: "2026-07-19", durationDays: 15, percent_complete: 0, status: "scheduled" });
   // 3) A job running late — excavation stalled at 85%, past its end date
   setTask("TSK-P2-01", { percent_complete: 85, status: "overdue" });
   // 4) A tight handover — Chris's fitout pulled up hard against the steel frame finishing
-  setTask("TSK-P1-04", { start: "2026-06-29", end: "2026-07-17", durationDays: 14 });
+  setTask("TSK-P1-04", { start: "2026-07-29", end: "2026-08-16", durationDays: 14 });
   // 5) A storm hits mid-week (NSW only — Parramatta is exposed, interstate jobs aren't).
   //    Pull a clean NSW job (Sam's cost report) into the storm window so the weather
   //    risk surfaces on a job that isn't already a clash.

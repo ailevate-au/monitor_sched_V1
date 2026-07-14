@@ -11,7 +11,7 @@ import { dbInstance } from "../../src/server/db";
 import { computeCascade, getReplacementCandidates } from "../../src/server/conflictEngine";
 import { RESOURCE_PROFILES } from "../../src/server/seedData";
 
-export const SCENARIO_TODAY = new Date("2026-06-02"); // demo "now" — aligns with weather + dashboard
+export const SCENARIO_TODAY = new Date("2026-07-02"); // demo "now" — aligns with weather + dashboard
 
 export const profileFor = (id: string): { bio?: string; skills?: string[] } => RESOURCE_PROFILES[id] || {};
 

@@ -235,7 +235,7 @@ export default function ScreenPermissions() {
       >
         <div>
           <div style={{ fontSize: 17, fontWeight: 700, color: C.navy, display: "flex", alignItems: "center", gap: 8 }}>
-            <ShieldCheck size={20} /> Access — Role Permissions
+            <ShieldCheck size={20} /> Role Permissions
           </div>
           <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3, maxWidth: 620, lineHeight: 1.5 }}>
             Choose which sidebar features each role can access. Owner always has full access and

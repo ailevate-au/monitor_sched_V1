@@ -1,5 +1,5 @@
 /** Demo programme anchor for Dashboard/Claims/BOM context (not wall-clock today). */
-export const PROGRAMME_TODAY = "2026-06-02";
+export const PROGRAMME_TODAY = "2026-07-02";
 
 export function parseProgrammeDate(iso: string): Date {
   return new Date(`${iso}T12:00:00`);
